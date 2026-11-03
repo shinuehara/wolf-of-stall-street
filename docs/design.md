@@ -65,6 +65,13 @@ A faixa pública é centrada em _drift + parte das notícias + ruído_. Um "vié
 notícia aparece na faixa pública; o resto vai para o viés escondido.** Assim a notícia
 diz a direção, e o especialista diz a intensidade.
 
+### Compra e venda rápida
+
+Cada linha do Mercado tem atalhos `+5% +10% +50% +Tudo` e `-5% -10% -50% -Tudo`. A base é o
+**patrimônio total**: com 2000 fl de patrimônio, `+10%` tenta comprar 200 fl, limitado aos
+florins livres; `-10%` tenta vender 200 fl, limitado à posição (zera se for menor).
+`+Tudo` usa todos os florins livres; `-Tudo` zera a posição.
+
 ### Notícias
 
 - **Do reino**, que afetam setores: Guerra (Ferreiros ▲, Mercadores ▼), Peste (Boticários ▲),

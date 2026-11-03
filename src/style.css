@@ -532,7 +532,7 @@ img.sprite,
 /* Market */
 .market {
   display: grid;
-  grid-template-columns: minmax(250px, 340px) minmax(0, 1fr);
+  grid-template-columns: minmax(280px, 390px) minmax(0, 1fr);
   gap: 10px;
   height: 100%;
 }
@@ -1383,4 +1383,74 @@ img.sprite,
   .members {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* Quick trade bar under each market row */
+.asset-item {
+  display: flex;
+  flex-direction: column;
+  background: var(--panel-lo);
+  border: 2px solid transparent;
+}
+
+.asset-item:hover {
+  border-color: var(--purple);
+}
+
+.asset-item.selected {
+  background: var(--panel-hi);
+  border-color: var(--gold);
+}
+
+.asset-item .guild-row,
+.asset-item .guild-row:hover {
+  background: transparent;
+  border-color: transparent;
+}
+
+.company-item {
+  margin-left: 10px;
+}
+
+.quick {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 2px;
+  padding: 0 4px 4px;
+}
+
+.qbtn {
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  padding: 2px 0;
+  border: 2px solid var(--edge);
+  color: var(--edge);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.qbuy {
+  background: var(--green);
+}
+
+.qsell {
+  background: var(--red);
+}
+
+.qbtn:nth-child(5) {
+  margin-left: 4px;
+}
+
+.qbtn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.qbtn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.toast-info {
+  background: var(--green);
+  color: var(--edge);
 }

@@ -363,13 +363,15 @@ function renderGuildGroup(state: GameState, ui: UiState, guild: GuildDef): strin
   const row = (assetId: string, label: string, isCompany: boolean) => {
     const r = assetRange(state, assetId);
     const position = state.positions[assetId];
-    return `<button class="guild-row ${isCompany ? 'company-row' : ''} ${ui.selectedAsset === assetId ? 'selected' : ''}"
-      data-action="select-asset" data-asset="${assetId}">
-      ${isCompany ? '<span class="tree">└</span>' : sprite(GUILD_SPRITE[guild.id]!, 28)}
-      <span class="row-name">${label}</span>
-      <span class="row-range">${pct(r.low, 0)} a ${pct(r.high, 0)}</span>
-      <span class="row-pos ${position ? 'gold' : 'muted'}">${position ? `${fmt(position.value)} fl${position.hedged ? ' 🛡' : ''}` : '—'}</span>
-    </button>`;
+    return `<div class="asset-item ${isCompany ? 'company-item' : ''} ${ui.selectedAsset === assetId ? 'selected' : ''}">
+      <button class="guild-row ${isCompany ? 'company-row' : ''}" data-action="select-asset" data-asset="${assetId}">
+        ${isCompany ? '<span class="tree">└</span>' : sprite(GUILD_SPRITE[guild.id]!, 28)}
+        <span class="row-name">${label}</span>
+        <span class="row-range">${pct(r.low, 0)} a ${pct(r.high, 0)}</span>
+        <span class="row-pos ${position ? 'gold' : 'muted'}">${position ? `${fmt(position.value)} fl${position.hedged ? ' 🛡' : ''}` : '—'}</span>
+      </button>
+      ${quickBar(state, assetId)}
+    </div>`;
   };
 
   if (!unlocked) {
@@ -381,17 +383,54 @@ function renderGuildGroup(state: GameState, ui: UiState, guild: GuildDef): strin
   }
   if (!expanded) {
     const r = assetRange(state, guild.id);
-    return `<li><button class="guild-row" data-action="select-asset" data-asset="${guild.id}">
-      ${sprite(GUILD_SPRITE[guild.id]!, 28)}
-      <span class="row-name">${guild.short} <span class="muted small">▸ 3 empresas</span></span>
-      <span class="row-range">cesta ${pct(r.low, 0)} a ${pct(r.high, 0)}</span>
-      <span class="row-pos ${held ? 'gold' : 'muted'}">${held ? `${fmt(held)} fl` : '—'}</span>
-    </button></li>`;
+    return `<li><div class="asset-item">
+      <button class="guild-row" data-action="select-asset" data-asset="${guild.id}">
+        ${sprite(GUILD_SPRITE[guild.id]!, 28)}
+        <span class="row-name">${guild.short} <span class="muted small">▸ 3 empresas</span></span>
+        <span class="row-range">cesta ${pct(r.low, 0)} a ${pct(r.high, 0)}</span>
+        <span class="row-pos ${held ? 'gold' : 'muted'}">${held ? `${fmt(held)} fl` : '—'}</span>
+      </button>
+      ${quickBar(state, guild.id)}
+    </div></li>`;
   }
   return `<li class="group-open">
     ${row(guild.id, `${guild.short} <span class="muted small">(cesta)</span>`, false)}
     ${companies.map((c) => row(c.id, c.name, true)).join('')}
   </li>`;
+}
+
+const QUICK_SHARES: [share: number, label: string][] = [
+  [0.05, '+5%'],
+  [0.1, '+10%'],
+  [0.5, '+50%'],
+  [1, '+Tudo'],
+  [-0.05, '-5%'],
+  [-0.1, '-10%'],
+  [-0.5, '-50%'],
+  [-1, '-Tudo'],
+];
+
+/** Buy/sell shortcuts sized as a share of total wealth (capped by free gold or the position). */
+function quickBar(state: GameState, assetId: string): string {
+  const playing = state.status === 'playing';
+  const canBuy = playing && state.cash > 0.005;
+  const canSell = playing && Boolean(state.positions[assetId]);
+  const name = assetName(assetId);
+  return `<div class="quick" role="group" aria-label="Compra e venda rápida: ${esc(name)}">
+    ${QUICK_SHARES.map(([share, label]) => {
+      const buying = share > 0;
+      const enabled = buying ? canBuy : canSell;
+      const title = buying
+        ? share >= 1
+          ? `Comprar ${name} com todos os florins livres`
+          : `Comprar ${name}: ${label.slice(1)} do patrimônio (até o que estiver livre)`
+        : share <= -1
+          ? `Vender toda a posição em ${name}`
+          : `Vender ${name}: ${label.slice(1)} do patrimônio (até zerar a posição)`;
+      return `<button class="qbtn ${buying ? 'qbuy' : 'qsell'}" data-action="quick" data-asset="${assetId}" data-share="${share}"
+        title="${esc(title)}" ${enabled ? '' : 'disabled'}>${label}</button>`;
+    }).join('')}
+  </div>`;
 }
 
 function renderAssetDetail(state: GameState, ui: UiState, assetId: string): string {

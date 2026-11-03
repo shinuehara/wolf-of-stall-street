@@ -6,10 +6,13 @@ import {
   declineAscension,
   endWeek,
   newGame,
+  quickTrade,
   sell,
   setHedge,
   type ActionResult,
+  fmt,
 } from './sim/game';
+import { assetName } from './sim/assets';
 import type { ExpertId, GameState } from './sim/types';
 import { SCREENS, initialUi, render, type Screen } from './ui/render';
 import { clearGame, loadGame, saveGame } from './ui/storage';
@@ -79,6 +82,17 @@ root.addEventListener('click', (event) => {
       const amount = amountFor(assetId);
       report(sell(state, assetId, Number.isNaN(amount) ? Infinity : amount));
       if (!ui.message) ui.amounts[assetId] = '';
+      break;
+    }
+    case 'quick': {
+      const share = Number(target.dataset.share);
+      const result = quickTrade(state, assetId, share);
+      ui.message = result.ok
+        ? {
+            text: `${share > 0 ? 'Comprou' : 'Vendeu'} ${fmt(result.amount)} fl de ${assetName(assetId)}.`,
+            tone: 'info',
+          }
+        : { text: result.error, tone: 'error' };
       break;
     }
     case 'fill': {

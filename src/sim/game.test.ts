@@ -7,6 +7,7 @@ import {
   endWeek,
   expertCost,
   newGame,
+  quickTrade,
   PRE_HISTORY_WEEKS,
   sell,
   setHedge,
@@ -65,6 +66,28 @@ describe('trading', () => {
     expect(buy(state, 'bakers', 500).ok).toBe(false);
     expect(buy(state, 'spices', 10).ok).toBe(false);
     expect(state.cash).toBe(100);
+  });
+
+  it('quick trades use a share of total wealth, capped by free gold or the position', () => {
+    const state = newGame(1);
+    // wealth 100, all free: +10% buys 10
+    expect(quickTrade(state, 'bakers', 0.1)).toEqual({ ok: true, amount: 10 });
+    // +50% would be 50, still fits in the 90 free
+    quickTrade(state, 'mines', 0.5);
+    expect(state.cash).toBeCloseTo(40);
+    // +50% again would be 50, but only 40 is free: buys 40
+    expect(quickTrade(state, 'mines', 0.5)).toEqual({ ok: true, amount: 40 });
+    expect(state.cash).toBeCloseTo(0);
+    expect(quickTrade(state, 'bakers', 0.05).ok).toBe(false);
+    // -50% would sell 50, but the bakers position is only 10: closes it
+    expect(quickTrade(state, 'bakers', -0.5)).toEqual({ ok: true, amount: 10 });
+    expect(state.positions.bakers).toBeUndefined();
+    // -all closes the position
+    quickTrade(state, 'mines', -1);
+    expect(state.positions.mines).toBeUndefined();
+    expect(state.cash).toBeCloseTo(100);
+    // +all uses all free gold
+    expect(quickTrade(state, 'apothecaries', 1)).toEqual({ ok: true, amount: 100 });
   });
 
   it('only insures positions you hold', () => {

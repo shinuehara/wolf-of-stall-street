@@ -34,7 +34,7 @@ import type {
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
 const ok: ActionResult = { ok: true };
-const fail = (error: string): ActionResult => ({ ok: false, error });
+const fail = (error: string): { ok: false; error: string } => ({ ok: false, error });
 
 export interface WeekReport {
   /** Return in % per asset (market move, before insurance). */
@@ -200,6 +200,27 @@ export function sell(state: GameState, assetId: string, amount: number): ActionR
   state.cash += amount;
   if (position.value < 0.005) delete state.positions[assetId];
   return ok;
+}
+
+export type QuickTradeResult = { ok: true; amount: number } | { ok: false; error: string };
+
+/**
+ * Buys (share > 0) or sells (share < 0) a slice of total wealth in one asset.
+ * Buying is capped by free gold; selling is capped by the position, closing it if smaller.
+ * A share of +1 buys with all free gold; -1 closes the position.
+ */
+export function quickTrade(state: GameState, assetId: string, share: number): QuickTradeResult {
+  if (share > 0) {
+    if (state.cash <= 0.005) return fail('Você não tem florins livres.');
+    const amount = share >= 1 ? state.cash : Math.min(wealth(state) * share, state.cash);
+    const result = buy(state, assetId, amount);
+    return result.ok ? { ok: true, amount } : result;
+  }
+  const position = state.positions[assetId];
+  if (!position) return fail('Você não tem cotas disso.');
+  const amount = share <= -1 ? position.value : Math.min(wealth(state) * -share, position.value);
+  const result = sell(state, assetId, amount);
+  return result.ok ? { ok: true, amount } : result;
 }
 
 export function setHedge(state: GameState, assetId: string, hedged: boolean): ActionResult {
