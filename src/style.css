@@ -532,7 +532,7 @@ img.sprite,
 /* Market */
 .market {
   display: grid;
-  grid-template-columns: minmax(280px, 390px) minmax(0, 1fr);
+  grid-template-columns: minmax(300px, 440px) minmax(0, 1fr);
   gap: 10px;
   height: 100%;
 }
@@ -1437,10 +1437,6 @@ img.sprite,
   background: var(--red);
 }
 
-.qbtn:nth-child(5) {
-  margin-left: 4px;
-}
-
 .qbtn:active:not(:disabled) {
   transform: translateY(1px);
 }
@@ -1453,4 +1449,60 @@ img.sprite,
 .toast-info {
   background: var(--green);
   color: var(--edge);
+}
+
+/* Product row: info on the left half, a 2x4 buy/sell grid on the right half */
+.asset-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  padding-right: 4px;
+}
+
+.asset-item .guild-row {
+  grid-template-columns: 28px minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
+  row-gap: 0;
+  padding: 4px 6px;
+}
+
+.asset-item .guild-row img,
+.asset-item .guild-row .tree {
+  grid-row: 1 / span 3;
+}
+
+.asset-item .row-name {
+  grid-column: 2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.asset-item .row-range {
+  grid-column: 2;
+}
+
+.asset-item .row-pos {
+  grid-column: 2;
+  grid-row: 3;
+  text-align: left;
+}
+
+.asset-item .quick {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: auto auto;
+  gap: 3px;
+  padding: 4px 0;
+}
+
+.asset-item .qbtn {
+  font-size: 0.68rem;
+  padding: 3px 0;
+}
+
+@media (max-width: 720px) {
+  .asset-item .row-name {
+    white-space: normal;
+  }
 }

@@ -386,7 +386,7 @@ function renderGuildGroup(state: GameState, ui: UiState, guild: GuildDef): strin
     return `<li><div class="asset-item">
       <button class="guild-row" data-action="select-asset" data-asset="${guild.id}">
         ${sprite(GUILD_SPRITE[guild.id]!, 28)}
-        <span class="row-name">${guild.short} <span class="muted small">▸ 3 empresas</span></span>
+        <span class="row-name">${guild.short} <span class="muted small">▸ abrir</span></span>
         <span class="row-range">cesta ${pct(r.low, 0)} a ${pct(r.high, 0)}</span>
         <span class="row-pos ${held ? 'gold' : 'muted'}">${held ? `${fmt(held)} fl` : '—'}</span>
       </button>
