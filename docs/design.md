@@ -107,6 +107,18 @@ faz essa conta antes dos outros.
 **Almanaque** (na Praça): descrição da cidade, dos bairros e das guildas, gráficos do PIB
 e da demanda de cada bairro, empresas de cada bairro e notícias ativas.
 
+### Carteira (Casa de Contas)
+
+Um local próprio com duas visões:
+
+- **Posição de hoje:** patrimônio, quanto está em cotas e quanto está livre, ganho em aberto,
+  barra de distribuição e uma tabela por ativo (valor, custo, ganho em fl e %, peso, faixa
+  da semana, seguro). O custo de uma posição cai na mesma proporção quando se vende parte dela.
+- **Rentabilidade:** rentabilidade desde o início e nas últimas 4 semanas, melhor e pior
+  semana, gráfico do patrimônio, ranking de quanto cada ativo já rendeu e o livro-caixa semana
+  a semana (cotas, títulos da Coroa, seguros, custo de vida e outros gastos, como especialistas
+  e títulos de nobreza).
+
 ### Notícias
 
 - **Do reino**, que afetam setores: Guerra (Ferreiros ▲, Mercadores ▼), Peste (Boticários ▲),

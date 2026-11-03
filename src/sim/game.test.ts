@@ -91,6 +91,37 @@ describe('trading', () => {
     expect(quickTrade(state, 'apothecaries', 1)).toEqual({ ok: true, amount: 100 });
   });
 
+  it('tracks the cost of each position, reduced pro rata on sales', () => {
+    const state = newGame(1);
+    buy(state, 'bakers', 40);
+    endWeek(state);
+    const value = state.positions.bakers!.value;
+    expect(state.positions.bakers!.cost).toBe(40);
+    sell(state, 'bakers', value / 2);
+    expect(state.positions.bakers!.cost).toBeCloseTo(20);
+    expect(state.assetPnl.bakers).toBeCloseTo(value - 40);
+  });
+
+  it('keeps a weekly ledger that adds up', () => {
+    const state = newGame(9);
+    buy(state, 'mines', 30);
+    consult(state, 'astrologer', 'mines');
+    endWeek(state);
+    buy(state, 'bakers', 20);
+    endWeek(state);
+    expect(state.ledger).toHaveLength(2);
+    const [first, second] = state.ledger;
+    expect(first!.startWealth).toBe(100);
+    expect(second!.startWealth).toBeCloseTo(first!.endWealth);
+    for (const r of state.ledger) {
+      const sum = r.marketPnl + r.bondIncome - r.hedgeFees - r.livingCost + r.other;
+      expect(r.endWealth - r.startWealth).toBeCloseTo(sum);
+    }
+    // The astrologer's fee shows up as "other" in the first week.
+    expect(first!.other).toBeLessThan(0);
+    expect(second!.other).toBeCloseTo(0);
+  });
+
   it('only insures positions you hold', () => {
     const state = newGame(1);
     expect(setHedge(state, 'mines', true).ok).toBe(false);

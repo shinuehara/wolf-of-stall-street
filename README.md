@@ -12,9 +12,9 @@ buying rumors and insuring your bets._
 
 ## Como jogar
 
-A cidade tem quatro locais, acessados pela barra de baixo (ou teclas 1 a 4): a **Praça**
-(notícias e resumo da semana), o **Mercado** (guildas e seguro), a **Taverna** (especialistas)
-e o **Castelo** (escada social e títulos).
+A cidade tem cinco locais, acessados pela barra de baixo (ou teclas 1 a 5): a **Praça**
+(notícias e almanaque), o **Mercado** (guildas, empresas e seguro), a **Carteira** (posição e
+rentabilidade), a **Taverna** (especialistas) e o **Castelo** (escada social e títulos).
 
 - **📯 O Arauto** anuncia toda semana a faixa de variação esperada de cada guilda (ex: `-3% a +5%`).
 - **Especialistas** dizem para que lado a faixa pende: 🍺 o Bêbado (grátis e pouco confiável),

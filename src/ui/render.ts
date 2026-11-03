@@ -51,6 +51,8 @@ export interface UiState {
   squareTab: 'news' | 'almanac';
   /** Almanac entry: 'city', a region id or a guild id. */
   almanacEntry: string;
+  /** Which view the portfolio shows: today's holdings or past returns. */
+  portfolioTab: 'position' | 'returns';
   /** Guilds whose companies are listed under the basket in the market. */
   expandedGuilds: Record<string, boolean>;
   /** On narrow screens the market shows either the list or one asset's detail. */
@@ -69,6 +71,7 @@ export function initialUi(): UiState {
     screen: 'square',
     selectedAsset: 'bakers',
     squareTab: 'news',
+    portfolioTab: 'position',
     almanacEntry: 'city',
     expandedGuilds: { bakers: true },
     marketDetailOpen: false,
@@ -102,6 +105,13 @@ export const SCREENS: {
     icon: 'tent',
     title: 'Mercado das Guildas',
     tagline: 'Compre na baixa, venda na alta, reze no meio.',
+  },
+  {
+    id: 'portfolio',
+    label: 'Carteira',
+    icon: 'scroll',
+    title: 'Casa de Contas',
+    tagline: 'Onde o escriba anota cada florim que entra e sai.',
   },
   {
     id: 'tavern',
@@ -217,6 +227,8 @@ function renderScreen(state: GameState, ui: UiState): string {
       return renderSquare(state, ui);
     case 'market':
       return renderMarket(state, ui);
+    case 'portfolio':
+      return renderPortfolio(state, ui);
     case 'tavern':
       return renderTavern(state, ui);
     case 'castle':
@@ -862,6 +874,179 @@ function rangeBar(r: Range, hedge: { floor: number; cap: number } | null): strin
     <div class="range-zero" style="left:${x(0)}%"></div>
   </div>
   <div class="range-scale"><span>-${SCALE}%</span><span>0</span><span>+${SCALE}%</span></div>`;
+}
+
+// ---------------------------------------------------------------------------
+// Carteira
+// ---------------------------------------------------------------------------
+
+const ALLOC_COLORS = [
+  'var(--gold)',
+  'var(--blue)',
+  'var(--purple)',
+  'var(--orange)',
+  'var(--green)',
+  'var(--red)',
+];
+
+function renderPortfolio(state: GameState, ui: UiState): string {
+  const tab = (id: UiState['portfolioTab'], label: string) =>
+    `<button role="tab" class="tab ${ui.portfolioTab === id ? 'active' : ''}" aria-selected="${ui.portfolioTab === id}" data-action="portfolio-tab" data-tab="${id}">${label}</button>`;
+  return `<div class="portfolio">
+    <div class="tabs" role="tablist">${tab('position', 'Posição de hoje')}${tab('returns', 'Rentabilidade')}</div>
+    ${ui.portfolioTab === 'returns' ? renderReturns(state) : renderPositions(state)}
+  </div>`;
+}
+
+function statTile(label: string, value: string, sub = '', toneClass = ''): string {
+  return `<div class="tile px"><span class="hud-label">${label}</span><strong class="tile-value ${toneClass}">${value}</strong>${sub ? `<span class="muted small">${sub}</span>` : ''}</div>`;
+}
+
+function renderPositions(state: GameState): string {
+  const total = wealth(state);
+  const entries = Object.entries(state.positions).sort((a, b) => b[1].value - a[1].value);
+  const investedTotal = entries.reduce((s, [, p]) => s + p.value, 0);
+  const costTotal = entries.reduce((s, [, p]) => s + p.cost, 0);
+  const openGain = investedTotal - costTotal;
+  const share = (v: number) => (total > 0 ? (v / total) * 100 : 0);
+
+  const tiles = `<div class="tiles">
+    ${statTile('Patrimônio', `${fmt(total)} fl`)}
+    ${statTile('Em cotas', `${fmt(investedTotal)} fl`, `${whole(share(investedTotal))}% do patrimônio`)}
+    ${statTile('Livres', `${fmt(state.cash)} fl`, `${whole(share(state.cash))}% · rendem nos Títulos da Coroa`)}
+    ${statTile('Ganho em aberto', `${signed(openGain)} fl`, costTotal > 0 ? pct((openGain / costTotal) * 100) + ' sobre o custo' : 'sem posições', tone(openGain))}
+  </div>`;
+
+  const bar = `<div class="alloc px" aria-label="Distribuição do patrimônio">
+    ${entries
+      .map(
+        ([id, p], i) =>
+          `<span class="alloc-seg" style="width:${share(p.value)}%;background:${ALLOC_COLORS[i % ALLOC_COLORS.length]}" title="${esc(assetName(id))}: ${whole(share(p.value))}%"></span>`,
+      )
+      .join('')}
+    <span class="alloc-seg alloc-free" style="width:${share(state.cash)}%" title="Livres: ${whole(share(state.cash))}%"></span>
+  </div>`;
+
+  if (entries.length === 0) {
+    return `${tiles}${bar}<div class="card px empty-state">
+      <p>Você não tem cotas de nada. Todo o seu ouro está livre, rendendo nos Títulos da Coroa.</p>
+      <button class="pbtn" data-action="go" data-screen="market">Ir ao Mercado</button>
+    </div>`;
+  }
+
+  const rows = entries
+    .map(([id, p], i) => {
+      const gain = p.value - p.cost;
+      const r = assetRange(state, id);
+      const company = isBasket(id) ? null : getCompany(id);
+      return `<tr>
+        <td><button class="linkish asset-link" data-action="open-asset" data-asset="${id}">
+          <span class="swatch" style="background:${ALLOC_COLORS[i % ALLOC_COLORS.length]}"></span>
+          ${sprite(assetSprite(id), 16)} ${assetName(id)}</button></td>
+        <td>${company ? `<span class="standing standing-${company.regionId}">${getRegion(company.regionId).name}</span>` : '<span class="muted small">cesta</span>'}</td>
+        <td class="num">${fmt(p.value)}</td>
+        <td class="num muted">${fmt(p.cost)}</td>
+        <td class="num ${tone(gain)}">${signed(gain)}</td>
+        <td class="num ${tone(gain)}">${p.cost > 0 ? pct((gain / p.cost) * 100) : '—'}</td>
+        <td class="num">${whole(share(p.value))}%</td>
+        <td class="num muted">${pct(r.low, 0)} a ${pct(r.high, 0)}</td>
+        <td>${p.hedged ? '🛡 sim' : '<span class="muted">não</span>'}</td>
+      </tr>`;
+    })
+    .join('');
+
+  return `${tiles}${bar}
+    <div class="table-wrap px">
+      <table class="ptable">
+        <thead><tr><th>Ativo</th><th>Bairro</th><th class="num">Valor</th><th class="num">Custo</th><th class="num">Ganho</th><th class="num">%</th><th class="num">Peso</th><th class="num">Faixa da semana</th><th>Seguro</th></tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr><td>Total em cotas</td><td></td><td class="num">${fmt(investedTotal)}</td><td class="num muted">${fmt(costTotal)}</td><td class="num ${tone(openGain)}">${signed(openGain)}</td><td class="num ${tone(openGain)}">${costTotal > 0 ? pct((openGain / costTotal) * 100) : '—'}</td><td class="num">${whole(share(investedTotal))}%</td><td></td><td></td></tr></tfoot>
+      </table>
+    </div>`;
+}
+
+function renderReturns(state: GameState): string {
+  const ledger = state.ledger;
+  const start = ledger[0]?.startWealth ?? wealth(state);
+  const now = wealth(state);
+  const totalReturn = ((now - start) / start) * 100;
+  const weekPct = (r: (typeof ledger)[number]) =>
+    ((r.endWealth - r.startWealth) / r.startWealth) * 100;
+  const last4 = ledger.slice(-4);
+  const last4Return = last4.length
+    ? ((last4[last4.length - 1]!.endWealth - last4[0]!.startWealth) / last4[0]!.startWealth) * 100
+    : 0;
+  const best = ledger.reduce<(typeof ledger)[number] | null>(
+    (b, r) => (!b || weekPct(r) > weekPct(b) ? r : b),
+    null,
+  );
+  const worst = ledger.reduce<(typeof ledger)[number] | null>(
+    (b, r) => (!b || weekPct(r) < weekPct(b) ? r : b),
+    null,
+  );
+
+  const tiles = `<div class="tiles">
+    ${statTile('Desde o início', pct(totalReturn), `${fmt(start)} → ${fmt(now)} fl`, tone(totalReturn))}
+    ${statTile('Últimas 4 semanas', last4.length ? pct(last4Return) : '—', last4.length ? `${last4.length} semana(s)` : 'nenhuma semana ainda', tone(last4Return))}
+    ${statTile('Melhor semana', best ? pct(weekPct(best)) : '—', best ? `semana ${best.week}` : '', best ? tone(weekPct(best)) : '')}
+    ${statTile('Pior semana', worst ? pct(weekPct(worst)) : '—', worst ? `semana ${worst.week}` : '', worst ? tone(weekPct(worst)) : '')}
+  </div>`;
+
+  if (ledger.length === 0) {
+    return `${tiles}<div class="card px empty-state"><p>Ainda não terminou nenhuma semana. A rentabilidade aparece aqui depois do primeiro "Fim da semana".</p></div>`;
+  }
+
+  const wealthSeries = [ledger[0]!.startWealth, ...ledger.map((r) => r.endWealth)];
+  const ranking = Object.entries(state.assetPnl)
+    .filter(([, v]) => Math.abs(v) >= 0.05)
+    .sort((a, b) => b[1] - a[1]);
+  const maxAbs = Math.max(1, ...ranking.map(([, v]) => Math.abs(v)));
+
+  const weekRows = [...ledger]
+    .reverse()
+    .map(
+      (r) => `<tr>
+        <td>${r.week}</td>
+        <td class="num">${fmt(r.endWealth)}</td>
+        <td class="num ${tone(r.endWealth - r.startWealth)}">${signed(r.endWealth - r.startWealth)}</td>
+        <td class="num ${tone(weekPct(r))}">${pct(weekPct(r))}</td>
+        <td class="num ${tone(r.marketPnl)}">${signed(r.marketPnl)}</td>
+        <td class="num">${signed(r.bondIncome)}</td>
+        <td class="num">${signed(-r.hedgeFees)}</td>
+        <td class="num">${signed(-r.livingCost)}</td>
+        <td class="num">${signed(r.other)}</td>
+      </tr>`,
+    )
+    .join('');
+
+  return `${tiles}
+    <div class="returns-grid">
+      <div class="returns-col">
+        ${renderChart([{ values: wealthSeries, color: 'var(--gold)', main: true, label: 'Patrimônio' }], false, 'Patrimônio nas últimas')}
+        <div class="card px">
+          <h3>Quanto cada ativo já rendeu</h3>
+          ${
+            ranking.length === 0
+              ? '<p class="muted small">Nenhum ganho ou perda em cotas ainda.</p>'
+              : `<ul class="ranking">${ranking
+                  .map(
+                    ([id, v]) => `<li>
+                      <span class="rank-name">${sprite(assetSprite(id), 16)} ${assetName(id)}</span>
+                      <span class="rank-bar"><span class="${v >= 0 ? 'bar-up' : 'bar-down'}" style="width:${(Math.abs(v) / maxAbs) * 100}%"></span></span>
+                      <span class="num ${tone(v)}">${signed(v)}</span>
+                    </li>`,
+                  )
+                  .join('')}</ul>`
+          }
+        </div>
+      </div>
+      <div class="table-wrap px">
+        <table class="ptable">
+          <thead><tr><th>Sem.</th><th class="num">Patrimônio</th><th class="num">Resultado</th><th class="num">%</th><th class="num">Cotas</th><th class="num">Títulos</th><th class="num">Seguros</th><th class="num">Vida</th><th class="num" title="Especialistas, títulos de nobreza">Outros</th></tr></thead>
+          <tbody>${weekRows}</tbody>
+        </table>
+      </div>
+    </div>`;
 }
 
 // ---------------------------------------------------------------------------

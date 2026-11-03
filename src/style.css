@@ -475,7 +475,7 @@ img.sprite,
 /* Nav */
 .nav {
   display: grid;
-  grid-template-columns: repeat(4, 1fr) 1.3fr;
+  grid-template-columns: repeat(5, 1fr) 1.3fr;
   gap: 6px;
   padding: 6px;
   padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
@@ -1107,7 +1107,8 @@ img.sprite,
     display: inline-block;
   }
   .nav {
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(6, 1fr);
+    gap: 3px;
   }
   .nav-btn {
     font-size: 0.7rem;
@@ -1727,4 +1728,203 @@ img.sprite,
   .almanac-index {
     max-height: 30vh;
   }
+}
+
+/* Portfolio */
+.portfolio {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 10px;
+}
+
+.tile-value {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.alloc {
+  display: flex;
+  height: 16px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.alloc-seg {
+  height: 100%;
+  border-right: 2px solid var(--edge);
+}
+
+.alloc-free {
+  background: repeating-linear-gradient(90deg, var(--panel-hi) 0 4px, var(--panel-lo) 4px 8px);
+}
+
+.table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px;
+}
+
+.ptable {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.95em;
+}
+
+.ptable th {
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: left;
+  padding: 4px 6px;
+  border-bottom: var(--px) solid var(--edge);
+  white-space: nowrap;
+}
+
+.ptable td {
+  padding: 3px 6px;
+  border-bottom: 2px dotted var(--panel-hi);
+  white-space: nowrap;
+}
+
+.ptable tfoot td {
+  border-top: var(--px) solid var(--edge);
+  border-bottom: 0;
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+}
+
+.ptable .num {
+  text-align: right;
+}
+
+.asset-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+  color: var(--ink);
+}
+
+.asset-link:hover {
+  color: var(--gold);
+}
+
+.returns-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 10px;
+}
+
+.returns-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.ranking {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ranking li {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.9em;
+}
+
+.rank-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rank-bar {
+  height: 8px;
+  background: var(--panel-lo);
+}
+
+.rank-bar span {
+  display: block;
+  height: 100%;
+}
+
+.bar-up {
+  background: var(--green);
+}
+
+.bar-down {
+  background: var(--red);
+}
+
+.empty-state {
+  align-items: flex-start;
+}
+
+@media (max-width: 860px) {
+  .tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .returns-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .portfolio {
+    height: auto;
+  }
+  .table-wrap {
+    max-height: 50vh;
+  }
+}
+
+/* Wide tables scroll inside their own frame, never the screen */
+.game {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.stage,
+.screen,
+.portfolio,
+.tiles,
+.table-wrap {
+  min-width: 0;
+}
+
+.nav-btn.active,
+.nav-btn.active:hover {
+  background: var(--purple);
+  color: var(--edge);
 }

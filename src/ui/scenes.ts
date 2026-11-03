@@ -2,7 +2,7 @@
  * Procedural pixel-art backdrops for each location, painted on a small canvas
  * (SCENE_W x SCENE_H) and scaled up with nearest-neighbour filtering.
  */
-export type SceneName = 'square' | 'market' | 'tavern' | 'castle';
+export type SceneName = 'square' | 'market' | 'portfolio' | 'tavern' | 'castle';
 
 export const SCENE_W = 192;
 export const SCENE_H = 64;
@@ -28,6 +28,7 @@ export function sceneUrl(name: SceneName): string {
 const PAINTERS: Record<SceneName, (ctx: Ctx) => void> = {
   square: paintSquare,
   market: paintMarket,
+  portfolio: paintCountingHouse,
   tavern: paintTavern,
   castle: paintCastle,
 };
@@ -280,4 +281,71 @@ function paintCastle(ctx: Ctx): void {
   for (let x = cx + 6; x < cx + 50; x += 10) rect(ctx, x, base - 16, 3, 4, '#ffcc33');
   rect(ctx, cx + 21, base - 10, 10, 10, '#1a1033');
   rect(ctx, cx + 22, base - 11, 8, 1, '#1a1033');
+}
+
+function paintCountingHouse(ctx: Ctx): void {
+  // stone wall
+  rect(ctx, 0, 0, SCENE_W, SCENE_H, '#3d2b80');
+  for (let y = 0; y < 44; y += 6) {
+    rect(ctx, 0, y, SCENE_W, 1, '#2b1d5e');
+    for (let x = (y / 6) % 2 ? 0 : 8; x < SCENE_W; x += 16) rect(ctx, x, y, 1, 6, '#2b1d5e');
+  }
+  // windows with night sky
+  for (const wx of [14, 150]) {
+    rect(ctx, wx, 6, 26, 24, '#1a1033');
+    rect(ctx, wx + 2, 8, 22, 20, '#2c5fd1');
+    rect(ctx, wx + 12, 8, 2, 20, '#1a1033');
+    rect(ctx, wx + 2, 17, 22, 2, '#1a1033');
+    rect(ctx, wx + 5, 10, 1, 1, '#fff4d6');
+    rect(ctx, wx + 18, 12, 1, 1, '#fff4d6');
+    rect(ctx, wx + 7, 21, 1, 1, '#fff4d6');
+  }
+  // shelves with scrolls and ledgers
+  for (const sy of [10, 24]) {
+    rect(ctx, 52, sy + 8, 88, 2, '#5a2e1a');
+    for (let i = 0; i < 11; i++) {
+      const colors = ['#ff4f5e', '#4fe08a', '#ffcc33', '#4fb4ff', '#b56cff', '#fff4d6'];
+      const h = 5 + ((i * 7 + sy) % 3);
+      rect(ctx, 55 + i * 8, sy + 8 - h, 5, h, colors[(i + sy) % colors.length]!);
+    }
+  }
+  // floor
+  rect(ctx, 0, 44, SCENE_W, 20, '#5a2e1a');
+  for (let x = 0; x < SCENE_W; x += 12) rect(ctx, x, 44, 1, 20, '#3a1c10');
+  rect(ctx, 0, 44, SCENE_W, 1, '#1a1033');
+  // desk
+  rect(ctx, 46, 38, 100, 6, '#a8602f');
+  rect(ctx, 46, 38, 100, 1, '#1a1033');
+  rect(ctx, 50, 44, 4, 16, '#5a2e1a');
+  rect(ctx, 138, 44, 4, 16, '#5a2e1a');
+  // open ledger
+  rect(ctx, 80, 33, 30, 5, '#fff4d6');
+  rect(ctx, 95, 33, 1, 5, '#a8602f');
+  for (let i = 0; i < 4; i++) {
+    rect(ctx, 82, 34 + i, 11, 1, i % 2 ? '#c3c9e8' : '#6b73a3');
+    rect(ctx, 97, 34 + i, 11, 1, i % 2 ? '#6b73a3' : '#c3c9e8');
+  }
+  // quill
+  rect(ctx, 112, 28, 1, 9, '#fff4d6');
+  rect(ctx, 111, 28, 3, 4, '#fff4d6');
+  // coin stacks
+  for (const [cx, h] of [
+    [56, 4],
+    [62, 7],
+    [68, 5],
+    [124, 6],
+    [130, 9],
+  ] as const) {
+    for (let i = 0; i < h; i++) rect(ctx, cx, 37 - i, 5, 1, i % 2 ? '#ffcc33' : '#ff8a3d');
+  }
+  // scales
+  rect(ctx, 140, 22, 1, 16, '#c3c9e8');
+  rect(ctx, 132, 22, 17, 1, '#c3c9e8');
+  rect(ctx, 130, 27, 6, 2, '#ffcc33');
+  rect(ctx, 145, 25, 6, 2, '#ffcc33');
+  // candle glow
+  rect(ctx, 74, 30, 2, 8, '#fff4d6');
+  rect(ctx, 74, 28, 2, 2, '#ffcc33');
+  ctx.fillStyle = 'rgba(255, 204, 51, 0.12)';
+  ctx.fillRect(56, 18, 40, 26);
 }

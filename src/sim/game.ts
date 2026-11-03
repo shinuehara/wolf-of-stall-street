@@ -151,7 +151,7 @@ function cityProfile(state: GameState): { drift: number; width: number } {
 
 export function newGame(seed: number = Date.now() >>> 0): GameState {
   const state: GameState = {
-    version: 3,
+    version: 4,
     seed,
     rngState: seed,
     week: 0,
@@ -171,6 +171,8 @@ export function newGame(seed: number = Date.now() >>> 0): GameState {
     events: [],
     companyEvents: [],
     localNews: [],
+    ledger: [],
+    assetPnl: {},
     ascensionOffer: false,
     status: 'playing',
     log: [],
@@ -253,8 +255,9 @@ export function buy(state: GameState, assetId: string, amount: number): ActionRe
   if (amount > state.cash + 1e-9) return fail('Você não tem tantos florins livres.');
   amount = Math.min(amount, state.cash);
   state.cash -= amount;
-  const position = (state.positions[assetId] ??= { value: 0, hedged: false });
+  const position = (state.positions[assetId] ??= { value: 0, cost: 0, hedged: false });
   position.value += amount;
+  position.cost += amount;
   return ok;
 }
 
@@ -264,9 +267,8 @@ export function sell(state: GameState, assetId: string, amount: number): ActionR
   if (!position || position.value <= 0) return fail('Você não tem cotas disso.');
   if (!(amount > 0)) return fail('Informe um valor positivo.');
   amount = Math.min(amount, position.value);
-  position.value -= amount;
+  reducePosition(state, assetId, amount);
   state.cash += amount;
-  if (position.value < 0.005) delete state.positions[assetId];
   return ok;
 }
 
@@ -391,6 +393,7 @@ export function endWeek(state: GameState): WeekReport {
     const pnl = position.value * (applied / 100);
     position.value += pnl;
     report.positionPnl[assetId] = pnl;
+    state.assetPnl[assetId] = (state.assetPnl[assetId] ?? 0) + pnl;
   }
 
   for (const assetId of ASSET_IDS) {
@@ -431,6 +434,7 @@ export function endWeek(state: GameState): WeekReport {
 
   state.week += 1;
   logWeekSummary(state, report);
+  recordWeek(state, report);
 
   // 4. Season review.
   if (state.week % SEASON_LENGTH === 0) {
@@ -601,10 +605,41 @@ function raiseCash(state: GameState, needed: number): void {
   const fraction = Math.min(1, missing / total);
   for (const [assetId, position] of Object.entries(state.positions)) {
     const amount = position.value * fraction;
-    position.value -= amount;
+    reducePosition(state, assetId, amount);
     state.cash += amount;
-    if (position.value < 0.005) delete state.positions[assetId];
   }
+}
+
+/** Takes `amount` gold out of a position, reducing its cost in the same proportion. */
+function reducePosition(state: GameState, assetId: string, amount: number): void {
+  const position = state.positions[assetId];
+  if (!position) return;
+  const share = position.value > 0 ? Math.min(1, amount / position.value) : 1;
+  position.cost -= position.cost * share;
+  position.value -= amount;
+  if (position.value < 0.005) delete state.positions[assetId];
+}
+
+/** Wealth at the end of the last finished week (or the starting gold). */
+export function lastRecordedWealth(state: GameState): number {
+  return state.ledger[state.ledger.length - 1]?.endWealth ?? STARTING_GOLD;
+}
+
+function recordWeek(state: GameState, report: WeekReport): void {
+  const startWealth = lastRecordedWealth(state);
+  const endWealth = wealth(state);
+  const marketPnl = Object.values(report.positionPnl).reduce((a, b) => a + b, 0);
+  const explained = marketPnl + report.bondIncome - report.hedgeFees - report.livingCost;
+  state.ledger.push({
+    week: state.week,
+    startWealth,
+    endWealth,
+    marketPnl,
+    bondIncome: report.bondIncome,
+    hedgeFees: report.hedgeFees,
+    livingCost: report.livingCost,
+    other: endWealth - startWealth - explained,
+  });
 }
 
 function logWeekSummary(state: GameState, report: WeekReport): void {

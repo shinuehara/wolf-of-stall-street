@@ -76,6 +76,9 @@ root.addEventListener('click', (event) => {
       selectAsset(assetId);
       go('market');
       break;
+    case 'portfolio-tab':
+      ui.portfolioTab = target.dataset.tab === 'returns' ? 'returns' : 'position';
+      break;
     case 'square-tab':
       ui.squareTab = target.dataset.tab === 'almanac' ? 'almanac' : 'news';
       break;

@@ -148,7 +148,24 @@ export type Insight =
 
 export interface Position {
   value: number;
+  /** Gold put in that is still in the position (reduced pro rata on sales). */
+  cost: number;
   hedged: boolean;
+}
+
+/** One line of the weekly ledger: how wealth changed in a finished week. */
+export interface WeekRecord {
+  /** Week number that just ended (1 = first week). */
+  week: number;
+  startWealth: number;
+  endWealth: number;
+  /** Gains and losses on positions, after insurance. */
+  marketPnl: number;
+  bondIncome: number;
+  hedgeFees: number;
+  livingCost: number;
+  /** Everything else: experts, titles bought. */
+  other: number;
 }
 
 export interface AssetState {
@@ -177,7 +194,7 @@ export interface LogEntry {
 export type GameStatus = 'playing' | 'won' | 'lost';
 
 export interface GameState {
-  version: 3;
+  version: 4;
   seed: number;
   rngState: number;
   /** Weeks elapsed. A season is SEASON_LENGTH weeks. */
@@ -206,6 +223,10 @@ export interface GameState {
   events: ActiveEvent[];
   companyEvents: ActiveCompanyEvent[];
   localNews: ActiveLocalNews[];
+  /** One record per finished week, oldest first. */
+  ledger: WeekRecord[];
+  /** Lifetime gains and losses per asset, in gold. */
+  assetPnl: Record<string, number>;
   /** Set at a season's end when wealth reached the class ceiling. */
   ascensionOffer: boolean;
   status: GameStatus;
