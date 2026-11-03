@@ -72,6 +72,41 @@ Cada linha do Mercado tem atalhos `+5% +10% +50% +Tudo` e `-5% -10% -50% -Tudo`.
 florins livres; `-10%` tenta vender 200 fl, limitado à posição (zera se for menor).
 `+Tudo` usa todos os florins livres; `-Tudo` zera a posição.
 
+### A cidade de Valdouro e seus bairros
+
+A cidade tem um **PIB** e três **bairros**. Cada guilda tem uma empresa em cada bairro.
+
+| Bairro        | Perfil  | Sente a economia da cidade |
+| ------------- | ------- | -------------------------- |
+| Alto da Coroa | nobre   | pouco (×0,7)               |
+| Burgo Velho   | médio   | normal (×1,0)              |
+| Ribeira       | humilde | muito (×1,3)               |
+
+**Movimento semanal de uma empresa:**
+
+```
+cidade (PIB) × sensibilidade do bairro à cidade
++ setor × sensibilidade da empresa ao setor (β)
++ demanda do bairro × quanto o setor vive da freguesia
++ movimento próprio da empresa
+```
+
+Quanto o setor vive da freguesia do bairro: Feira 1,2 · Padeiros 1,1 · Boticários 0,8 ·
+Cambistas 0,7 · Ferreiros 0,5 · Especiarias 0,5 · Minas 0,3 · Navegação 0,3.
+
+**Longo e curto prazo.** O PIB segue um **ciclo econômico** lento (dura várias semanas e
+aparece como tendência no gráfico). As sensibilidades e as notícias inclinam o resultado
+por algumas semanas. Mas cada camada sorteia toda semana dentro da sua faixa, então a
+volatilidade de curto prazo nunca some.
+
+**Inferência indireta.** Notícias da cidade e dos bairros aparecem **sem setas**: só a
+manchete. Exemplo: "A Coroa dará um saco de moedas às famílias da Ribeira" → demanda da
+Ribeira ▲ → empresas da Ribeira, principalmente padaria e feira. Quem lê o Almanaque
+faz essa conta antes dos outros.
+
+**Almanaque** (na Praça): descrição da cidade, dos bairros e das guildas, gráficos do PIB
+e da demanda de cada bairro, empresas de cada bairro e notícias ativas.
+
 ### Notícias
 
 - **Do reino**, que afetam setores: Guerra (Ferreiros ▲, Mercadores ▼), Peste (Boticários ▲),
@@ -87,7 +122,7 @@ florins livres; `-10%` tenta vender 200 fl, limitado à posição (zera se for m
 | 🔮 Astróloga         | 0,05 + 0,03% do patrimônio | alta ou baixa, com 75% de acerto                         | Servo    |
 | 🕵️ Espião            | 0,15 + 0,1% do patrimônio  | a probabilidade real de cada uma das 4 faixas            | Camponês |
 
-Cada pergunta é sobre um **setor** (a guilda inteira) ou uma **empresa** (só o movimento próprio dela).
+Cada pergunta é sobre o **PIB da cidade**, um **bairro**, um **setor** (a guilda inteira) ou uma **empresa** (só o movimento próprio dela).
 
 ### Seguro (hedge)
 
@@ -122,9 +157,17 @@ patrimônio, masmorra.
 - pagar por informação faz subir mais rápido (`naive` > `astrologer` > `spy` em semanas);
 - uma run bem informada dura entre 40 e 90 semanas.
 
-Referência atual (60 seeds): naive ~92 semanas, astróloga ~70, espião ~62.
+Referência atual (60 seeds): naive ~79 semanas, astróloga ~63, espião ~53.
 
 ## Ideias para depois
+
+- **Fase 2: etiquetas de empresa e analistas contratáveis.** Cada empresa ganha
+  características (atendimento, equipamento, fornecedores, reputação…). Algumas notícias
+  acertam empresas por etiqueta ("Fiscais inspecionam fornos antigos"). As etiquetas
+  começam escondidas e são reveladas contratando analistas, como um **analista de
+  atendimento ao cliente** que avalia as empresas nesse quesito.
+- **Cronista** (comprável): revela as sensibilidades exatas de cada empresa à cidade, ao
+  setor e ao bairro.
 
 - 📚 **Perk "Livro-caixa do Escriba"** (comprável): hoje o jogo começa com 26 semanas de
   histórico simulado nos gráficos. No futuro, o histórico visível pode ser curto por padrão

@@ -13,7 +13,8 @@ import {
   setHedge,
   wealth,
 } from './game';
-import { assetRange } from './assets';
+import { assetRange, companyExposures } from './assets';
+import { getCompany } from './data';
 
 describe('newGame', () => {
   it('starts as a Serf with the starting gold and a forecast for every guild', () => {
@@ -113,6 +114,13 @@ describe('experts', () => {
     expect(consult(state, 'spy', 'bakers').ok).toBe(false);
   });
 
+  it('can be asked about the city and the districts by anyone', () => {
+    const state = newGame(5);
+    expect(consult(state, 'astrologer', 'city').ok).toBe(true);
+    expect(consult(state, 'astrologer', 'ribeira').ok).toBe(true);
+    expect(state.insights.map((i) => i.targetId)).toEqual(['city', 'ribeira']);
+  });
+
   it('can be asked about a sector or about a single company', () => {
     const state = newGame(5);
     expect(consult(state, 'astrologer', 'bakers').ok).toBe(true);
@@ -174,6 +182,39 @@ describe('endWeek', () => {
       expect(avg).toBeGreaterThanOrEqual(range.low - 1e-9);
       expect(avg).toBeLessThanOrEqual(range.high + 1e-9);
     }
+  });
+
+  it('tracks the city GDP and district demand as indices with history', () => {
+    const state = newGame(6);
+    for (const id of ['city', 'crown', 'burgo', 'ribeira']) {
+      expect(state.indicators[id]!.value).toBe(100);
+      expect(state.indicators[id]!.history).toHaveLength(PRE_HISTORY_WEEKS + 1);
+    }
+    endWeek(state);
+    expect(state.indicators.city!.history).toHaveLength(PRE_HISTORY_WEEKS + 2);
+  });
+
+  it('district news moves the hidden lean of only that district', () => {
+    let seen = 0;
+    for (let seed = 0; seed < 40 && seen < 3; seed++) {
+      const state = newGame(seed);
+      for (let i = 0; i < 20; i++) endWeek(state);
+      for (const n of state.localNews) {
+        seen++;
+        expect(n.headline.length).toBeGreaterThan(10);
+        expect(['city', 'crown', 'burgo', 'ribeira']).toContain(n.targetId);
+      }
+    }
+    expect(seen).toBeGreaterThan(0);
+  });
+
+  it('a company is exposed to the city, its sector, its district and itself', () => {
+    const state = newGame(2);
+    const harbor = getCompany('bakers.harbor');
+    const factors = companyExposures(harbor).map((e) => e.factorId);
+    expect(factors).toEqual(['city', 'bakers', 'ribeira', 'bakers.harbor']);
+    const r = assetRange(state, 'bakers.harbor');
+    expect(r.high).toBeGreaterThan(r.low);
   });
 
   it('company news shifts only that company and reads well', () => {

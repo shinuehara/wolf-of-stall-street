@@ -41,6 +41,19 @@ export interface GuildDef extends ForecastProfile {
   startPrice: number;
 }
 
+export type RegionId = 'crown' | 'burgo' | 'ribeira';
+
+/** A district of the city. Its own factor moves the local demand of the companies based there. */
+export interface RegionDef extends ForecastProfile {
+  id: RegionId;
+  name: string;
+  /** Social standing of the people who live there. */
+  standing: 'nobre' | 'médio' | 'humilde';
+  description: string;
+  /** How strongly the city's economy (GDP) moves companies based here. */
+  cityBeta: number;
+}
+
 /**
  * A company inside a guild. Its weekly return is `beta x sector move + its own move`,
  * where its own move has its own forecast (drift, width) and events.
@@ -51,6 +64,8 @@ export interface CompanyDef extends ForecastProfile {
   name: string;
   /** Grammatical gender, for headlines: 'f' -> "da Padaria", 'm' -> "do Forno". */
   gender: 'f' | 'm';
+  /** District where the company is based. */
+  regionId: RegionId;
   /** Sensitivity to the sector move. */
   beta: number;
   trait: string;
@@ -66,6 +81,26 @@ export interface EventDef {
   /** Shift in percentage points applied to the weekly forecast of each sector. */
   effects: SectorEffects;
   duration: [min: number, max: number];
+}
+
+/** Headline for news about the whole city (GDP) or one district. */
+export interface LocalNewsTemplate {
+  text: string;
+  shift: number;
+}
+
+export interface ActiveLocalNews {
+  /** 'city' or a region id. */
+  targetId: string;
+  headline: string;
+  shift: number;
+  weeksLeft: number;
+}
+
+/** An economic indicator tracked over time (city GDP, district demand), as an index. */
+export interface IndicatorState {
+  value: number;
+  history: number[];
 }
 
 /** Headline template for news about one company. `{c}` is the company name. */
@@ -104,8 +139,8 @@ export interface Band {
 }
 
 /**
- * What an expert said. `targetId` is a guild id (about the whole sector) or a company id
- * (about that company's own business, apart from the sector).
+ * What an expert said. `targetId` is 'city', a region id, a guild id (about the whole sector)
+ * or a company id (about that company's own business, apart from everything else).
  */
 export type Insight =
   | { expert: 'drunk' | 'astrologer'; targetId: string; leansUp: boolean }
@@ -142,7 +177,7 @@ export interface LogEntry {
 export type GameStatus = 'playing' | 'won' | 'lost';
 
 export interface GameState {
-  version: 2;
+  version: 3;
   seed: number;
   rngState: number;
   /** Weeks elapsed. A season is SEASON_LENGTH weeks. */
@@ -156,9 +191,21 @@ export interface GameState {
   sectorForecasts: Record<string, Forecast>;
   /** This week's company-specific forecasts, by company id. */
   companyForecasts: Record<string, Forecast>;
+  /** This week's forecast for the city's economy (GDP). */
+  cityForecast: Forecast;
+  /** This week's forecasts for each district's local demand. */
+  regionForecasts: Record<string, Forecast>;
+  /**
+   * Slow economic cycle of the city, in % per week. It drifts a little every week and
+   * sets the long-term trend of the GDP; weekly moves stay noisy around it.
+   */
+  cityCycle: number;
+  /** GDP and district indices ('city' and region ids), starting at 100. */
+  indicators: Record<string, IndicatorState>;
   insights: Insight[];
   events: ActiveEvent[];
   companyEvents: ActiveCompanyEvent[];
+  localNews: ActiveLocalNews[];
   /** Set at a season's end when wealth reached the class ceiling. */
   ascensionOffer: boolean;
   status: GameStatus;

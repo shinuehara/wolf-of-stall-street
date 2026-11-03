@@ -1,14 +1,23 @@
 import {
   ASTROLOGER_ACCURACY,
+  CITY,
+  CITY_NEWS,
   COMPANIES,
   COMPANY_EVENT_CHANCE,
   COMPANY_NEWS,
+  CYCLE_LIMIT,
+  CYCLE_PERSISTENCE,
+  CYCLE_SHOCK,
   DRUNK_ACCURACY,
   EVENT_CHANCE,
   EVENTS,
   GUILDS,
+  LOCAL_NEWS_CHANCE,
   MAX_ACTIVE_EVENTS,
   MAX_COMPANY_EVENTS,
+  MAX_LOCAL_NEWS,
+  REGIONS,
+  REGION_NEWS,
   SEASON_LENGTH,
   STARTING_GOLD,
   TOP_CLASS,
@@ -17,8 +26,17 @@ import {
   getEvent,
   getExpert,
   getGuild,
+  isRegionId,
 } from './data';
-import { ASSET_IDS, assetRange, assetStartPrice, guildOfAsset, isBasket } from './assets';
+import {
+  ASSET_IDS,
+  assetRange,
+  assetStartPrice,
+  companyMove,
+  factorForecast,
+  guildOfAsset,
+  type FactorId,
+} from './assets';
 import { applyHedge, bands, eventShift, generateForecast, leansUp, sampleReturn } from './forecast';
 import { nextRandom, pick, randomInt } from './rng';
 import type {
@@ -39,6 +57,8 @@ const fail = (error: string): { ok: false; error: string } => ({ ok: false, erro
 export interface WeekReport {
   /** Return in % per asset (market move, before insurance). */
   marketReturns: Record<string, number>;
+  /** Move in % of each factor (city, districts, sectors, companies' own business). */
+  factorMoves: Record<string, number>;
   /** Gold gained or lost on each held position, after insurance. */
   positionPnl: Record<string, number>;
   bondIncome: number;
@@ -53,48 +73,85 @@ const MAX_LOG = 60;
 /** Weeks of simulated market history that exist before the game starts, so charts are never empty. */
 export const PRE_HISTORY_WEEKS = 26;
 
+/** Every factor with its own weekly forecast: the city, the districts, the sectors, the companies. */
+const FACTOR_IDS: readonly FactorId[] = [
+  'city',
+  ...REGIONS.map((r) => r.id),
+  ...GUILDS.map((g) => g.id),
+  ...COMPANIES.map((c) => c.id),
+];
+
+/** Indicators shown in the almanac: the city's GDP and each district's local demand. */
+export const INDICATOR_IDS: readonly string[] = ['city', ...REGIONS.map((r) => r.id)];
+
+/** Samples one week of moves for every factor, then combines them into every asset's move. */
+function sampleMoves(
+  state: GameState,
+  forecastOf: (factorId: FactorId) => Forecast,
+): { factors: Record<FactorId, number>; assets: Record<string, number> } {
+  const factors: Record<FactorId, number> = {};
+  for (const id of FACTOR_IDS) {
+    factors[id] = sampleReturn(forecastOf(id), nextRandom(state), nextRandom(state));
+  }
+  const assets: Record<string, number> = {};
+  for (const guild of GUILDS) {
+    const companies = companiesOf(guild.id);
+    for (const company of companies) assets[company.id] = companyMove(company, factors);
+    assets[guild.id] = companies.reduce((sum, c) => sum + assets[c.id]!, 0) / companies.length;
+  }
+  return { factors, assets };
+}
+
+/** The slow economic cycle wanders a little each week, pulled back towards zero. */
+function stepCycle(state: GameState): void {
+  const next = state.cityCycle * CYCLE_PERSISTENCE + (nextRandom(state) - 0.5) * 2 * CYCLE_SHOCK;
+  state.cityCycle = Math.max(-CYCLE_LIMIT, Math.min(CYCLE_LIMIT, next));
+}
+
 /**
  * Simulates calm weeks (same market model, no news) before the player arrives and rescales
- * each path so it ends exactly at the asset's starting price.
+ * each path so it ends exactly at the asset's starting price (indicators end at 100).
  */
 function seedHistory(state: GameState): void {
-  const paths: Record<string, number[]> = Object.fromEntries(ASSET_IDS.map((id) => [id, [1]]));
-  for (let w = 0; w < PRE_HISTORY_WEEKS; w++) {
-    for (const guild of GUILDS) {
-      const sectorMove = sampleReturn(
-        generateForecast(state, guild, 0),
-        nextRandom(state),
-        nextRandom(state),
-      );
-      const companies = companiesOf(guild.id);
-      let sum = 0;
-      for (const company of companies) {
-        const own = sampleReturn(
-          generateForecast(state, company, 0),
-          nextRandom(state),
-          nextRandom(state),
-        );
-        const move = company.beta * sectorMove + own;
-        sum += move;
-        const path = paths[company.id]!;
-        path.push(path[path.length - 1]! * (1 + move / 100));
-      }
-      const basket = paths[guild.id]!;
-      basket.push(basket[basket.length - 1]! * (1 + sum / companies.length / 100));
-    }
-  }
-  for (const id of ASSET_IDS) {
+  const ids = [...ASSET_IDS, ...INDICATOR_IDS];
+  const paths: Record<string, number[]> = Object.fromEntries(ids.map((id) => [id, [1]]));
+  const push = (id: string, move: number) => {
     const path = paths[id]!;
-    const scale = assetStartPrice(id) / path[path.length - 1]!;
-    const history = path.map((v) => v * scale);
-    history[history.length - 1] = assetStartPrice(id);
-    state.assets[id] = { price: assetStartPrice(id), history };
+    path.push(path[path.length - 1]! * (1 + move / 100));
+  };
+  for (let w = 0; w < PRE_HISTORY_WEEKS; w++) {
+    stepCycle(state);
+    const { factors, assets } = sampleMoves(state, (id) =>
+      generateForecast(state, id === 'city' ? cityProfile(state) : profileOf(id), 0),
+    );
+    for (const id of ASSET_IDS) push(id, assets[id]!);
+    for (const id of INDICATOR_IDS) push(id, factors[id]!);
   }
+  for (const id of ids) {
+    const path = paths[id]!;
+    const end = INDICATOR_IDS.includes(id) ? 100 : assetStartPrice(id);
+    const scale = end / path[path.length - 1]!;
+    const history = path.map((v) => v * scale);
+    history[history.length - 1] = end;
+    if (INDICATOR_IDS.includes(id)) state.indicators[id] = { value: end, history };
+    else state.assets[id] = { price: end, history };
+  }
+}
+
+function profileOf(factorId: FactorId): { drift: number; width: number } {
+  if (isRegionId(factorId)) return REGIONS.find((r) => r.id === factorId)!;
+  const guild = GUILDS.find((g) => g.id === factorId);
+  if (guild) return guild;
+  return COMPANIES.find((c) => c.id === factorId)!;
+}
+
+function cityProfile(state: GameState): { drift: number; width: number } {
+  return { drift: CITY.drift + state.cityCycle, width: CITY.width };
 }
 
 export function newGame(seed: number = Date.now() >>> 0): GameState {
   const state: GameState = {
-    version: 2,
+    version: 3,
     seed,
     rngState: seed,
     week: 0,
@@ -106,9 +163,14 @@ export function newGame(seed: number = Date.now() >>> 0): GameState {
     ),
     sectorForecasts: {},
     companyForecasts: {},
+    cityForecast: { low: 0, high: 0, weights: [] },
+    regionForecasts: {},
+    cityCycle: 0,
+    indicators: {},
     insights: [],
     events: [],
     companyEvents: [],
+    localNews: [],
     ascensionOffer: false,
     status: 'playing',
     log: [],
@@ -164,11 +226,17 @@ export function hedgeFee(state: GameState, assetId: string): number {
   return position.value * currentClass(state).hedgeFeeRate;
 }
 
-/** The forecast an expert reads for a target: the sector's for a guild, the company's own otherwise. */
+/**
+ * The forecast an expert reads for a target: the city's GDP, a district's demand, a sector
+ * (guild id) or a company's own business.
+ */
 export function targetForecast(state: GameState, targetId: string): Forecast {
-  const f = isBasket(targetId) ? state.sectorForecasts[targetId] : state.companyForecasts[targetId];
-  if (!f) throw new Error(`No forecast for ${targetId}`);
-  return f;
+  return factorForecast(state, targetId);
+}
+
+/** The city and its districts are open to everyone; guilds and companies need the right class. */
+export function isTargetUnlocked(state: GameState, targetId: string): boolean {
+  return targetId === 'city' || isRegionId(targetId) || isAssetUnlocked(state, targetId);
 }
 
 // ---------------------------------------------------------------------------
@@ -239,7 +307,7 @@ export function consult(state: GameState, expertId: ExpertId, targetId: string):
       `O ${expert.name} não atende quem está abaixo de ${getClass(expert.minClass).name}.`,
     );
   }
-  if (!isAssetUnlocked(state, targetId)) return fail('Você ainda não tem acesso a esta guilda.');
+  if (!isTargetUnlocked(state, targetId)) return fail('Você ainda não tem acesso a esta guilda.');
   if (state.insights.some((i) => i.expert === expertId && i.targetId === targetId)) {
     return fail('Você já fez essa pergunta a este especialista nesta semana.');
   }
@@ -292,6 +360,7 @@ export function endWeek(state: GameState): WeekReport {
   const cls = currentClass(state);
   const report: WeekReport = {
     marketReturns: {},
+    factorMoves: {},
     positionPnl: {},
     bondIncome: 0,
     hedgeFees: 0,
@@ -310,25 +379,11 @@ export function endWeek(state: GameState): WeekReport {
     state.cash -= fee;
   }
 
-  // 2. The market moves: each sector, then each company on top of its sector.
-  const moves = report.marketReturns;
-  for (const guild of GUILDS) {
-    const sectorMove = sampleReturn(
-      state.sectorForecasts[guild.id]!,
-      nextRandom(state),
-      nextRandom(state),
-    );
-    const companies = companiesOf(guild.id);
-    for (const company of companies) {
-      const own = sampleReturn(
-        state.companyForecasts[company.id]!,
-        nextRandom(state),
-        nextRandom(state),
-      );
-      moves[company.id] = company.beta * sectorMove + own;
-    }
-    moves[guild.id] = companies.reduce((sum, c) => sum + moves[c.id]!, 0) / companies.length;
-  }
+  // 2. The market moves: the city, the districts, the sectors and each company's own business.
+  const sampled = sampleMoves(state, (id) => factorForecast(state, id));
+  const moves = sampled.assets;
+  report.marketReturns = moves;
+  report.factorMoves = sampled.factors;
 
   for (const [assetId, position] of Object.entries(state.positions)) {
     const raw = moves[assetId] ?? 0;
@@ -342,6 +397,11 @@ export function endWeek(state: GameState): WeekReport {
     const asset = state.assets[assetId]!;
     asset.price *= 1 + (moves[assetId] ?? 0) / 100;
     asset.history.push(asset.price);
+  }
+  for (const id of INDICATOR_IDS) {
+    const indicator = state.indicators[id]!;
+    indicator.value *= 1 + (sampled.factors[id] ?? 0) / 100;
+    indicator.history.push(indicator.value);
   }
 
   // 3. Idle gold earns Crown bond interest; then the bills come.
@@ -382,6 +442,7 @@ export function endWeek(state: GameState): WeekReport {
   // 5. The world turns.
   tickEvents(state);
   tickCompanyEvents(state);
+  tickLocalNews(state);
   state.insights = [];
   rollForecasts(state);
   return report;
@@ -479,7 +540,41 @@ export function companyShift(state: GameState, companyId: string): number {
     .reduce((s, e) => s + e.shift, 0);
 }
 
+function tickLocalNews(state: GameState): void {
+  for (const news of state.localNews) news.weeksLeft -= 1;
+  state.localNews = state.localNews.filter((n) => n.weeksLeft > 0);
+
+  if (state.localNews.length >= MAX_LOCAL_NEWS || nextRandom(state) >= LOCAL_NEWS_CHANCE) return;
+  const targets = ['city', ...REGIONS.map((r) => r.id)].filter(
+    (id) => !state.localNews.some((n) => n.targetId === id),
+  );
+  if (targets.length === 0) return;
+  const targetId = pick(state, targets);
+  const template = pick(state, isRegionId(targetId) ? REGION_NEWS[targetId] : CITY_NEWS);
+  state.localNews.push({
+    targetId,
+    headline: template.text,
+    shift: template.shift,
+    weeksLeft: randomInt(state, 2, 4),
+  });
+  log(state, template.text, 'neutral');
+}
+
+/** Total effect of active news on the city or a district, in percentage points. */
+export function localShift(state: GameState, targetId: string): number {
+  return state.localNews.filter((n) => n.targetId === targetId).reduce((s, n) => s + n.shift, 0);
+}
+
 function rollForecasts(state: GameState): void {
+  stepCycle(state);
+  state.cityForecast = generateForecast(state, cityProfile(state), localShift(state, 'city'));
+  for (const region of REGIONS) {
+    state.regionForecasts[region.id] = generateForecast(
+      state,
+      region,
+      localShift(state, region.id),
+    );
+  }
   const events = state.events.map((e) => getEvent(e.id));
   for (const guild of GUILDS) {
     state.sectorForecasts[guild.id] = generateForecast(

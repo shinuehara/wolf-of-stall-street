@@ -1539,3 +1539,192 @@ img.sprite,
 .company-item {
   margin-left: 0;
 }
+
+/* Square tabs */
+.tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  color: var(--ink);
+  background: var(--panel-lo);
+  border: var(--px) solid var(--edge);
+  cursor: pointer;
+}
+
+.tab.active {
+  background: var(--purple);
+  color: var(--edge);
+}
+
+.square .cols-3 {
+  flex: 1;
+}
+
+/* District chips */
+.standing {
+  display: inline-block;
+  padding: 0 5px;
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  border: 2px solid var(--edge);
+  color: var(--edge);
+}
+
+.standing-crown {
+  background: var(--purple);
+}
+
+.standing-burgo {
+  background: var(--blue);
+}
+
+.standing-ribeira {
+  background: var(--orange);
+}
+
+.big-standing {
+  font-size: 0.8rem;
+  padding: 4px 8px;
+}
+
+.tag-local {
+  background: var(--orange);
+}
+
+/* Almanac */
+.almanac {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.almanac-index {
+  padding: 8px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.almanac-index h3 {
+  font-size: 0.8rem;
+  color: var(--purple);
+  margin-top: 4px;
+}
+
+.almanac-index ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.almanac-link {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 6px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: var(--panel-lo);
+  border: 2px solid transparent;
+  cursor: pointer;
+}
+
+.almanac-link:hover {
+  border-color: var(--purple);
+}
+
+.almanac-link.selected {
+  background: var(--panel-hi);
+  border-color: var(--gold);
+}
+
+.almanac-link.locked {
+  opacity: 0.6;
+}
+
+.almanac-body {
+  padding: 10px 14px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.almanac-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.almanac-head h2 {
+  color: var(--gold);
+  font-size: 1.25rem;
+}
+
+.almanac-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+}
+
+.almanac-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.almanac-col h3 {
+  font-size: 0.85rem;
+  color: var(--purple);
+}
+
+.almanac-companies {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.almanac-companies .member {
+  width: 100%;
+  padding-left: 8px;
+}
+
+.almanac-companies .member-name {
+  flex-basis: auto;
+}
+
+.breakdown {
+  line-height: 1.3;
+}
+
+@media (max-width: 860px) {
+  .almanac,
+  .almanac-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .almanac-index {
+    max-height: 30vh;
+  }
+}

@@ -4,6 +4,9 @@ import type {
   EventDef,
   ExpertDef,
   GuildDef,
+  LocalNewsTemplate,
+  RegionDef,
+  RegionId,
   Sector,
   SocialClass,
 } from './types';
@@ -16,6 +19,123 @@ export const ASTROLOGER_ACCURACY = 0.75;
 export const DRUNK_ACCURACY = 0.5;
 export const MAX_COMPANY_EVENTS = 3;
 export const COMPANY_EVENT_CHANCE = 0.4;
+export const MAX_LOCAL_NEWS = 2;
+export const LOCAL_NEWS_CHANCE = 0.3;
+
+export const CITY_NAME = 'Valdouro';
+
+export const CITY = {
+  name: CITY_NAME,
+  description:
+    'Cidade mercante às margens do rio Douro-Velho, cercada por muralhas e cobiçada por três reinos. ' +
+    'Quando o PIB de Valdouro sobe, quase todo mundo ganha; quando cai, até o Conde aperta o cinto.',
+  /** Average weekly GDP growth in %, before the cycle and the news. */
+  drift: 0.15,
+  width: 4,
+};
+
+/** How far the economic cycle can wander (in % per week) and how fast it moves. */
+export const CYCLE_LIMIT = 1.2;
+export const CYCLE_PERSISTENCE = 0.92;
+export const CYCLE_SHOCK = 0.35;
+
+export const REGIONS: readonly RegionDef[] = [
+  {
+    id: 'crown',
+    name: 'Alto da Coroa',
+    standing: 'nobre',
+    description:
+      'A colina dos palácios, perto do castelo. Moram ali nobres, bispos e banqueiros. ' +
+      'Gastam muito, mas só com o que é fino, e sentem pouco as crises da cidade.',
+    cityBeta: 0.7,
+    drift: 0.05,
+    width: 4,
+  },
+  {
+    id: 'burgo',
+    name: 'Burgo Velho',
+    standing: 'médio',
+    description:
+      'O coração antigo da cidade: ruas de oficinas, mestres de guilda e lojistas. ' +
+      'Acompanha de perto a economia de Valdouro.',
+    cityBeta: 1.0,
+    drift: 0.05,
+    width: 5,
+  },
+  {
+    id: 'ribeira',
+    name: 'Ribeira',
+    standing: 'humilde',
+    description:
+      'O bairro do porto e das enchentes, de estivadores, pescadores e lavadeiras. ' +
+      'Quando sobra um trocado, ele vira pão e pano na hora; quando falta, é o primeiro a sentir.',
+    cityBeta: 1.3,
+    drift: 0.05,
+    width: 7,
+  },
+];
+
+/**
+ * How much each sector depends on the local demand of the district where a company sits.
+ * Bread and stalls live off the neighbours; ships and mines sell far away.
+ */
+export const LOCAL_DEMAND: Record<Sector, number> = {
+  food: 1.1,
+  retail: 1.2,
+  health: 0.8,
+  banking: 0.7,
+  commodities: 0.3,
+  industry: 0.5,
+  shipping: 0.3,
+  spices: 0.5,
+};
+
+export const GUILD_DESCRIPTIONS: Record<string, string> = {
+  bakers:
+    'Pão é a primeira coisa que se compra e a última que se corta. Depende muito da freguesia do bairro.',
+  mines:
+    'Ferro e prata que saem da serra para os três reinos. Pouco importa o bairro; importam a guerra e os dragões.',
+  apothecaries:
+    'Unguentos, ervas e sangrias. A peste é tragédia para a cidade e festa para os boticários.',
+  changers: 'Câmbio, penhores e empréstimos. Vivem da confiança, e a confiança some num boato.',
+  fair: 'Barracas, armazéns e tecidos. O termômetro do bolso de cada bairro.',
+  forge: 'Armas, ferraduras e arados. A guerra enche as forjas; a paz enche os campos de arados.',
+  fleet: 'Barcas e naus que levam e trazem o mundo. O mar dá e o mar toma.',
+  spices:
+    'Pimenta, açafrão e canela valem mais que ouro. Fortunas se fazem e se perdem numa caravana.',
+};
+
+/** News about the whole city. They move the GDP factor. */
+export const CITY_NEWS: readonly LocalNewsTemplate[] = [
+  { text: 'A Coroa anunciou obras na muralha: trabalho para meio Valdouro.', shift: 3 },
+  { text: 'O Rei casa a filha em Valdouro: um mês de festas e banquetes.', shift: 3 },
+  { text: 'Novo tratado abre as rotas do sul aos mercadores de Valdouro.', shift: 2 },
+  { text: 'O Conselho criou um imposto sobre portas e janelas.', shift: -3 },
+  { text: 'Inverno mais longo em memória: a cidade se tranca em casa.', shift: -2 },
+  { text: 'Boatos de cerco: famílias guardam moedas debaixo do colchão.', shift: -3 },
+];
+
+/** News about one district. They move that district's local demand. */
+export const REGION_NEWS: Record<RegionId, readonly LocalNewsTemplate[]> = {
+  crown: [
+    { text: 'Nobres voltam da corte para passar o verão no Alto da Coroa.', shift: 4 },
+    { text: 'Baile de máscaras no Alto da Coroa: todos querem o mais fino.', shift: 3 },
+    { text: 'O Duque taxou o luxo: o Alto da Coroa guarda a bolsa.', shift: -4 },
+    { text: 'Escândalo na corte: metade do Alto da Coroa viajou às pressas.', shift: -3 },
+  ],
+  burgo: [
+    { text: 'Nova ponte liga o Burgo Velho ao porto: mais gente nas ruas.', shift: 3 },
+    { text: 'As guildas do Burgo Velho aumentaram o salário dos aprendizes.', shift: 3 },
+    { text: 'Incêndio destrói uma rua inteira do Burgo Velho.', shift: -4 },
+    { text: 'Obras fecham a praça do Burgo Velho por semanas.', shift: -2 },
+  ],
+  ribeira: [
+    { text: 'A Coroa dará um saco de moedas às famílias da Ribeira.', shift: 5 },
+    { text: 'Pesca farta: os barcos voltam cheios à Ribeira.', shift: 3 },
+    { text: 'Enchente alaga a Ribeira até os joelhos.', shift: -5 },
+    { text: 'Estivadores da Ribeira sem trabalho: o porto parou.', shift: -4 },
+  ],
+};
 
 /**
  * The social ladder. Each ceiling minus the ascension fee lands at or above the next floor,
@@ -194,6 +314,7 @@ export const COMPANIES: readonly CompanyDef[] = [
   {
     id: 'bakers.royal',
     guildId: 'bakers',
+    regionId: 'crown',
     name: 'Padaria Real',
     gender: 'f',
     beta: 0.7,
@@ -205,6 +326,7 @@ export const COMPANIES: readonly CompanyDef[] = [
   {
     id: 'bakers.north',
     guildId: 'bakers',
+    regionId: 'burgo',
     name: 'Forno do Norte',
     gender: 'm',
     beta: 1.0,
@@ -216,6 +338,7 @@ export const COMPANIES: readonly CompanyDef[] = [
   {
     id: 'bakers.harbor',
     guildId: 'bakers',
+    regionId: 'ribeira',
     name: 'Padaria do Porto',
     gender: 'f',
     beta: 1.3,
@@ -228,6 +351,7 @@ export const COMPANIES: readonly CompanyDef[] = [
   {
     id: 'mines.serra',
     guildId: 'mines',
+    regionId: 'crown',
     name: 'Companhia da Serra',
     gender: 'f',
     beta: 0.8,
@@ -239,6 +363,7 @@ export const COMPANIES: readonly CompanyDef[] = [
   {
     id: 'mines.silver',
     guildId: 'mines',
+    regionId: 'burgo',
     name: 'Veio de Prata',
     gender: 'm',
     beta: 1.0,
@@ -250,6 +375,7 @@ export const COMPANIES: readonly CompanyDef[] = [
   {
     id: 'mines.deep',
     guildId: 'mines',
+    regionId: 'ribeira',
     name: 'Mina Funda',
     gender: 'f',
     beta: 1.4,
@@ -262,6 +388,7 @@ export const COMPANIES: readonly CompanyDef[] = [
   {
     id: 'apothecaries.abbey',
     guildId: 'apothecaries',
+    regionId: 'crown',
     name: 'Botica do Mosteiro',
     gender: 'f',
     beta: 0.7,
@@ -273,6 +400,7 @@ export const COMPANIES: readonly CompanyDef[] = [
   {
     id: 'apothecaries.central',
     guildId: 'apothecaries',
+    regionId: 'burgo',
     name: 'Botica Central',
     gender: 'f',
     beta: 1.0,
@@ -284,6 +412,7 @@ export const COMPANIES: readonly CompanyDef[] = [
   {
     id: 'apothecaries.phoenix',
     guildId: 'apothecaries',
+    regionId: 'ribeira',
     name: 'Elixir da Fênix',
     gender: 'm',
     beta: 1.2,
@@ -296,6 +425,7 @@ export const COMPANIES: readonly CompanyDef[] = [
   {
     id: 'changers.bridge',
     guildId: 'changers',
+    regionId: 'burgo',
     name: 'Banco da Ponte',
     gender: 'm',
     beta: 0.8,
@@ -307,6 +437,7 @@ export const COMPANIES: readonly CompanyDef[] = [
   {
     id: 'changers.fortune',
     guildId: 'changers',
+    regionId: 'crown',
     name: 'Casa Fortuna',
     gender: 'f',
     beta: 1.1,
@@ -318,6 +449,7 @@ export const COMPANIES: readonly CompanyDef[] = [
   {
     id: 'changers.oldgold',
     guildId: 'changers',
+    regionId: 'ribeira',
     name: 'Câmbio do Ouro Velho',
     gender: 'm',
     beta: 1.4,
@@ -330,6 +462,7 @@ export const COMPANIES: readonly CompanyDef[] = [
   {
     id: 'fair.store',
     guildId: 'fair',
+    regionId: 'ribeira',
     name: 'Armazém Bom Preço',
     gender: 'm',
     beta: 0.8,
@@ -341,6 +474,7 @@ export const COMPANIES: readonly CompanyDef[] = [
   {
     id: 'fair.silk',
     guildId: 'fair',
+    regionId: 'crown',
     name: 'Sedaria Oriental',
     gender: 'f',
     beta: 1.1,
@@ -352,6 +486,7 @@ export const COMPANIES: readonly CompanyDef[] = [
   {
     id: 'fair.peddler',
     guildId: 'fair',
+    regionId: 'burgo',
     name: 'Tenda do Mascate',
     gender: 'f',
     beta: 1.3,
@@ -364,6 +499,7 @@ export const COMPANIES: readonly CompanyDef[] = [
   {
     id: 'forge.royal',
     guildId: 'forge',
+    regionId: 'crown',
     name: 'Forja Real',
     gender: 'f',
     beta: 0.8,
@@ -375,6 +511,7 @@ export const COMPANIES: readonly CompanyDef[] = [
   {
     id: 'forge.bronze',
     guildId: 'forge',
+    regionId: 'burgo',
     name: 'Martelo de Bronze',
     gender: 'm',
     beta: 1.1,
@@ -386,6 +523,7 @@ export const COMPANIES: readonly CompanyDef[] = [
   {
     id: 'forge.valley',
     guildId: 'forge',
+    regionId: 'ribeira',
     name: 'Ferraria do Vale',
     gender: 'f',
     beta: 1.3,
@@ -398,6 +536,7 @@ export const COMPANIES: readonly CompanyDef[] = [
   {
     id: 'fleet.river',
     guildId: 'fleet',
+    regionId: 'ribeira',
     name: 'Barca do Rio',
     gender: 'f',
     beta: 0.7,
@@ -409,6 +548,7 @@ export const COMPANIES: readonly CompanyDef[] = [
   {
     id: 'fleet.levant',
     guildId: 'fleet',
+    regionId: 'burgo',
     name: 'Nau do Levante',
     gender: 'f',
     beta: 1.1,
@@ -420,6 +560,7 @@ export const COMPANIES: readonly CompanyDef[] = [
   {
     id: 'fleet.galleon',
     guildId: 'fleet',
+    regionId: 'crown',
     name: 'Galeão Dourado',
     gender: 'm',
     beta: 1.4,
@@ -432,6 +573,7 @@ export const COMPANIES: readonly CompanyDef[] = [
   {
     id: 'spices.pepper',
     guildId: 'spices',
+    regionId: 'burgo',
     name: 'Pimenta & Cia',
     gender: 'f',
     beta: 1.0,
@@ -443,6 +585,7 @@ export const COMPANIES: readonly CompanyDef[] = [
   {
     id: 'spices.saffron',
     guildId: 'spices',
+    regionId: 'crown',
     name: 'Rota do Açafrão',
     gender: 'f',
     beta: 1.2,
@@ -454,6 +597,7 @@ export const COMPANIES: readonly CompanyDef[] = [
   {
     id: 'spices.cinnamon',
     guildId: 'spices',
+    regionId: 'ribeira',
     name: 'Canela do Oriente',
     gender: 'f',
     beta: 1.4,
@@ -630,6 +774,16 @@ export function getCompany(id: string): CompanyDef {
 
 export function companiesOf(guildId: string): CompanyDef[] {
   return COMPANIES.filter((c) => c.guildId === guildId);
+}
+
+export function getRegion(id: string): RegionDef {
+  const region = REGIONS.find((r) => r.id === id);
+  if (!region) throw new Error(`Unknown region: ${id}`);
+  return region;
+}
+
+export function isRegionId(id: string): id is RegionId {
+  return REGIONS.some((r) => r.id === id);
 }
 
 export function getEvent(id: string): EventDef {

@@ -1,7 +1,11 @@
 import {
+  CITY,
   CLASSES,
   EXPERTS,
+  GUILD_DESCRIPTIONS,
   GUILDS,
+  LOCAL_DEMAND,
+  REGIONS,
   SEASON_LENGTH,
   TOP_CLASS,
   companiesOf,
@@ -9,8 +13,18 @@ import {
   getCompany,
   getEvent,
   getGuild,
+  getRegion,
+  isRegionId,
 } from '../sim/data';
-import { assetName, assetRange, componentsOf, guildOfAsset, isBasket } from '../sim/assets';
+import {
+  assetName,
+  assetRange,
+  companyExposures,
+  componentsOf,
+  factorForecast,
+  guildOfAsset,
+  isBasket,
+} from '../sim/assets';
 import { hedgeBounds, type Range } from '../sim/forecast';
 import {
   currentClass,
@@ -33,6 +47,10 @@ export interface UiState {
   screen: Screen;
   /** Asset shown in the market: a guild id (basket) or a company id. */
   selectedAsset: string;
+  /** Which panel the Square shows: this week's news or the city almanac. */
+  squareTab: 'news' | 'almanac';
+  /** Almanac entry: 'city', a region id or a guild id. */
+  almanacEntry: string;
   /** Guilds whose companies are listed under the basket in the market. */
   expandedGuilds: Record<string, boolean>;
   /** On narrow screens the market shows either the list or one asset's detail. */
@@ -50,6 +68,8 @@ export function initialUi(): UiState {
   return {
     screen: 'square',
     selectedAsset: 'bakers',
+    squareTab: 'news',
+    almanacEntry: 'city',
     expandedGuilds: { bakers: true },
     marketDetailOpen: false,
     tavernExpert: 'astrologer',
@@ -142,7 +162,27 @@ function assetSprite(assetId: string): SpriteName {
 
 /** "Setor Padeiros" for a guild id, the company name otherwise. */
 function targetName(targetId: string): string {
+  if (targetId === 'city') return `PIB de ${CITY.name}`;
+  if (isRegionId(targetId)) return getRegion(targetId).name;
   return isBasket(targetId) ? `Setor ${getGuild(targetId).short}` : getCompany(targetId).name;
+}
+
+/** "Cidade" or the district name, for news tags. */
+function localTag(targetId: string): string {
+  return targetId === 'city' ? 'Cidade' : getRegion(targetId).name;
+}
+
+function localDemandLabel(value: number): string {
+  if (value >= 1) return 'vive da freguesia do bairro';
+  if (value >= 0.7) return 'depende bastante do bairro';
+  if (value >= 0.5) return 'sente um pouco o bairro';
+  return 'vende para longe; o bairro pouco importa';
+}
+
+function cityBetaLabel(value: number): string {
+  if (value >= 1.2) return 'é o primeiro a sentir as crises e as bonanças da cidade';
+  if (value >= 0.9) return 'acompanha a economia da cidade';
+  return 'sente pouco as crises da cidade';
 }
 
 // ---------------------------------------------------------------------------
@@ -273,13 +313,30 @@ function renderSquare(state: GameState, ui: UiState): string {
   else if (total >= cls.ceiling)
     verdict = `Faltam ${weeks} semana(s) e você já passou do teto de ${whole(cls.ceiling)} fl. Mantenha assim e o camareiro vai bater à sua porta.`;
 
-  const noNews = events.length === 0 && state.companyEvents.length === 0;
+  const noNews =
+    events.length === 0 && state.companyEvents.length === 0 && state.localNews.length === 0;
+  const tabs = `<div class="tabs" role="tablist">
+    <button role="tab" class="tab ${ui.squareTab === 'news' ? 'active' : ''}" aria-selected="${ui.squareTab === 'news'}" data-action="square-tab" data-tab="news">${sprite('scroll', 16)} Notícias da semana</button>
+    <button role="tab" class="tab ${ui.squareTab === 'almanac' ? 'active' : ''}" aria-selected="${ui.squareTab === 'almanac'}" data-action="square-tab" data-tab="almanac">${sprite('castle', 16)} Almanaque de ${CITY.name}</button>
+  </div>`;
+  if (ui.squareTab === 'almanac')
+    return `<div class="square">${tabs}${renderAlmanac(state, ui)}</div>`;
   return `<div class="square">
+  ${tabs}
   <div class="cols cols-3">
     <article class="card px">
       <h2>${sprite('scroll', 20)} O Arauto anuncia</h2>
       ${noNews ? '<p class="muted">Tempos calmos no reino. Por enquanto.</p>' : ''}
       <ul class="news">
+        ${state.localNews
+          .map(
+            (n) => `<li>
+              <button class="linkish news-link" data-action="almanac" data-entry="${n.targetId}"><span class="news-tag tag-local">${localTag(n.targetId)}</span></button>
+              <span class="muted">· ${n.weeksLeft} sem.</span>
+              <p class="headline">"${esc(n.headline)}"</p>
+            </li>`,
+          )
+          .join('')}
         ${events
           .map(
             ({ def, weeksLeft }) => `<li>
@@ -340,6 +397,120 @@ function renderSquare(state: GameState, ui: UiState): string {
       .join('')}
   </div>
   </div>`;
+}
+
+// ---------------------------------------------------------------------------
+// Almanaque
+// ---------------------------------------------------------------------------
+
+function renderAlmanac(state: GameState, ui: UiState): string {
+  const entry = ui.almanacEntry;
+  const item = (id: string, label: string, icon: string, locked = false) =>
+    `<li><button class="almanac-link ${entry === id ? 'selected' : ''} ${locked ? 'locked' : ''}" data-action="almanac" data-entry="${id}">${icon}<span>${label}</span></button></li>`;
+  const index = `<nav class="almanac-index px" aria-label="Almanaque">
+    <h3>A cidade</h3>
+    <ul>${item('city', CITY.name, sprite('castle', 20))}</ul>
+    <h3>Bairros</h3>
+    <ul>${REGIONS.map((r) => item(r.id, r.name, `<span class="standing standing-${r.id}">${r.standing}</span>`)).join('')}</ul>
+    <h3>Guildas</h3>
+    <ul>${GUILDS.map((g) => item(g.id, g.short, sprite(GUILD_SPRITE[g.id]!, 20), !isGuildUnlocked(state, g))).join('')}</ul>
+  </nav>`;
+
+  let body: string;
+  if (entry === 'city') body = renderCityEntry(state);
+  else if (isRegionId(entry)) body = renderRegionEntry(state, entry);
+  else body = renderGuildEntry(state, entry);
+  return `<div class="almanac">${index}<article class="almanac-body px">${body}</article></div>`;
+}
+
+function indicatorChart(state: GameState, id: string, label: string): string {
+  return renderChart(
+    [{ values: state.indicators[id]!.history, color: 'var(--gold)', main: true, label }],
+    false,
+    `${label} nas últimas`,
+  );
+}
+
+function factorRangeLine(state: GameState, factorId: string, what: string): string {
+  const f = factorForecast(state, factorId);
+  return `<p>O arauto prevê que ${what} varie <strong>${pct(f.low, 0)} a ${pct(f.high, 0)}</strong> nesta semana.</p>`;
+}
+
+function localNewsList(state: GameState, targetId: string): string {
+  const news = state.localNews.filter((n) => n.targetId === targetId);
+  if (news.length === 0) return '<p class="muted small">Nenhuma notícia por aqui nesta semana.</p>';
+  return `<ul class="news">${news.map((n) => `<li><p class="headline">"${esc(n.headline)}"</p><span class="muted small">mais ${n.weeksLeft} sem.</span></li>`).join('')}</ul>`;
+}
+
+function renderCityEntry(state: GameState): string {
+  return `<header class="almanac-head">${sprite('castle', 40)}<div><h2>${CITY.name}</h2><span class="muted small">A cidade e seu PIB</span></div></header>
+    <div class="almanac-grid">
+      <div class="almanac-col">
+        <p>${CITY.description}</p>
+        <p class="muted small">O PIB move todas as empresas, umas mais que outras: a Ribeira sente mais, o Alto da Coroa sente menos.
+        A economia anda em ciclos que duram várias semanas; o gráfico mostra a tendência.</p>
+        ${factorRangeLine(state, 'city', 'o PIB')}
+      </div>
+      <div class="almanac-col">
+        ${indicatorChart(state, 'city', 'PIB')}
+        <h3>Notícias da cidade</h3>
+        ${localNewsList(state, 'city')}
+      </div>
+    </div>`;
+}
+
+function renderRegionEntry(state: GameState, regionId: string): string {
+  const region = getRegion(regionId);
+  const companies = GUILDS.flatMap((g) => companiesOf(g.id)).filter((c) => c.regionId === regionId);
+  return `<header class="almanac-head"><span class="standing standing-${region.id} big-standing">${region.standing}</span><div><h2>${region.name}</h2><span class="muted small">Bairro ${region.standing}: ${cityBetaLabel(region.cityBeta)}</span></div></header>
+    <div class="almanac-grid">
+      <div class="almanac-col">
+        <p>${region.description}</p>
+        ${factorRangeLine(state, region.id, 'a demanda do bairro')}
+        <h3>Notícias do bairro</h3>
+        ${localNewsList(state, region.id)}
+      </div>
+      <div class="almanac-col">
+        ${indicatorChart(state, region.id, 'Demanda')}
+        <h3>Empresas sediadas aqui</h3>
+        <ul class="almanac-companies">${companies
+          .map((c) => {
+            const guild = getGuild(c.guildId);
+            const locked = !isGuildUnlocked(state, guild);
+            return `<li><button class="member" data-action="open-asset" data-asset="${c.id}" ${locked ? 'disabled' : ''}>
+              ${sprite(GUILD_SPRITE[guild.id]!, 16)} <span class="member-name">${c.name}</span>
+              <span class="muted small">${guild.short} · ${localDemandLabel(LOCAL_DEMAND[guild.sector])}</span>
+            </button></li>`;
+          })
+          .join('')}</ul>
+      </div>
+    </div>`;
+}
+
+function renderGuildEntry(state: GameState, guildId: string): string {
+  const guild = getGuild(guildId);
+  const locked = !isGuildUnlocked(state, guild);
+  return `<header class="almanac-head">${sprite(GUILD_SPRITE[guild.id]!, 40)}<div><h2>${guild.name}</h2><span class="muted small">${SECTOR_NAMES[guild.sector]}${locked ? ` · 🔒 a partir de ${getClass(guild.minClass).name}` : ''}</span></div></header>
+    <div class="almanac-grid">
+      <div class="almanac-col">
+        <p>${GUILD_DESCRIPTIONS[guild.id] ?? ''}</p>
+        <p class="muted small">Sobre os bairros: este setor ${localDemandLabel(LOCAL_DEMAND[guild.sector])}.</p>
+        ${locked ? '' : factorRangeLine(state, guild.id, 'o setor')}
+      </div>
+      <div class="almanac-col">
+        <h3>As empresas</h3>
+        <ul class="almanac-companies">${companiesOf(guild.id)
+          .map(
+            (
+              c,
+            ) => `<li><button class="member" data-action="open-asset" data-asset="${c.id}" ${locked ? 'disabled' : ''}>
+              <span class="member-name">${c.name}</span>
+              <span class="small"><span class="standing standing-${c.regionId}">${getRegion(c.regionId).name}</span> ${c.trait}</span>
+            </button></li>`,
+          )
+          .join('')}</ul>
+      </div>
+    </div>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -438,7 +609,7 @@ function renderAssetDetail(state: GameState, ui: UiState, assetId: string): stri
   const back = `<button class="pbtn pbtn-small back-btn" data-action="close-detail">◀ Guildas</button>`;
   const subtitle = basket
     ? `Cesta da ${guild.name}: um pouco de cada uma das 3 empresas`
-    : `${guild.name} · sensibilidade ao setor ×${fmtBeta(company!.beta)}`;
+    : `${guild.name} · sediada em ${getRegion(company!.regionId).name} (bairro ${getRegion(company!.regionId).standing})`;
   const head = (extra = '') => `<header class="detail-head">
       ${sprite(GUILD_SPRITE[guild.id]!, 48)}
       <div class="detail-title">
@@ -464,7 +635,12 @@ function renderAssetDetail(state: GameState, ui: UiState, assetId: string): stri
   const lastPnl = ui.lastReport?.positionPnl[assetId];
   const components = componentsOf(assetId);
 
-  const targets = [guild.id, ...(basket ? [] : [assetId])];
+  const targets = [
+    'city',
+    ...new Set(components.map((c) => c.regionId)),
+    guild.id,
+    ...(basket ? [] : [assetId]),
+  ];
   const insights = state.insights.filter((i) => targets.includes(i.targetId));
   const sectorNews = state.events
     .map((e) => getEvent(e.id))
@@ -473,7 +649,10 @@ function renderAssetDetail(state: GameState, ui: UiState, assetId: string): stri
   const companyNews = state.companyEvents
     .filter((e) => components.some((c) => c.id === e.companyId))
     .map((e) => ({ label: e.headline, shift: e.shift }));
-  const news = [...sectorNews, ...companyNews];
+  const localNews = state.localNews
+    .filter((n) => n.targetId === 'city' || components.some((c) => c.regionId === n.targetId))
+    .map((n) => ({ label: `${localTag(n.targetId)}: ${n.headline}`, shift: 0 }));
+  const news = [...sectorNews, ...companyNews, ...localNews];
 
   const price = `<div class="detail-price">
       <strong>${fmt(asset.price)} fl</strong>
@@ -507,9 +686,22 @@ function renderAssetDetail(state: GameState, ui: UiState, assetId: string): stri
         .join('')}</div>`
     : '';
 
+  const factorLabel = (factorId: string) =>
+    factorId === 'city'
+      ? 'cidade'
+      : isRegionId(factorId)
+        ? 'bairro'
+        : isBasket(factorId)
+          ? 'setor'
+          : 'própria';
   const breakdown = company
-    ? `<p class="muted small">= setor ${pct(state.sectorForecasts[guild.id]!.low, 0)} a ${pct(state.sectorForecasts[guild.id]!.high, 0)} × ${fmtBeta(company.beta)}
-       + própria ${pct(state.companyForecasts[company.id]!.low, 0)} a ${pct(state.companyForecasts[company.id]!.high, 0)}</p>`
+    ? `<p class="muted small breakdown">= ${companyExposures(company)
+        .map(({ factorId, weight }) => {
+          const f = factorForecast(state, factorId);
+          const w = factorId === company.id ? '' : ` ×${fmtBeta(weight)}`;
+          return `${factorLabel(factorId)} ${pct(f.low, 0)} a ${pct(f.high, 0)}${w}`;
+        })
+        .join(' + ')}</p>`
     : '';
 
   return `${back}${head(price)}
@@ -525,7 +717,7 @@ function renderAssetDetail(state: GameState, ui: UiState, assetId: string): stri
         </div>
       </div>
       <div class="detail-side">
-        ${news.length ? `<div class="chips">${news.map((n) => `<span class="chip ${tone(n.shift)}">${esc(n.label)} ${n.shift > 0 ? '▲' : '▼'}</span>`).join('')}</div>` : ''}
+        ${news.length ? `<div class="chips">${news.map((n) => `<span class="chip ${tone(n.shift)}">${esc(n.label)}${n.shift > 0 ? ' ▲' : n.shift < 0 ? ' ▼' : ''}</span>`).join('')}</div>` : ''}
         ${
           insights.length
             ? `<div class="insights">${insights.map((i) => renderInsight(i, true)).join('')}</div>`
@@ -574,7 +766,7 @@ interface Series {
  * Price history as a stepped pixel line chart. For a basket, the companies are rescaled to
  * start where the basket starts, so the lines compare performance rather than price levels.
  */
-function renderChart(series: Series[], rescale: boolean): string {
+function renderChart(series: Series[], rescale: boolean, title = 'Preço nas últimas'): string {
   const main = series.find((s) => s.main)!;
   const n = Math.min(CHART_WEEKS + 1, main.values.length);
   if (n < 2) {
@@ -612,7 +804,7 @@ function renderChart(series: Series[], rescale: boolean): string {
 
   return `<figure class="chart px">
     <figcaption class="chart-head">
-      <span>Preço nas últimas ${n - 1} semana(s): <strong class="${tone(change)}">${pct(change)}</strong></span>
+      <span>${title} ${n - 1} semana(s): <strong class="${tone(change)}">${pct(change)}</strong></span>
       ${
         windowed.length > 1
           ? `<span class="legend">${windowed.map((s) => `<span><i style="background:${s.color}"></i>${s.main ? 'Cesta' : s.label}</span>`).join('')}</span>`
@@ -707,17 +899,22 @@ function renderTavern(state: GameState, ui: UiState): string {
       ${
         expertLocked
           ? `<p class="locked-note">🔒 O ${expert.name} não atende quem está abaixo de ${getClass(expert.minClass).name}.</p>`
-          : `<p class="muted small">"Setor" responde pela guilda inteira; uma empresa responde só pelos negócios dela.</p>
-             <div class="ask-groups">${GUILDS.filter((g) => isGuildUnlocked(state, g))
-               .map(
-                 (g) => `<div class="ask-group">
+          : `<p class="muted small">O PIB e os bairros mexem com muitas empresas de uma vez; "Setor" responde pela guilda inteira; uma empresa responde só pelos negócios dela.</p>
+             <div class="ask-groups">
+               <div class="ask-group">
+                 ${askButton('city', `PIB de ${CITY.name}`, sprite('castle', 20))}
+                 ${REGIONS.map((r) => askButton(r.id, r.name, '')).join('')}
+               </div>
+               ${GUILDS.filter((g) => isGuildUnlocked(state, g))
+                 .map(
+                   (g) => `<div class="ask-group">
                    ${askButton(g.id, `Setor ${g.short}`, sprite(GUILD_SPRITE[g.id]!, 20))}
                    ${companiesOf(g.id)
                      .map((c) => askButton(c.id, c.name, ''))
                      .join('')}
                  </div>`,
-               )
-               .join('')}</div>`
+                 )
+                 .join('')}</div>`
       }
       <h3>Rumores desta semana</h3>
       ${

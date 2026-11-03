@@ -76,6 +76,14 @@ root.addEventListener('click', (event) => {
       selectAsset(assetId);
       go('market');
       break;
+    case 'square-tab':
+      ui.squareTab = target.dataset.tab === 'almanac' ? 'almanac' : 'news';
+      break;
+    case 'almanac':
+      ui.squareTab = 'almanac';
+      ui.almanacEntry = target.dataset.entry ?? 'city';
+      go('square');
+      break;
     case 'toggle-guild': {
       const guildId = target.dataset.guild ?? '';
       ui.expandedGuilds[guildId] = !ui.expandedGuilds[guildId];
