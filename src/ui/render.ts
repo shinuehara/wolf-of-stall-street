@@ -597,7 +597,7 @@ function renderChart(series: Series[], rescale: boolean): string {
         <path d="${stepPath(mainValues)}" fill="none" stroke="var(--gold)" stroke-width="3" vector-effect="non-scaling-stroke" />
       </svg>
     </div>
-    <div class="chart-foot"><span>sem. ${firstWeek + 1}</span><span>agora</span></div>
+    <div class="chart-foot"><span>há ${n - 1} sem.</span><span>agora</span></div>
   </figure>`;
 }
 

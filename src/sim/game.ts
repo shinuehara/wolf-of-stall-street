@@ -50,6 +50,48 @@ export interface WeekReport {
 
 const MAX_LOG = 60;
 
+/** Weeks of simulated market history that exist before the game starts, so charts are never empty. */
+export const PRE_HISTORY_WEEKS = 26;
+
+/**
+ * Simulates calm weeks (same market model, no news) before the player arrives and rescales
+ * each path so it ends exactly at the asset's starting price.
+ */
+function seedHistory(state: GameState): void {
+  const paths: Record<string, number[]> = Object.fromEntries(ASSET_IDS.map((id) => [id, [1]]));
+  for (let w = 0; w < PRE_HISTORY_WEEKS; w++) {
+    for (const guild of GUILDS) {
+      const sectorMove = sampleReturn(
+        generateForecast(state, guild, 0),
+        nextRandom(state),
+        nextRandom(state),
+      );
+      const companies = companiesOf(guild.id);
+      let sum = 0;
+      for (const company of companies) {
+        const own = sampleReturn(
+          generateForecast(state, company, 0),
+          nextRandom(state),
+          nextRandom(state),
+        );
+        const move = company.beta * sectorMove + own;
+        sum += move;
+        const path = paths[company.id]!;
+        path.push(path[path.length - 1]! * (1 + move / 100));
+      }
+      const basket = paths[guild.id]!;
+      basket.push(basket[basket.length - 1]! * (1 + sum / companies.length / 100));
+    }
+  }
+  for (const id of ASSET_IDS) {
+    const path = paths[id]!;
+    const scale = assetStartPrice(id) / path[path.length - 1]!;
+    const history = path.map((v) => v * scale);
+    history[history.length - 1] = assetStartPrice(id);
+    state.assets[id] = { price: assetStartPrice(id), history };
+  }
+}
+
 export function newGame(seed: number = Date.now() >>> 0): GameState {
   const state: GameState = {
     version: 2,
@@ -71,6 +113,7 @@ export function newGame(seed: number = Date.now() >>> 0): GameState {
     status: 'playing',
     log: [],
   };
+  seedHistory(state);
   rollForecasts(state);
   log(
     state,

@@ -7,6 +7,7 @@ import {
   endWeek,
   expertCost,
   newGame,
+  PRE_HISTORY_WEEKS,
   sell,
   setHedge,
   wealth,
@@ -21,6 +22,16 @@ describe('newGame', () => {
     expect(Object.keys(state.sectorForecasts)).toHaveLength(8);
     expect(Object.keys(state.companyForecasts)).toHaveLength(24);
     expect(Object.keys(state.assets)).toHaveLength(32);
+  });
+
+  it('starts with simulated price history that ends at the starting price', () => {
+    const state = newGame(4);
+    for (const asset of Object.values(state.assets)) {
+      expect(asset.history).toHaveLength(PRE_HISTORY_WEEKS + 1);
+      expect(asset.history[asset.history.length - 1]).toBe(asset.price);
+      expect(asset.history.every((p) => p > 0)).toBe(true);
+    }
+    expect(state.assets.bakers!.price).toBe(10);
   });
 
   it('is deterministic for a given seed', () => {

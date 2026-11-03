@@ -115,9 +115,13 @@ patrimônio, masmorra.
 - pagar por informação faz subir mais rápido (`naive` > `astrologer` > `spy` em semanas);
 - uma run bem informada dura entre 40 e 90 semanas.
 
-Referência atual (60 seeds): naive ~88 semanas, astróloga ~69, espião ~60.
+Referência atual (60 seeds): naive ~92 semanas, astróloga ~70, espião ~62.
 
 ## Ideias para depois
+
+- 📚 **Perk "Livro-caixa do Escriba"** (comprável): hoje o jogo começa com 26 semanas de
+  histórico simulado nos gráficos. No futuro, o histórico visível pode ser curto por padrão
+  (ex: 8 semanas) e o perk amplia para meses ou anos, ajudando a ler a tendência de cada empresa.
 
 - 🧪 **Alquimista**: revela correlações entre setores.
 - 🧑‍🏫 **Coach de mercadores** na taverna, que vende cursos de enriquecimento (palpites ruins, muito meme).
