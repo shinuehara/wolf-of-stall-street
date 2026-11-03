@@ -778,6 +778,50 @@ interface Series {
  * Price history as a stepped pixel line chart. For a basket, the companies are rescaled to
  * start where the basket starts, so the lines compare performance rather than price levels.
  */
+interface ChartPoint {
+  /** Position in weeks from the start of the window. */
+  t: number;
+  v: number;
+}
+
+/** Points drawn between two weekly closes, for a market-like line. */
+const TICKS_PER_WEEK = 6;
+
+/**
+ * Adds intra-week oscillation between weekly closes so the line looks like a market chart.
+ * Purely visual: each week is a random-walk bridge that starts and ends exactly at the real
+ * closes, seeded by the series and the absolute week so it never changes between renders.
+ */
+function oscillate(values: number[], key: string, firstWeek: number): ChartPoint[] {
+  const points: ChartPoint[] = [{ t: 0, v: values[0]! }];
+  for (let i = 1; i < values.length; i++) {
+    const from = values[i - 1]!;
+    const to = values[i]!;
+    let seed = hashString(`${key}:${firstWeek + i}`);
+    const rand = () => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      return seed / 4294967296 - 0.5;
+    };
+    const walk = [0];
+    for (let k = 1; k <= TICKS_PER_WEEK; k++) walk.push(walk[k - 1]! + rand());
+    const end = walk[TICKS_PER_WEEK]!;
+    // Daily noise of roughly 0.9% of the price, a bit more in weeks that moved a lot.
+    const scale = Math.abs(from) * 0.009 + Math.abs(to - from) * 0.35;
+    for (let k = 1; k <= TICKS_PER_WEEK; k++) {
+      const f = k / TICKS_PER_WEEK;
+      const bridge = k === TICKS_PER_WEEK ? 0 : (walk[k]! - f * end) * scale;
+      points.push({ t: i - 1 + f, v: from + (to - from) * f + bridge });
+    }
+  }
+  return points;
+}
+
+function hashString(text: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+
 function renderChart(series: Series[], rescale: boolean, title = 'Preço nas últimas'): string {
   const main = series.find((s) => s.main)!;
   const n = Math.min(CHART_WEEKS + 1, main.values.length);
@@ -792,7 +836,8 @@ function renderChart(series: Series[], rescale: boolean, title = 'Preço nas úl
     const target = main.values[firstWeek]!;
     return { ...s, values: values.map((v) => (v / base) * target) };
   });
-  const all = windowed.flatMap((s) => s.values);
+  const dense = windowed.map((s) => ({ ...s, points: oscillate(s.values, s.label, firstWeek) }));
+  const all = dense.flatMap((s) => s.points.map((p) => p.v));
   const min = Math.min(...all);
   const max = Math.max(...all);
   const pad = (max - min) * 0.08 || max * 0.05 || 1;
@@ -802,14 +847,14 @@ function renderChart(series: Series[], rescale: boolean, title = 'Preço nas úl
   const H = 100;
   const x = (i: number) => (i / (n - 1)) * W;
   const y = (v: number) => H - ((v - lo) / (hi - lo)) * H;
-  const stepPath = (values: number[]) =>
-    values
-      .map((v, i) =>
-        i === 0 ? `M0 ${y(v).toFixed(1)}` : `H${x(i).toFixed(1)} V${y(v).toFixed(1)}`,
-      )
+  const linePath = (points: ChartPoint[]) =>
+    points
+      .map((p, i) => `${i === 0 ? 'M' : 'L'}${x(p.t).toFixed(2)} ${y(p.v).toFixed(2)}`)
       .join(' ');
-  const mainValues = windowed.find((s) => s.main)!.values;
-  const area = `${stepPath(mainValues)} V${H} H0 Z`;
+  const mainDense = dense.find((s) => s.main)!;
+  const mainValues = mainDense.values;
+  const area = `${linePath(mainDense.points)} L${W} ${H} L0 ${H} Z`;
+  const lastY = y(mainValues[mainValues.length - 1]!);
   const startValue = mainValues[0]!;
   const endValue = mainValues[mainValues.length - 1]!;
   const change = ((endValue - startValue) / startValue) * 100;
@@ -828,14 +873,15 @@ function renderChart(series: Series[], rescale: boolean, title = 'Preço nas úl
       <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Gráfico de preço">
         <line x1="0" x2="${W}" y1="${y(startValue).toFixed(1)}" y2="${y(startValue).toFixed(1)}" class="chart-base" vector-effect="non-scaling-stroke" />
         <path d="${area}" class="chart-area" />
-        ${windowed
+        ${dense
           .filter((s) => !s.main)
           .map(
             (s) =>
-              `<path d="${stepPath(s.values)}" fill="none" stroke="${s.color}" stroke-width="1.5" vector-effect="non-scaling-stroke" opacity="0.85" />`,
+              `<path d="${linePath(s.points)}" fill="none" stroke="${s.color}" stroke-width="1.25" stroke-linejoin="round" vector-effect="non-scaling-stroke" opacity="0.8" />`,
           )
           .join('')}
-        <path d="${stepPath(mainValues)}" fill="none" stroke="var(--gold)" stroke-width="3" vector-effect="non-scaling-stroke" />
+        <path d="${linePath(mainDense.points)}" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+        <line x1="0" x2="${W}" y1="${lastY.toFixed(1)}" y2="${lastY.toFixed(1)}" class="chart-last" vector-effect="non-scaling-stroke" />
       </svg>
     </div>
     <div class="chart-foot"><span>há ${n - 1} sem.</span><span>agora</span></div>
