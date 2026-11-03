@@ -23,6 +23,7 @@ import {
 import type { Forecast, GameState, GuildDef, Insight, Sector } from '../sim/types';
 
 export interface UiState {
+  confirmingRestart: boolean;
   amounts: Record<string, string>;
   lastReport: WeekReport | null;
   message: { text: string; tone: 'error' | 'info' } | null;
@@ -61,7 +62,7 @@ export function render(state: GameState, ui: UiState): string {
         ${renderHerald(state)}
         ${renderExperts(state)}
         ${renderLadder(state)}
-        ${renderLog(state)}
+        ${renderLog(state, ui)}
       </aside>
     </main>
     ${renderFooter(state)}
@@ -331,14 +332,24 @@ function renderLadder(state: GameState): string {
   </section>`;
 }
 
-function renderLog(state: GameState): string {
+function renderLog(state: GameState, ui: UiState): string {
   return `<section class="panel chronicle">
     <h2>Crônica</h2>
     <ul>${state.log
       .slice(0, 15)
       .map((l) => `<li class="log-${l.tone}">${esc(l.text)}</li>`)
       .join('')}</ul>
-    <button class="btn btn-small btn-ghost" data-action="new-game">Recomeçar partida</button>
+    ${
+      ui.confirmingRestart
+        ? `<div class="restart-confirm" role="alert">
+            <p>Abandonar esta partida e começar outra?</p>
+            <div class="actions">
+              <button class="btn btn-small btn-primary" data-action="new-game">Sim, recomeçar</button>
+              <button class="btn btn-small" data-action="cancel-restart">Continuar jogando</button>
+            </div>
+          </div>`
+        : '<button class="btn btn-small btn-ghost" data-action="new-game">Recomeçar partida</button>'
+    }
   </section>`;
 }
 

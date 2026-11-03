@@ -17,7 +17,7 @@ import { clearGame, loadGame, saveGame } from './ui/storage';
 const root = document.querySelector<HTMLDivElement>('#app')!;
 
 let state: GameState = loadGame() ?? newGame();
-const ui: UiState = { amounts: {}, lastReport: null, message: null };
+const ui: UiState = { amounts: {}, lastReport: null, message: null, confirmingRestart: false };
 
 function update(): void {
   saveGame(state);
@@ -62,11 +62,18 @@ root.addEventListener('click', (event) => {
     case 'decline-title':
       report(declineAscension(state));
       break;
+    case 'cancel-restart':
+      ui.confirmingRestart = false;
+      break;
     case 'end-week':
       ui.lastReport = endWeek(state);
       break;
     case 'new-game':
-      if (state.status === 'playing' && !confirm('Abandonar esta partida e começar outra?')) return;
+      if (state.status === 'playing' && !ui.confirmingRestart) {
+        ui.confirmingRestart = true;
+        break;
+      }
+      ui.confirmingRestart = false;
       clearGame();
       state = newGame();
       ui.lastReport = null;
