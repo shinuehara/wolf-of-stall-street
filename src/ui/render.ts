@@ -33,6 +33,8 @@ export interface UiState {
   screen: Screen;
   /** Asset shown in the market: a guild id (basket) or a company id. */
   selectedAsset: string;
+  /** Guilds whose companies are listed under the basket in the market. */
+  expandedGuilds: Record<string, boolean>;
   /** On narrow screens the market shows either the list or one asset's detail. */
   marketDetailOpen: boolean;
   tavernExpert: ExpertId;
@@ -48,6 +50,7 @@ export function initialUi(): UiState {
   return {
     screen: 'square',
     selectedAsset: 'bakers',
+    expandedGuilds: { bakers: true },
     marketDetailOpen: false,
     tavernExpert: 'astrologer',
     amounts: {},
@@ -353,49 +356,44 @@ function renderMarket(state: GameState, ui: UiState): string {
 }
 
 function renderGuildGroup(state: GameState, ui: UiState, guild: GuildDef): string {
-  const unlocked = isGuildUnlocked(state, guild);
-  const expanded = unlocked && guildOfAsset(ui.selectedAsset).id === guild.id;
-  const companies = companiesOf(guild.id);
-  const held = [guild.id, ...companies.map((c) => c.id)].reduce(
-    (s, id) => s + (state.positions[id]?.value ?? 0),
-    0,
-  );
-  const row = (assetId: string, label: string, isCompany: boolean) => {
-    const r = assetRange(state, assetId);
-    const position = state.positions[assetId];
-    return `<div class="asset-item ${isCompany ? 'company-item' : ''} ${ui.selectedAsset === assetId ? 'selected' : ''}">
-      <button class="guild-row ${isCompany ? 'company-row' : ''}" data-action="select-asset" data-asset="${assetId}">
-        ${isCompany ? '<span class="tree">└</span>' : sprite(GUILD_SPRITE[guild.id]!, 28)}
-        <span class="row-name">${label}</span>
-        <span class="row-range">${pct(r.low, 0)} a ${pct(r.high, 0)}</span>
-        <span class="row-pos ${position ? 'gold' : 'muted'}">${position ? `${fmt(position.value)} fl${position.hedged ? ' 🛡' : ''}` : '—'}</span>
-      </button>
-      ${quickBar(state, assetId)}
-    </div>`;
-  };
-
-  if (!unlocked) {
+  if (!isGuildUnlocked(state, guild)) {
     return `<li><button class="guild-row locked" data-action="select-asset" data-asset="${guild.id}">
       ${sprite(GUILD_SPRITE[guild.id]!, 28)}
       <span class="row-name">${guild.short}</span>
       <span class="row-range muted">🔒 ${getClass(guild.minClass).name}</span><span></span>
     </button></li>`;
   }
-  if (!expanded) {
-    const r = assetRange(state, guild.id);
-    return `<li><div class="asset-item">
-      <button class="guild-row" data-action="select-asset" data-asset="${guild.id}">
-        ${sprite(GUILD_SPRITE[guild.id]!, 28)}
-        <span class="row-name">${guild.short} <span class="muted small">▸ abrir</span></span>
-        <span class="row-range">cesta ${pct(r.low, 0)} a ${pct(r.high, 0)}</span>
-        <span class="row-pos ${held ? 'gold' : 'muted'}">${held ? `${fmt(held)} fl` : '—'}</span>
+
+  const expanded = Boolean(ui.expandedGuilds[guild.id]);
+  const companies = companiesOf(guild.id);
+  const inCompanies = companies.reduce((s, c) => s + (state.positions[c.id]?.value ?? 0), 0);
+
+  const row = (assetId: string, label: string, isCompany: boolean) => {
+    const r = assetRange(state, assetId);
+    const position = state.positions[assetId];
+    const toggle = isCompany
+      ? '<span class="toggle-spacer"></span>'
+      : `<button class="toggle" data-action="toggle-guild" data-guild="${guild.id}" aria-expanded="${expanded}"
+          title="${expanded ? 'Esconder' : 'Mostrar'} as empresas da guilda">${expanded ? '▾' : '▸'}</button>`;
+    const extra =
+      !isCompany && !expanded && inCompanies > 0
+        ? ` <span class="muted small">+ ${fmt(inCompanies)} em empresas</span>`
+        : '';
+    return `<div class="asset-item ${isCompany ? 'company-item' : ''} ${ui.selectedAsset === assetId ? 'selected' : ''}">
+      ${toggle}
+      <button class="guild-row ${isCompany ? 'company-row' : ''}" data-action="select-asset" data-asset="${assetId}">
+        ${isCompany ? '<span class="tree">└</span>' : sprite(GUILD_SPRITE[guild.id]!, 28)}
+        <span class="row-name">${label}</span>
+        <span class="row-range">${pct(r.low, 0)} a ${pct(r.high, 0)}</span>
+        <span class="row-pos ${position ? 'gold' : 'muted'}">${position ? `${fmt(position.value)} fl${position.hedged ? ' 🛡' : ''}` : '—'}${extra}</span>
       </button>
-      ${quickBar(state, guild.id)}
-    </div></li>`;
-  }
-  return `<li class="group-open">
+      ${quickBar(state, assetId)}
+    </div>`;
+  };
+
+  return `<li class="${expanded ? 'group-open' : ''}">
     ${row(guild.id, `${guild.short} <span class="muted small">(cesta)</span>`, false)}
-    ${companies.map((c) => row(c.id, c.name, true)).join('')}
+    ${expanded ? companies.map((c) => row(c.id, c.name, true)).join('') : ''}
   </li>`;
 }
 

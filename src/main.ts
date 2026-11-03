@@ -12,7 +12,7 @@ import {
   type ActionResult,
   fmt,
 } from './sim/game';
-import { assetName } from './sim/assets';
+import { assetName, guildOfAsset, isBasket } from './sim/assets';
 import type { ExpertId, GameState } from './sim/types';
 import { SCREENS, initialUi, render, type Screen } from './ui/render';
 import { clearGame, loadGame, saveGame } from './ui/storage';
@@ -33,6 +33,13 @@ function report(result: ActionResult): void {
 
 function amountFor(assetId: string): number {
   return Number.parseFloat((ui.amounts[assetId] ?? '').replace(',', '.'));
+}
+
+function selectAsset(assetId: string): void {
+  ui.selectedAsset = assetId;
+  ui.marketDetailOpen = true;
+  // Picking a company opens its guild so it stays visible in the list.
+  if (!isBasket(assetId)) ui.expandedGuilds[guildOfAsset(assetId).id] = true;
 }
 
 function go(screen: Screen): void {
@@ -63,14 +70,17 @@ root.addEventListener('click', (event) => {
       go(target.dataset.screen as Screen);
       break;
     case 'select-asset':
-      ui.selectedAsset = assetId;
-      ui.marketDetailOpen = true;
+      selectAsset(assetId);
       break;
     case 'open-asset':
-      ui.selectedAsset = assetId;
-      ui.marketDetailOpen = true;
+      selectAsset(assetId);
       go('market');
       break;
+    case 'toggle-guild': {
+      const guildId = target.dataset.guild ?? '';
+      ui.expandedGuilds[guildId] = !ui.expandedGuilds[guildId];
+      break;
+    }
     case 'close-detail':
       ui.marketDetailOpen = false;
       break;
