@@ -12,6 +12,10 @@ buying rumors and insuring your bets._
 
 ## Como jogar
 
+A cidade tem quatro locais, acessados pela barra de baixo (ou teclas 1 a 4): a **Praça**
+(notícias e resumo da semana), o **Mercado** (guildas e seguro), a **Taverna** (especialistas)
+e o **Castelo** (escada social e títulos).
+
 - **📯 O Arauto** anuncia toda semana a faixa de variação esperada de cada guilda (ex: `-3% a +5%`).
 - **Especialistas** dizem para que lado a faixa pende: 🍺 o Bêbado (grátis e pouco confiável),
   🔮 a Astróloga (acerta 3 em 4) e 🕵️ o Espião (mostra a chance real de cada faixa).
@@ -52,6 +56,6 @@ src/
     forecast.ts   # modelo de previsão em faixas, seguro, eventos
     game.ts       # estado do jogo e ações do jogador
     bots.ts       # jogadores automáticos para checar o balanceamento
-  ui/         # renderização em HTML e save no localStorage
+  ui/         # telas, sprites e cenários em pixel art, save no localStorage
   main.ts     # ligação entre eventos da página e ações
 ```

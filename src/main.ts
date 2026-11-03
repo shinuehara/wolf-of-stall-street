@@ -11,13 +11,13 @@ import {
   type ActionResult,
 } from './sim/game';
 import type { ExpertId, GameState } from './sim/types';
-import { render, type UiState } from './ui/render';
+import { SCREENS, initialUi, render, type Screen } from './ui/render';
 import { clearGame, loadGame, saveGame } from './ui/storage';
 
 const root = document.querySelector<HTMLDivElement>('#app')!;
 
 let state: GameState = loadGame() ?? newGame();
-const ui: UiState = { amounts: {}, lastReport: null, message: null, confirmingRestart: false };
+let ui = initialUi();
 
 function update(): void {
   saveGame(state);
@@ -29,8 +29,24 @@ function report(result: ActionResult): void {
 }
 
 function amountFor(guildId: string): number {
-  const raw = (ui.amounts[guildId] ?? '').replace(',', '.');
-  return Number.parseFloat(raw);
+  return Number.parseFloat((ui.amounts[guildId] ?? '').replace(',', '.'));
+}
+
+function go(screen: Screen): void {
+  ui.screen = screen;
+  ui.confirmingRestart = false;
+}
+
+function finishWeek(): void {
+  const previousTop = state.log[0];
+  ui.lastReport = endWeek(state);
+  const fresh = [];
+  for (const entry of state.log) {
+    if (entry === previousTop) break;
+    fresh.push(entry);
+  }
+  ui.weekNews = fresh.reverse();
+  ui.showReport = true;
 }
 
 root.addEventListener('click', (event) => {
@@ -40,44 +56,61 @@ root.addEventListener('click', (event) => {
   ui.message = null;
 
   switch (target.dataset.action) {
+    case 'go':
+      go(target.dataset.screen as Screen);
+      break;
+    case 'select-guild':
+      ui.selectedGuild = guildId;
+      ui.marketDetailOpen = true;
+      break;
+    case 'close-detail':
+      ui.marketDetailOpen = false;
+      break;
     case 'buy':
       report(buy(state, guildId, amountFor(guildId)));
       if (!ui.message) ui.amounts[guildId] = '';
       break;
     case 'sell': {
-      const amount = Number.isNaN(amountFor(guildId)) ? Infinity : amountFor(guildId);
-      report(sell(state, guildId, amount));
+      const amount = amountFor(guildId);
+      report(sell(state, guildId, Number.isNaN(amount) ? Infinity : amount));
       if (!ui.message) ui.amounts[guildId] = '';
       break;
     }
-    case 'fill-max':
-      ui.amounts[guildId] = String(Math.floor(state.cash * 10) / 10);
+    case 'fill': {
+      const fraction = Number(target.dataset.fraction ?? 1);
+      ui.amounts[guildId] = String(Math.floor(state.cash * fraction * 10) / 10);
+      break;
+    }
+    case 'pick-expert':
+      ui.tavernExpert = target.dataset.expert as ExpertId;
       break;
     case 'consult':
       report(consult(state, target.dataset.expert as ExpertId, guildId));
       break;
     case 'accept-title':
       report(acceptAscension(state));
+      if (!ui.message) ui.showReport = false;
       break;
     case 'decline-title':
       report(declineAscension(state));
       break;
+    case 'end-week':
+      finishWeek();
+      break;
+    case 'close-report':
+      ui.showReport = false;
+      break;
     case 'cancel-restart':
       ui.confirmingRestart = false;
-      break;
-    case 'end-week':
-      ui.lastReport = endWeek(state);
       break;
     case 'new-game':
       if (state.status === 'playing' && !ui.confirmingRestart) {
         ui.confirmingRestart = true;
         break;
       }
-      ui.confirmingRestart = false;
       clearGame();
       state = newGame();
-      ui.lastReport = null;
-      ui.amounts = {};
+      ui = initialUi();
       break;
     default:
       return;
@@ -100,12 +133,28 @@ root.addEventListener('change', (event) => {
   update();
 });
 
-root.addEventListener('keydown', (event) => {
-  const input = event.target as HTMLInputElement;
-  if (event.key === 'Enter' && input.dataset.amount) {
-    root
-      .querySelector<HTMLButtonElement>(`[data-action="buy"][data-guild="${input.dataset.amount}"]`)
-      ?.click();
+document.addEventListener('keydown', (event) => {
+  const target = event.target as HTMLElement;
+  if (target instanceof HTMLInputElement) {
+    if (event.key === 'Enter' && target.dataset.amount) {
+      root
+        .querySelector<HTMLButtonElement>(
+          `[data-action="buy"][data-guild="${target.dataset.amount}"]`,
+        )
+        ?.click();
+    }
+    return;
+  }
+  if (event.key === 'Escape' && ui.showReport) {
+    ui.showReport = false;
+    update();
+    return;
+  }
+  const index = Number(event.key) - 1;
+  const screen = SCREENS[index];
+  if (screen && !ui.showReport) {
+    go(screen.id);
+    update();
   }
 });
 
