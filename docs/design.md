@@ -35,36 +35,56 @@ Pilares:
 Todo florim livre (não investido em guildas) rende automaticamente uma taxa semanal baixa
 (0,20% para Servo até 0,50% para Barão).
 
-### Guildas (ações)
+### Guildas, empresas e cestas (ações)
 
-| Guilda                    | Setor       | Volatilidade | Liberada a partir de |
-| ------------------------- | ----------- | ------------ | -------------------- |
-| 🍞 Guilda dos Padeiros    | Alimentos   | baixa        | Servo                |
-| ⛏️ Minas de Ferro         | Commodities | média        | Servo                |
-| 🧪 Boticários             | Saúde       | baixa/média  | Servo                |
-| 🪙 Casa dos Cambistas     | Bancos      | média        | Camponês             |
-| 🎪 Feira dos Mercadores   | Varejo      | média/alta   | Camponês             |
-| ⚒️ Forja Real             | Indústria   | alta         | Artesão              |
-| ⛵ Companhia de Navegação | Navegação   | muito alta   | Mercador             |
-| 🌶️ Mercado de Especiarias | Especiarias | absurda      | Burguês              |
+Cada guilda é um **setor** com **3 empresas** de perfis diferentes. O jogador compra:
 
-**Modelo de previsão.** Cada semana, cada guilda tem uma faixa pública `[low, high]`,
-dividida em 4 faixas iguais, cada uma com uma **probabilidade escondida**. A faixa pública
-é centrada em _drift da guilda + efeito dos eventos + ruído_. Um "viés" escondido
-(entre -1 e +1, também puxado pelos eventos) concentra probabilidade em um dos lados. O
-resultado sorteia uma faixa pelo peso e depois um ponto uniforme dentro dela.
+- a **cesta** da guilda, que move a média das 3 empresas e é mais diversificada; ou
+- uma **empresa específica**.
+
+| Guilda      | Setor       | Empresas (estável · segue o setor · arriscada)          | Liberada a partir de |
+| ----------- | ----------- | ------------------------------------------------------- | -------------------- |
+| Padeiros    | Alimentos   | Padaria Real · Forno do Norte · Padaria do Porto        | Servo                |
+| Mineiros    | Commodities | Companhia da Serra · Veio de Prata · Mina Funda         | Servo                |
+| Boticários  | Saúde       | Botica do Mosteiro · Botica Central · Elixir da Fênix   | Servo                |
+| Cambistas   | Bancos      | Banco da Ponte · Casa Fortuna · Câmbio do Ouro Velho    | Camponês             |
+| Mercadores  | Varejo      | Armazém Bom Preço · Sedaria Oriental · Tenda do Mascate | Camponês             |
+| Ferreiros   | Indústria   | Forja Real · Martelo de Bronze · Ferraria do Vale       | Artesão              |
+| Navegantes  | Navegação   | Barca do Rio · Nau do Levante · Galeão Dourado          | Mercador             |
+| Especiarias | Especiarias | Pimenta & Cia · Rota do Açafrão · Canela do Oriente     | Burguês              |
+
+**Movimento semanal de uma empresa** = `sensibilidade (β) × movimento do setor + movimento próprio`.
+O movimento do setor e o movimento próprio de cada empresa têm cada um sua previsão. A
+cesta move a média das 3 empresas. A faixa anunciada de cada ativo é combinada a partir
+dessas previsões.
+
+**Modelo de previsão.** Toda semana, cada setor e cada empresa têm uma faixa pública
+`[low, high]`, dividida em 4 faixas iguais, cada uma com uma **probabilidade escondida**.
+A faixa pública é centrada em _drift + parte das notícias + ruído_. Um "viés" escondido
+(entre -1 e +1) concentra probabilidade em um dos lados. **Só 40% do efeito de uma
+notícia aparece na faixa pública; o resto vai para o viés escondido.** Assim a notícia
+diz a direção, e o especialista diz a intensidade.
+
+### Notícias
+
+- **Do reino**, que afetam setores: Guerra (Ferreiros ▲, Mercadores ▼), Peste (Boticários ▲),
+  Dragão nas Minas, Retorno da Frota, Moeda Raspada… Até 2 ativas, com 30% de chance por semana.
+- **De empresas**, que afetam uma empresa só: "Nobres se mudaram para perto do Forno do Norte",
+  "Piratas atacaram a Nau do Levante". Até 3 ativas, com 40% de chance por semana, duram 1 a 3 semanas.
 
 ### Especialistas
 
-|                      | Custo                     | O que revela                                             | Classe   |
-| -------------------- | ------------------------- | -------------------------------------------------------- | -------- |
-| 🍺 Bêbado da Taverna | grátis                    | alta ou baixa, com 50% de acerto (puro ruído, e um meme) | Servo    |
-| 🔮 Astróloga         | 0,1 + 0,05% do patrimônio | alta ou baixa, com 75% de acerto                         | Servo    |
-| 🕵️ Espião            | 0,3 + 0,2% do patrimônio  | a probabilidade real de cada uma das 4 faixas            | Camponês |
+|                      | Custo                      | O que revela                                             | Classe   |
+| -------------------- | -------------------------- | -------------------------------------------------------- | -------- |
+| 🍺 Bêbado da Taverna | grátis                     | alta ou baixa, com 50% de acerto (puro ruído, e um meme) | Servo    |
+| 🔮 Astróloga         | 0,05 + 0,03% do patrimônio | alta ou baixa, com 75% de acerto                         | Servo    |
+| 🕵️ Espião            | 0,15 + 0,1% do patrimônio  | a probabilidade real de cada uma das 4 faixas            | Camponês |
+
+Cada pergunta é sobre um **setor** (a guilda inteira) ou uma **empresa** (só o movimento próprio dela).
 
 ### Seguro (hedge)
 
-Para uma posição, o jogador pode contratar seguro da Guilda dos Seguradores: a faixa de
+Para qualquer posição (cesta ou empresa), o jogador pode contratar seguro da Guilda dos Seguradores: a faixa de
 resultado encolhe 1/4 da largura de cada lado (`[-3, +5]` vira `[-1, +3]`). O prêmio é
 cobrado toda semana, de 1,0% (Servo) a 0,4% (Barão) do valor segurado.
 
@@ -88,13 +108,6 @@ mais baratos. **Vitória:** virar Conde. A pontuação é o número de semanas.
 Se faltar dinheiro vivo para pagar as contas, cotas são vendidas proporcionalmente. Sem
 patrimônio, masmorra.
 
-### Eventos do reino
-
-Até 2 ativos ao mesmo tempo, com 30% de chance de surgir um por semana. Cada evento desloca
-as faixas de alguns setores e o viés escondido. Exemplos: Guerra (Forja ▲, Feira ▼), Peste
-(Boticários ▲), Dragão nas Minas (Minas ▼▼), Retorno da Frota (Especiarias ▲), Moeda
-Raspada (Cambistas ▼).
-
 ## Balanceamento
 
 `src/sim/bots.ts` tem três jogadores automáticos, e `src/sim/balance.test.ts` garante que:
@@ -102,7 +115,7 @@ Raspada (Cambistas ▼).
 - pagar por informação faz subir mais rápido (`naive` > `astrologer` > `spy` em semanas);
 - uma run bem informada dura entre 40 e 90 semanas.
 
-Referência atual (60 seeds): naive ~128 semanas, astróloga ~80, espião ~68.
+Referência atual (60 seeds): naive ~88 semanas, astróloga ~69, espião ~60.
 
 ## Ideias para depois
 

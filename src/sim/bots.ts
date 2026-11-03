@@ -1,13 +1,13 @@
-import { GUILDS } from './data';
-import { expectedReturn } from './forecast';
+import { GUILDS, companiesOf } from './data';
+import { assetExpectedReturn, assetRange } from './assets';
 import { acceptAscension, buy, consult, endWeek, isGuildUnlocked, newGame, sell } from './game';
-import type { GameState } from './types';
+import type { GameState, Insight } from './types';
 
 /**
  * Scripted players used to check game balance. Not part of the game itself.
- * - naive: trusts only the herald's public range.
- * - astrologer: also asks the Astrologer about the most promising guilds.
- * - spy: asks the Spy (when allowed) about the three most promising guilds.
+ * - naive: trusts only the herald's public ranges.
+ * - astrologer: asks the Astrologer about the two most promising guilds and their companies.
+ * - spy: asks the Spy (when allowed) about the two most promising guilds and their companies.
  */
 export type BotStrategy = 'naive' | 'astrologer' | 'spy';
 
@@ -19,33 +19,50 @@ export interface BotResult {
 
 const MAX_WEEKS = 400;
 
+function center(state: GameState, assetId: string): number {
+  const r = assetRange(state, assetId);
+  return (r.low + r.high) / 2;
+}
+
+function leanAdjust(insight: Insight | undefined, width: number): number {
+  if (!insight || insight.expert === 'spy') return 0;
+  return (insight.leansUp ? 1 : -1) * width * 0.1;
+}
+
 export function playBot(seed: number, strategy: BotStrategy): BotResult {
   const state = newGame(seed);
   while (state.status === 'playing' && state.week < MAX_WEEKS) {
     for (const id of Object.keys(state.positions)) sell(state, id, Infinity);
 
-    const center = (id: string) => {
-      const f = state.forecasts[id]!;
-      return (f.low + f.high) / 2;
-    };
-    const candidates = GUILDS.filter((g) => isGuildUnlocked(state, g))
-      .map((g) => g.id)
-      .sort((a, b) => center(b) - center(a));
-
-    const estimates: [string, number][] = candidates.map((id) => [id, center(id)]);
-    if (strategy !== 'naive') {
-      for (const entry of estimates.slice(0, 3)) {
-        const [id] = entry;
-        const f = state.forecasts[id]!;
-        if (strategy === 'spy' && consult(state, 'spy', id).ok) {
-          entry[1] = expectedReturn(f);
-        } else if (consult(state, 'astrologer', id).ok) {
-          const insight = state.insights.find((i) => i.guildId === id && i.expert === 'astrologer');
-          if (insight?.expert === 'astrologer') {
-            entry[1] += (insight.leansUp ? 1 : -1) * (f.high - f.low) * 0.1;
-          }
-        }
+    const guilds = GUILDS.filter((g) => isGuildUnlocked(state, g)).sort(
+      (a, b) => center(state, b.id) - center(state, a.id),
+    );
+    const estimates: [string, number][] = [];
+    for (const [rank, guild] of guilds.entries()) {
+      const companies = companiesOf(guild.id);
+      const assets = [guild.id, ...companies.map((c) => c.id)];
+      const researched = strategy !== 'naive' && rank < 2;
+      if (!researched) {
+        for (const id of assets) estimates.push([id, center(state, id)]);
+        continue;
       }
+      const expert = strategy === 'spy' && state.classIndex >= 1 ? 'spy' : 'astrologer';
+      for (const id of assets) consult(state, expert, id);
+      if (expert === 'spy') {
+        for (const id of assets) estimates.push([id, assetExpectedReturn(state, id)]);
+        continue;
+      }
+      const find = (id: string) =>
+        state.insights.find((i) => i.targetId === id && i.expert === expert);
+      const sectorAdj = leanAdjust(find(guild.id), guild.width);
+      for (const c of companies) {
+        estimates.push([
+          c.id,
+          center(state, c.id) + c.beta * sectorAdj + leanAdjust(find(c.id), c.width),
+        ]);
+      }
+      const avgBeta = companies.reduce((s, c) => s + c.beta, 0) / companies.length;
+      estimates.push([guild.id, center(state, guild.id) + avgBeta * sectorAdj]);
     }
 
     const picks = estimates

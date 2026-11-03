@@ -11,13 +11,16 @@ import {
   setHedge,
   wealth,
 } from './game';
+import { assetRange } from './assets';
 
 describe('newGame', () => {
   it('starts as a Serf with the starting gold and a forecast for every guild', () => {
     const state = newGame(123);
     expect(state.classIndex).toBe(0);
     expect(state.cash).toBe(STARTING_GOLD);
-    expect(Object.keys(state.forecasts)).toHaveLength(8);
+    expect(Object.keys(state.sectorForecasts)).toHaveLength(8);
+    expect(Object.keys(state.companyForecasts)).toHaveLength(24);
+    expect(Object.keys(state.assets)).toHaveLength(32);
   });
 
   it('is deterministic for a given seed', () => {
@@ -76,6 +79,13 @@ describe('experts', () => {
     expect(consult(state, 'spy', 'bakers').ok).toBe(false);
   });
 
+  it('can be asked about a sector or about a single company', () => {
+    const state = newGame(5);
+    expect(consult(state, 'astrologer', 'bakers').ok).toBe(true);
+    expect(consult(state, 'astrologer', 'bakers.harbor').ok).toBe(true);
+    expect(consult(state, 'astrologer', 'spices.pepper').ok).toBe(false);
+  });
+
   it('the spy reveals the true band probabilities', () => {
     const state = newGame(5);
     state.classIndex = 2;
@@ -102,12 +112,42 @@ describe('endWeek', () => {
       const state = newGame(seed);
       buy(state, 'mines', 50);
       setHedge(state, 'mines', true);
-      const f = state.forecasts.mines!;
-      const d = (f.high - f.low) / 4;
+      buy(state, 'mines.deep', 20);
+      setHedge(state, 'mines.deep', true);
+      const basket = assetRange(state, 'mines');
+      const company = assetRange(state, 'mines.deep');
       const report = endWeek(state);
-      const pct = (report.positionPnl.mines! / 50) * 100;
-      expect(pct).toBeGreaterThanOrEqual(f.low + d - 1e-9);
-      expect(pct).toBeLessThanOrEqual(f.high - d + 1e-9);
+      for (const [id, r, amount] of [
+        ['mines', basket, 50],
+        ['mines.deep', company, 20],
+      ] as const) {
+        const d = (r.high - r.low) / 4;
+        const pct = (report.positionPnl[id]! / amount) * 100;
+        expect(pct).toBeGreaterThanOrEqual(r.low + d - 1e-9);
+        expect(pct).toBeLessThanOrEqual(r.high - d + 1e-9);
+      }
+    }
+  });
+
+  it('a basket moves as the average of its companies, inside the announced range', () => {
+    for (let seed = 0; seed < 100; seed++) {
+      const state = newGame(seed);
+      const range = assetRange(state, 'bakers');
+      const report = endWeek(state);
+      const ids = ['bakers.royal', 'bakers.north', 'bakers.harbor'];
+      const avg = ids.reduce((s, id) => s + report.marketReturns[id]!, 0) / 3;
+      expect(report.marketReturns.bakers).toBeCloseTo(avg);
+      expect(avg).toBeGreaterThanOrEqual(range.low - 1e-9);
+      expect(avg).toBeLessThanOrEqual(range.high + 1e-9);
+    }
+  });
+
+  it('company news shifts only that company and reads well', () => {
+    const state = newGame(8);
+    for (let i = 0; i < 30; i++) endWeek(state);
+    for (const e of state.companyEvents) {
+      expect(e.headline).not.toMatch(/[{}]/);
+      expect(e.headline[0]).toBe(e.headline[0]!.toUpperCase());
     }
   });
 

@@ -19,17 +19,41 @@ export interface SocialClass {
   hedgeFeeRate: number;
 }
 
-export interface GuildDef {
-  id: string;
-  name: string;
-  sector: Sector;
-  emoji: string;
+/** Anything with its own weekly forecast: a whole sector or one company's own business. */
+export interface ForecastProfile {
   /** Average weekly return in %, before events. */
   drift: number;
   /** Typical width of the weekly return range in percentage points. */
   width: number;
-  /** Minimum social class index that can trade this guild. */
+}
+
+/**
+ * A guild is a sector. Its id is also the id of the guild's basket asset, which holds
+ * all of the guild's companies in equal parts.
+ */
+export interface GuildDef extends ForecastProfile {
+  id: string;
+  name: string;
+  short: string;
+  sector: Sector;
+  /** Minimum social class index that can trade this guild and its companies. */
   minClass: number;
+  startPrice: number;
+}
+
+/**
+ * A company inside a guild. Its weekly return is `beta x sector move + its own move`,
+ * where its own move has its own forecast (drift, width) and events.
+ */
+export interface CompanyDef extends ForecastProfile {
+  id: string;
+  guildId: string;
+  name: string;
+  /** Grammatical gender, for headlines: 'f' -> "da Padaria", 'm' -> "do Forno". */
+  gender: 'f' | 'm';
+  /** Sensitivity to the sector move. */
+  beta: number;
+  trait: string;
   startPrice: number;
 }
 
@@ -42,6 +66,12 @@ export interface EventDef {
   /** Shift in percentage points applied to the weekly forecast of each sector. */
   effects: SectorEffects;
   duration: [min: number, max: number];
+}
+
+/** Headline template for news about one company. `{c}` is the company name. */
+export interface CompanyNewsTemplate {
+  text: string;
+  shift: number;
 }
 
 export type ExpertId = 'drunk' | 'astrologer' | 'spy';
@@ -58,7 +88,7 @@ export interface ExpertDef {
 }
 
 /**
- * Distribution of a guild's weekly return in %. `low`/`high` are public (announced by the
+ * Distribution of a weekly return in %. `low`/`high` are public (announced by the
  * herald). The range is split into equal bands whose probabilities (`weights`) are hidden.
  */
 export interface Forecast {
@@ -73,23 +103,33 @@ export interface Band {
   p: number;
 }
 
+/**
+ * What an expert said. `targetId` is a guild id (about the whole sector) or a company id
+ * (about that company's own business, apart from the sector).
+ */
 export type Insight =
-  | { expert: 'drunk' | 'astrologer'; guildId: string; leansUp: boolean }
-  | { expert: 'spy'; guildId: string; bands: Band[] };
+  | { expert: 'drunk' | 'astrologer'; targetId: string; leansUp: boolean }
+  | { expert: 'spy'; targetId: string; bands: Band[] };
 
 export interface Position {
   value: number;
   hedged: boolean;
 }
 
-export interface GuildState {
-  id: string;
+export interface AssetState {
   price: number;
   history: number[];
 }
 
 export interface ActiveEvent {
   id: string;
+  weeksLeft: number;
+}
+
+export interface ActiveCompanyEvent {
+  companyId: string;
+  headline: string;
+  shift: number;
   weeksLeft: number;
 }
 
@@ -102,18 +142,23 @@ export interface LogEntry {
 export type GameStatus = 'playing' | 'won' | 'lost';
 
 export interface GameState {
-  version: 1;
+  version: 2;
   seed: number;
   rngState: number;
   /** Weeks elapsed. A season is SEASON_LENGTH weeks. */
   week: number;
   classIndex: number;
   cash: number;
+  /** Keyed by asset id: a guild id (basket) or a company id. */
   positions: Record<string, Position>;
-  guilds: Record<string, GuildState>;
-  forecasts: Record<string, Forecast>;
+  assets: Record<string, AssetState>;
+  /** This week's sector forecasts, by guild id. */
+  sectorForecasts: Record<string, Forecast>;
+  /** This week's company-specific forecasts, by company id. */
+  companyForecasts: Record<string, Forecast>;
   insights: Insight[];
   events: ActiveEvent[];
+  companyEvents: ActiveCompanyEvent[];
   /** Set at a season's end when wealth reached the class ceiling. */
   ascensionOffer: boolean;
   status: GameStatus;

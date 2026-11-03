@@ -1117,3 +1117,270 @@ img.sprite,
     height: 24px;
   }
 }
+
+/* Companies inside a guild */
+.group-open {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px;
+  border: 2px solid var(--panel-hi);
+}
+
+.company-row {
+  padding-left: 10px;
+}
+
+.company-row .row-name {
+  font-size: 0.8rem;
+}
+
+.tree {
+  grid-row: span 2;
+  color: var(--muted);
+  text-align: center;
+}
+
+.trait {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.members {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 4px;
+}
+
+.member {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  padding: 3px 8px;
+  font: inherit;
+  font-size: 0.9em;
+  color: inherit;
+  text-align: left;
+  background: var(--panel-lo);
+  border: 2px solid var(--edge);
+  cursor: pointer;
+}
+
+.member:hover {
+  border-color: var(--gold);
+}
+
+.member-name {
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  flex-basis: 100%;
+}
+
+.swatch {
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--edge);
+}
+
+.member .swatch {
+  position: absolute;
+}
+
+.member {
+  position: relative;
+  padding-left: 22px;
+}
+
+.member .swatch {
+  left: 6px;
+  top: 7px;
+}
+
+/* Price chart */
+.chart {
+  margin: 0;
+  padding: 6px 8px;
+  background: var(--panel-lo);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chart-empty {
+  min-height: 60px;
+  display: grid;
+  place-items: center;
+}
+
+.chart-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  font-size: 0.9em;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  font-size: 0.85em;
+  color: var(--muted);
+}
+
+.legend i {
+  display: inline-block;
+  width: 10px;
+  height: 4px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+.chart-body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px;
+}
+
+.chart-body svg {
+  width: 100%;
+  height: clamp(80px, 16vh, 140px);
+  display: block;
+  border-left: 2px solid var(--panel-hi);
+  border-bottom: 2px solid var(--panel-hi);
+}
+
+.chart-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-size: 0.7em;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.chart-area {
+  fill: var(--gold);
+  opacity: 0.12;
+}
+
+.chart-base {
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+  opacity: 0.6;
+}
+
+.chart-foot {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7em;
+  color: var(--muted);
+  padding-left: 40px;
+}
+
+/* Insights & tavern groups */
+.insight-about {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  color: var(--gold);
+  min-width: 96px;
+}
+
+.ask-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ask-group {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 4px;
+}
+
+.ask-group .ask-btn:first-child {
+  background: var(--panel-hi);
+}
+
+.news-tag {
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  padding: 0 5px;
+  background: var(--purple);
+  color: var(--edge);
+}
+
+.news-link {
+  text-decoration: none;
+}
+
+/* Asset detail: chart and forecast on the left, rumours and trading on the right */
+.detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(220px, 1fr);
+  gap: 12px;
+  min-height: 0;
+}
+
+.detail-main,
+.detail-side {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.detail-side .trade-box {
+  border-top: 0;
+  padding-top: 0;
+  margin-top: auto;
+}
+
+.detail-side .trade .pbtn-small {
+  flex: 1;
+}
+
+@media (max-width: 1000px) {
+  .detail-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Keep the asset detail inside one desktop screen */
+.chart-body svg {
+  height: clamp(64px, 12vh, 110px);
+}
+
+.members {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.member {
+  font-size: 0.8em;
+  padding-block: 2px;
+}
+
+.member-name {
+  font-size: 0.7rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.insight {
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
+
+.detail-grid .forecast {
+  gap: 4px;
+}
+
+@media (max-width: 720px) {
+  .members {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

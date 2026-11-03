@@ -1,7 +1,10 @@
-import type { Band, EventDef, Forecast, GuildDef } from './types';
+import type { Band, EventDef, Forecast, ForecastProfile, Sector } from './types';
 import { nextRandom, type RngHolder } from './rng';
 
 export const BAND_COUNT = 4;
+
+/** Share of a news shift that shows up in the public range; the rest hides in the lean. */
+export const NEWS_VISIBILITY = 0.4;
 
 /** How strongly the hidden lean concentrates probability on one side of the range. */
 const LEAN_SHARPNESS = 1.8;
@@ -32,23 +35,28 @@ export function sampleReturn(f: Forecast, uBand: number, uInside: number): numbe
   return last.from + (last.to - last.from) * uInside;
 }
 
+export interface Range {
+  low: number;
+  high: number;
+}
+
 /**
  * Insurance narrows the outcome range by a quarter of its width on each side:
  * [-3, +5] becomes [-1, +3].
  */
-export function hedgeBounds(f: Forecast): { floor: number; cap: number } {
-  const d = (f.high - f.low) / 4;
-  return { floor: f.low + d, cap: f.high - d };
+export function hedgeBounds(r: Range): { floor: number; cap: number } {
+  const d = (r.high - r.low) / 4;
+  return { floor: r.low + d, cap: r.high - d };
 }
 
-export function applyHedge(f: Forecast, outcome: number): number {
-  const { floor, cap } = hedgeBounds(f);
+export function applyHedge(r: Range, outcome: number): number {
+  const { floor, cap } = hedgeBounds(r);
   return Math.min(cap, Math.max(floor, outcome));
 }
 
-/** Total effect of active events on a guild's sector, in percentage points. */
-export function eventShift(guild: GuildDef, events: readonly EventDef[]): number {
-  return events.reduce((sum, e) => sum + (e.effects[guild.sector] ?? 0), 0);
+/** Total effect of active events on a sector, in percentage points. */
+export function eventShift(sector: Sector, events: readonly EventDef[]): number {
+  return events.reduce((sum, e) => sum + (e.effects[sector] ?? 0), 0);
 }
 
 /** Turns a lean in [-1, 1] into band weights: negative favours the low bands, positive the high. */
@@ -62,18 +70,18 @@ export function weightsFromLean(lean: number, count = BAND_COUNT): number[] {
 }
 
 /**
- * Builds next week's forecast. The herald announces a range centred on the guild's drift,
- * the known events and some noise. Which side of that range is really more likely is a
- * hidden lean, partly driven by events, so paying for insider knowledge has an edge.
+ * Builds next week's forecast for a sector or a company. The herald announces a range
+ * centred on the drift, the known news (`shift`) and some noise. Which side of that range
+ * is really more likely is a hidden lean, partly driven by the news, so paying for insider
+ * knowledge has an edge.
  */
 export function generateForecast(
   rng: RngHolder,
-  guild: GuildDef,
-  events: readonly EventDef[],
+  profile: ForecastProfile,
+  shift: number,
 ): Forecast {
-  const shift = eventShift(guild, events);
-  const width = guild.width * (0.8 + 0.4 * nextRandom(rng));
-  const center = guild.drift + shift + (nextRandom(rng) - 0.5) * width * 0.2;
+  const width = profile.width * (0.8 + 0.4 * nextRandom(rng));
+  const center = profile.drift + shift * NEWS_VISIBILITY + (nextRandom(rng) - 0.5) * width * 0.2;
   const lean = clamp(nextRandom(rng) * 2 - 1 + (shift / width) * 2, -1, 1);
 
   let low = Math.round(center - width / 2);

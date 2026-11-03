@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyHedge,
   bands,
+  eventShift,
   expectedReturn,
   generateForecast,
   hedgeBounds,
@@ -10,6 +11,7 @@ import {
   weightsFromLean,
 } from './forecast';
 import { GUILDS, getEvent } from './data';
+import type { EventDef, Forecast } from './types';
 import { nextRandom } from './rng';
 
 describe('banded forecast', () => {
@@ -72,7 +74,11 @@ describe('generateForecast', () => {
     const rng = { rngState: 7 };
     for (let i = 0; i < 500; i++) {
       for (const guild of GUILDS) {
-        const f = generateForecast(rng, guild, [getEvent('war'), getEvent('dragon')]);
+        const f = generateForecast(
+          rng,
+          guild,
+          eventShift(guild.sector, [getEvent('war'), getEvent('dragon')]),
+        );
         expect(f.high - f.low).toBeGreaterThanOrEqual(2);
         expect(f.weights.reduce((a, b) => a + b, 0)).toBeCloseTo(1);
       }
@@ -81,15 +87,19 @@ describe('generateForecast', () => {
 
   it('events push the range in their direction', () => {
     const mines = GUILDS.find((g) => g.id === 'mines')!;
-    const avgCenter = (events: Parameters<typeof generateForecast>[2]) => {
+    const average = (events: EventDef[], measure: (f: Forecast) => number) => {
       const rng = { rngState: 1 };
       let sum = 0;
       for (let i = 0; i < 2000; i++) {
-        const f = generateForecast(rng, mines, events);
-        sum += (f.low + f.high) / 2;
+        sum += measure(generateForecast(rng, mines, eventShift(mines.sector, events)));
       }
       return sum / 2000;
     };
-    expect(avgCenter([getEvent('dragon')])).toBeLessThan(avgCenter([]) - 4);
+    const center = (f: Forecast) => (f.low + f.high) / 2;
+    // The public range moves a little; the true expected return moves a lot more.
+    const publicShift = average([getEvent('dragon')], center) - average([], center);
+    const trueShift = average([getEvent('dragon')], expectedReturn) - average([], expectedReturn);
+    expect(publicShift).toBeLessThan(-2);
+    expect(trueShift).toBeLessThan(publicShift - 1);
   });
 });

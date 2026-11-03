@@ -28,8 +28,8 @@ function report(result: ActionResult): void {
   ui.message = result.ok ? null : { text: result.error, tone: 'error' };
 }
 
-function amountFor(guildId: string): number {
-  return Number.parseFloat((ui.amounts[guildId] ?? '').replace(',', '.'));
+function amountFor(assetId: string): number {
+  return Number.parseFloat((ui.amounts[assetId] ?? '').replace(',', '.'));
 }
 
 function go(screen: Screen): void {
@@ -52,40 +52,45 @@ function finishWeek(): void {
 root.addEventListener('click', (event) => {
   const target = (event.target as HTMLElement).closest<HTMLElement>('[data-action]');
   if (!target || (target as HTMLButtonElement).disabled) return;
-  const guildId = target.dataset.guild ?? '';
+  const assetId = target.dataset.asset ?? '';
   ui.message = null;
 
   switch (target.dataset.action) {
     case 'go':
       go(target.dataset.screen as Screen);
       break;
-    case 'select-guild':
-      ui.selectedGuild = guildId;
+    case 'select-asset':
+      ui.selectedAsset = assetId;
       ui.marketDetailOpen = true;
+      break;
+    case 'open-asset':
+      ui.selectedAsset = assetId;
+      ui.marketDetailOpen = true;
+      go('market');
       break;
     case 'close-detail':
       ui.marketDetailOpen = false;
       break;
     case 'buy':
-      report(buy(state, guildId, amountFor(guildId)));
-      if (!ui.message) ui.amounts[guildId] = '';
+      report(buy(state, assetId, amountFor(assetId)));
+      if (!ui.message) ui.amounts[assetId] = '';
       break;
     case 'sell': {
-      const amount = amountFor(guildId);
-      report(sell(state, guildId, Number.isNaN(amount) ? Infinity : amount));
-      if (!ui.message) ui.amounts[guildId] = '';
+      const amount = amountFor(assetId);
+      report(sell(state, assetId, Number.isNaN(amount) ? Infinity : amount));
+      if (!ui.message) ui.amounts[assetId] = '';
       break;
     }
     case 'fill': {
       const fraction = Number(target.dataset.fraction ?? 1);
-      ui.amounts[guildId] = String(Math.floor(state.cash * fraction * 10) / 10);
+      ui.amounts[assetId] = String(Math.floor(state.cash * fraction * 10) / 10);
       break;
     }
     case 'pick-expert':
       ui.tavernExpert = target.dataset.expert as ExpertId;
       break;
     case 'consult':
-      report(consult(state, target.dataset.expert as ExpertId, guildId));
+      report(consult(state, target.dataset.expert as ExpertId, assetId));
       break;
     case 'accept-title':
       report(acceptAscension(state));
@@ -120,16 +125,16 @@ root.addEventListener('click', (event) => {
 
 root.addEventListener('input', (event) => {
   const input = event.target as HTMLInputElement;
-  const guildId = input.dataset.amount;
-  if (guildId) ui.amounts[guildId] = input.value;
+  const assetId = input.dataset.amount;
+  if (assetId) ui.amounts[assetId] = input.value;
 });
 
 root.addEventListener('change', (event) => {
   const input = event.target as HTMLInputElement;
-  const guildId = input.dataset.hedge;
-  if (!guildId) return;
+  const assetId = input.dataset.hedge;
+  if (!assetId) return;
   ui.message = null;
-  report(setHedge(state, guildId, input.checked));
+  report(setHedge(state, assetId, input.checked));
   update();
 });
 
@@ -139,7 +144,7 @@ document.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && target.dataset.amount) {
       root
         .querySelector<HTMLButtonElement>(
-          `[data-action="buy"][data-guild="${target.dataset.amount}"]`,
+          `[data-action="buy"][data-asset="${target.dataset.amount}"]`,
         )
         ?.click();
     }

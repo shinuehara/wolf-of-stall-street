@@ -1,21 +1,35 @@
 import {
   ASTROLOGER_ACCURACY,
+  COMPANIES,
+  COMPANY_EVENT_CHANCE,
+  COMPANY_NEWS,
   DRUNK_ACCURACY,
   EVENT_CHANCE,
   EVENTS,
   GUILDS,
   MAX_ACTIVE_EVENTS,
+  MAX_COMPANY_EVENTS,
   SEASON_LENGTH,
   STARTING_GOLD,
   TOP_CLASS,
+  companiesOf,
   getClass,
   getEvent,
   getExpert,
   getGuild,
 } from './data';
-import { applyHedge, bands, generateForecast, leansUp, sampleReturn } from './forecast';
+import { ASSET_IDS, assetRange, assetStartPrice, guildOfAsset, isBasket } from './assets';
+import { applyHedge, bands, eventShift, generateForecast, leansUp, sampleReturn } from './forecast';
 import { nextRandom, pick, randomInt } from './rng';
-import type { ExpertId, GameState, GuildDef, LogEntry, SocialClass } from './types';
+import type {
+  CompanyDef,
+  ExpertId,
+  Forecast,
+  GameState,
+  GuildDef,
+  LogEntry,
+  SocialClass,
+} from './types';
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -23,7 +37,7 @@ const ok: ActionResult = { ok: true };
 const fail = (error: string): ActionResult => ({ ok: false, error });
 
 export interface WeekReport {
-  /** Return in % per guild (market move, before insurance). */
+  /** Return in % per asset (market move, before insurance). */
   marketReturns: Record<string, number>;
   /** Gold gained or lost on each held position, after insurance. */
   positionPnl: Record<string, number>;
@@ -38,19 +52,21 @@ const MAX_LOG = 60;
 
 export function newGame(seed: number = Date.now() >>> 0): GameState {
   const state: GameState = {
-    version: 1,
+    version: 2,
     seed,
     rngState: seed,
     week: 0,
     classIndex: 0,
     cash: STARTING_GOLD,
     positions: {},
-    guilds: Object.fromEntries(
-      GUILDS.map((g) => [g.id, { id: g.id, price: g.startPrice, history: [g.startPrice] }]),
+    assets: Object.fromEntries(
+      ASSET_IDS.map((id) => [id, { price: assetStartPrice(id), history: [assetStartPrice(id)] }]),
     ),
-    forecasts: {},
+    sectorForecasts: {},
+    companyForecasts: {},
     insights: [],
     events: [],
+    companyEvents: [],
     ascensionOffer: false,
     status: 'playing',
     log: [],
@@ -88,6 +104,10 @@ export function isGuildUnlocked(state: GameState, guild: GuildDef): boolean {
   return state.classIndex >= guild.minClass;
 }
 
+export function isAssetUnlocked(state: GameState, assetId: string): boolean {
+  return isGuildUnlocked(state, guildOfAsset(assetId));
+}
+
 export function expertCost(state: GameState, expertId: ExpertId): number {
   const expert = getExpert(expertId);
   if (expert.baseCost === 0 && expert.wealthCost === 0) return 0;
@@ -95,19 +115,26 @@ export function expertCost(state: GameState, expertId: ExpertId): number {
   return Math.round(raw * 10) / 10;
 }
 
-export function hedgeFee(state: GameState, guildId: string): number {
-  const position = state.positions[guildId];
+export function hedgeFee(state: GameState, assetId: string): number {
+  const position = state.positions[assetId];
   if (!position?.hedged) return 0;
   return position.value * currentClass(state).hedgeFeeRate;
+}
+
+/** The forecast an expert reads for a target: the sector's for a guild, the company's own otherwise. */
+export function targetForecast(state: GameState, targetId: string): Forecast {
+  const f = isBasket(targetId) ? state.sectorForecasts[targetId] : state.companyForecasts[targetId];
+  if (!f) throw new Error(`No forecast for ${targetId}`);
+  return f;
 }
 
 // ---------------------------------------------------------------------------
 // Player actions
 // ---------------------------------------------------------------------------
 
-export function buy(state: GameState, guildId: string, amount: number): ActionResult {
+export function buy(state: GameState, assetId: string, amount: number): ActionResult {
   if (state.status !== 'playing') return fail('O jogo terminou.');
-  const guild = getGuild(guildId);
+  const guild = guildOfAsset(assetId);
   if (!isGuildUnlocked(state, guild)) {
     return fail(`Só a partir de ${getClass(guild.minClass).name} se negocia com a ${guild.name}.`);
   }
@@ -115,57 +142,55 @@ export function buy(state: GameState, guildId: string, amount: number): ActionRe
   if (amount > state.cash + 1e-9) return fail('Você não tem tantos florins livres.');
   amount = Math.min(amount, state.cash);
   state.cash -= amount;
-  const position = (state.positions[guildId] ??= { value: 0, hedged: false });
+  const position = (state.positions[assetId] ??= { value: 0, hedged: false });
   position.value += amount;
   return ok;
 }
 
-export function sell(state: GameState, guildId: string, amount: number): ActionResult {
+export function sell(state: GameState, assetId: string, amount: number): ActionResult {
   if (state.status !== 'playing') return fail('O jogo terminou.');
-  const position = state.positions[guildId];
-  if (!position || position.value <= 0) return fail('Você não tem cotas desta guilda.');
+  const position = state.positions[assetId];
+  if (!position || position.value <= 0) return fail('Você não tem cotas disso.');
   if (!(amount > 0)) return fail('Informe um valor positivo.');
   amount = Math.min(amount, position.value);
   position.value -= amount;
   state.cash += amount;
-  if (position.value < 0.005) delete state.positions[guildId];
+  if (position.value < 0.005) delete state.positions[assetId];
   return ok;
 }
 
-export function setHedge(state: GameState, guildId: string, hedged: boolean): ActionResult {
+export function setHedge(state: GameState, assetId: string, hedged: boolean): ActionResult {
   if (state.status !== 'playing') return fail('O jogo terminou.');
-  const position = state.positions[guildId];
+  const position = state.positions[assetId];
   if (!position) return fail('Só dá para segurar uma posição que você tem.');
   position.hedged = hedged;
   return ok;
 }
 
-export function consult(state: GameState, expertId: ExpertId, guildId: string): ActionResult {
+export function consult(state: GameState, expertId: ExpertId, targetId: string): ActionResult {
   if (state.status !== 'playing') return fail('O jogo terminou.');
   const expert = getExpert(expertId);
-  const guild = getGuild(guildId);
   if (state.classIndex < expert.minClass) {
     return fail(
       `O ${expert.name} não atende quem está abaixo de ${getClass(expert.minClass).name}.`,
     );
   }
-  if (!isGuildUnlocked(state, guild)) return fail('Você ainda não tem acesso a esta guilda.');
-  if (state.insights.some((i) => i.expert === expertId && i.guildId === guildId)) {
-    return fail('Você já consultou este especialista sobre esta guilda nesta semana.');
+  if (!isAssetUnlocked(state, targetId)) return fail('Você ainda não tem acesso a esta guilda.');
+  if (state.insights.some((i) => i.expert === expertId && i.targetId === targetId)) {
+    return fail('Você já fez essa pergunta a este especialista nesta semana.');
   }
   const cost = expertCost(state, expertId);
   if (cost > state.cash) return fail('Você não tem florins livres para pagar a consulta.');
-  const forecast = state.forecasts[guildId];
-  if (!forecast) throw new Error(`No forecast for ${guildId}`);
+  const forecast = targetForecast(state, targetId);
 
   state.cash -= cost;
   if (expertId === 'spy') {
-    state.insights.push({ expert: 'spy', guildId, bands: bands(forecast) });
+    state.insights.push({ expert: 'spy', targetId, bands: bands(forecast) });
   } else {
     const accuracy = expertId === 'astrologer' ? ASTROLOGER_ACCURACY : DRUNK_ACCURACY;
     const truth = leansUp(forecast);
     const honest = nextRandom(state) < accuracy;
-    state.insights.push({ expert: expertId, guildId, leansUp: honest ? truth : !truth });
+    state.insights.push({ expert: expertId, targetId, leansUp: honest ? truth : !truth });
   }
   return ok;
 }
@@ -215,29 +240,44 @@ export function endWeek(state: GameState): WeekReport {
   state.ascensionOffer = false;
 
   // 1. Insurance premiums are paid up front.
-  for (const guildId of Object.keys(state.positions)) {
-    const fee = hedgeFee(state, guildId);
+  for (const assetId of Object.keys(state.positions)) {
+    const fee = hedgeFee(state, assetId);
     report.hedgeFees += fee;
     state.cash -= fee;
   }
 
-  // 2. The market moves.
+  // 2. The market moves: each sector, then each company on top of its sector.
+  const moves = report.marketReturns;
   for (const guild of GUILDS) {
-    const forecast = state.forecasts[guild.id];
-    const guildState = state.guilds[guild.id];
-    if (!forecast || !guildState) continue;
-    const raw = sampleReturn(forecast, nextRandom(state), nextRandom(state));
-    report.marketReturns[guild.id] = raw;
-    guildState.price *= 1 + raw / 100;
-    guildState.history.push(guildState.price);
-
-    const position = state.positions[guild.id];
-    if (position) {
-      const applied = position.hedged ? applyHedge(forecast, raw) : raw;
-      const pnl = position.value * (applied / 100);
-      position.value += pnl;
-      report.positionPnl[guild.id] = pnl;
+    const sectorMove = sampleReturn(
+      state.sectorForecasts[guild.id]!,
+      nextRandom(state),
+      nextRandom(state),
+    );
+    const companies = companiesOf(guild.id);
+    for (const company of companies) {
+      const own = sampleReturn(
+        state.companyForecasts[company.id]!,
+        nextRandom(state),
+        nextRandom(state),
+      );
+      moves[company.id] = company.beta * sectorMove + own;
     }
+    moves[guild.id] = companies.reduce((sum, c) => sum + moves[c.id]!, 0) / companies.length;
+  }
+
+  for (const [assetId, position] of Object.entries(state.positions)) {
+    const raw = moves[assetId] ?? 0;
+    const applied = position.hedged ? applyHedge(assetRange(state, assetId), raw) : raw;
+    const pnl = position.value * (applied / 100);
+    position.value += pnl;
+    report.positionPnl[assetId] = pnl;
+  }
+
+  for (const assetId of ASSET_IDS) {
+    const asset = state.assets[assetId]!;
+    asset.price *= 1 + (moves[assetId] ?? 0) / 100;
+    asset.history.push(asset.price);
   }
 
   // 3. Idle gold earns Crown bond interest; then the bills come.
@@ -277,6 +317,7 @@ export function endWeek(state: GameState): WeekReport {
 
   // 5. The world turns.
   tickEvents(state);
+  tickCompanyEvents(state);
   state.insights = [];
   rollForecasts(state);
   return report;
@@ -329,15 +370,66 @@ function tickEvents(state: GameState): void {
     if (candidates.length > 0) {
       const event = pick(state, candidates);
       state.events.push({ id: event.id, weeksLeft: randomInt(state, ...event.duration) });
-      log(state, `📯 ${event.headline}`, 'neutral');
+      log(state, event.headline, 'neutral');
     }
   }
+}
+
+function tickCompanyEvents(state: GameState): void {
+  for (const event of state.companyEvents) event.weeksLeft -= 1;
+  state.companyEvents = state.companyEvents.filter((e) => e.weeksLeft > 0);
+
+  if (state.companyEvents.length >= MAX_COMPANY_EVENTS || nextRandom(state) >= COMPANY_EVENT_CHANCE)
+    return;
+  const candidates = COMPANIES.filter(
+    (c) => isAssetUnlocked(state, c.id) && !state.companyEvents.some((e) => e.companyId === c.id),
+  );
+  if (candidates.length === 0) return;
+  const company = pick(state, candidates);
+  const template = pick(state, COMPANY_NEWS[getGuild(company.guildId).sector]);
+  const headline = companyHeadline(template.text, company);
+  state.companyEvents.push({
+    companyId: company.id,
+    headline,
+    shift: template.shift,
+    weeksLeft: randomInt(state, 1, 3),
+  });
+  log(state, headline, template.shift > 0 ? 'good' : 'bad');
+}
+
+export function companyHeadline(template: string, company: CompanyDef): string {
+  const f = company.gender === 'f';
+  return template
+    .replaceAll('{c}', company.name)
+    .replaceAll('{do}', f ? 'da' : 'do')
+    .replaceAll('{o}', f ? 'a' : 'o')
+    .replaceAll('{no}', f ? 'na' : 'no')
+    .replaceAll('{ao}', f ? 'à' : 'ao')
+    .replace(/^./, (ch) => ch.toUpperCase());
+}
+
+/** Total effect of active news on one company's own business, in percentage points. */
+export function companyShift(state: GameState, companyId: string): number {
+  return state.companyEvents
+    .filter((e) => e.companyId === companyId)
+    .reduce((s, e) => s + e.shift, 0);
 }
 
 function rollForecasts(state: GameState): void {
   const events = state.events.map((e) => getEvent(e.id));
   for (const guild of GUILDS) {
-    state.forecasts[guild.id] = generateForecast(state, guild, events);
+    state.sectorForecasts[guild.id] = generateForecast(
+      state,
+      guild,
+      eventShift(guild.sector, events),
+    );
+  }
+  for (const company of COMPANIES) {
+    state.companyForecasts[company.id] = generateForecast(
+      state,
+      company,
+      companyShift(state, company.id),
+    );
   }
 }
 
@@ -348,11 +440,11 @@ function raiseCash(state: GameState, needed: number): void {
   const total = invested(state);
   if (total <= 0) return;
   const fraction = Math.min(1, missing / total);
-  for (const [guildId, position] of Object.entries(state.positions)) {
+  for (const [assetId, position] of Object.entries(state.positions)) {
     const amount = position.value * fraction;
     position.value -= amount;
     state.cash += amount;
-    if (position.value < 0.005) delete state.positions[guildId];
+    if (position.value < 0.005) delete state.positions[assetId];
   }
 }
 
@@ -362,7 +454,7 @@ function logWeekSummary(state: GameState, report: WeekReport): void {
   const sign = net >= 0 ? '+' : '';
   log(
     state,
-    `Semana ${state.week}: ${sign}${fmt(net)} florins (guildas ${fmt(pnl)}, títulos ${fmt(report.bondIncome)}, seguros -${fmt(report.hedgeFees)}, custo de vida -${fmt(report.livingCost)}).`,
+    `Semana ${state.week}: ${sign}${fmt(net)} florins (cotas ${fmt(pnl)}, títulos ${fmt(report.bondIncome)}, seguros -${fmt(report.hedgeFees)}, custo de vida -${fmt(report.livingCost)}).`,
     net >= 0 ? 'good' : 'bad',
   );
 }

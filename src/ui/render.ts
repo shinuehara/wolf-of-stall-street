@@ -4,11 +4,14 @@ import {
   GUILDS,
   SEASON_LENGTH,
   TOP_CLASS,
+  companiesOf,
   getClass,
+  getCompany,
   getEvent,
   getGuild,
 } from '../sim/data';
-import { bands, hedgeBounds } from '../sim/forecast';
+import { assetName, assetRange, componentsOf, guildOfAsset, isBasket } from '../sim/assets';
+import { hedgeBounds, type Range } from '../sim/forecast';
 import {
   currentClass,
   expertCost,
@@ -20,15 +23,7 @@ import {
   weeksUntilSeasonEnd,
   type WeekReport,
 } from '../sim/game';
-import type {
-  ExpertId,
-  Forecast,
-  GameState,
-  GuildDef,
-  Insight,
-  LogEntry,
-  Sector,
-} from '../sim/types';
+import type { ExpertId, GameState, GuildDef, Insight, LogEntry, Sector } from '../sim/types';
 import { sceneUrl, type SceneName } from './scenes';
 import { sprite, type SpriteName } from './sprites';
 
@@ -36,8 +31,9 @@ export type Screen = SceneName;
 
 export interface UiState {
   screen: Screen;
-  selectedGuild: string;
-  /** On narrow screens the market shows either the list or one guild's detail. */
+  /** Asset shown in the market: a guild id (basket) or a company id. */
+  selectedAsset: string;
+  /** On narrow screens the market shows either the list or one asset's detail. */
   marketDetailOpen: boolean;
   tavernExpert: ExpertId;
   amounts: Record<string, string>;
@@ -51,7 +47,7 @@ export interface UiState {
 export function initialUi(): UiState {
   return {
     screen: 'square',
-    selectedGuild: 'bakers',
+    selectedAsset: 'bakers',
     marketDetailOpen: false,
     tavernExpert: 'astrologer',
     amounts: {},
@@ -122,25 +118,29 @@ const GUILD_SPRITE: Record<string, SpriteName> = {
   spices: 'pepper',
 };
 
-const GUILD_SHORT: Record<string, string> = {
-  bakers: 'Padeiros',
-  mines: 'Minas',
-  apothecaries: 'Boticários',
-  changers: 'Cambistas',
-  fair: 'Feira',
-  forge: 'Forja',
-  fleet: 'Navegação',
-  spices: 'Especiarias',
-};
-
 const EXPERT_SPRITE: Record<ExpertId, SpriteName> = {
   drunk: 'mug',
   astrologer: 'crystal',
   spy: 'hood',
 };
 
+/** Distinct line colours for the companies of a basket chart. */
+const COMPANY_COLORS = ['var(--blue)', 'var(--purple)', 'var(--orange)'];
+
 /** Scale of the range bars, in % per week. */
 const SCALE = 25;
+
+/** Weeks of history shown in charts. */
+const CHART_WEEKS = 40;
+
+function assetSprite(assetId: string): SpriteName {
+  return GUILD_SPRITE[guildOfAsset(assetId).id]!;
+}
+
+/** "Setor Padeiros" for a guild id, the company name otherwise. */
+function targetName(targetId: string): string {
+  return isBasket(targetId) ? `Setor ${getGuild(targetId).short}` : getCompany(targetId).name;
+}
 
 // ---------------------------------------------------------------------------
 // Shell
@@ -230,7 +230,7 @@ function renderHud(state: GameState): string {
 
 function renderNav(state: GameState, ui: UiState): string {
   const playing = state.status === 'playing';
-  const fees = GUILDS.reduce((sum, g) => sum + hedgeFee(state, g.id), 0);
+  const fees = Object.keys(state.positions).reduce((sum, id) => sum + hedgeFee(state, id), 0);
   const bills = currentClass(state).livingCost + fees;
   return `<nav class="nav px" aria-label="Locais">
     ${SCREENS.map(
@@ -270,28 +270,40 @@ function renderSquare(state: GameState, ui: UiState): string {
   else if (total >= cls.ceiling)
     verdict = `Faltam ${weeks} semana(s) e você já passou do teto de ${whole(cls.ceiling)} fl. Mantenha assim e o camareiro vai bater à sua porta.`;
 
+  const noNews = events.length === 0 && state.companyEvents.length === 0;
   return `<div class="square">
   <div class="cols cols-3">
     <article class="card px">
       <h2>${sprite('scroll', 20)} O Arauto anuncia</h2>
-      ${
-        events.length === 0
-          ? '<p class="muted">Tempos calmos no reino. Por enquanto.</p>'
-          : `<ul class="news">${events
-              .map(
-                ({ def, weeksLeft }) => `<li>
-                  <strong>${def.name}</strong> <span class="muted">· mais ${weeksLeft} sem.</span>
-                  <p class="headline">"${def.headline}"</p>
-                  <div class="chips">${Object.entries(def.effects)
-                    .map(
-                      ([sector, v]) =>
-                        `<span class="chip ${tone(v)}">${SECTOR_NAMES[sector as Sector]} ${v > 0 ? '▲' : '▼'}</span>`,
-                    )
-                    .join('')}</div>
-                </li>`,
-              )
-              .join('')}</ul>`
-      }
+      ${noNews ? '<p class="muted">Tempos calmos no reino. Por enquanto.</p>' : ''}
+      <ul class="news">
+        ${events
+          .map(
+            ({ def, weeksLeft }) => `<li>
+              <span class="news-tag">Reino</span> <strong>${def.name}</strong> <span class="muted">· ${weeksLeft} sem.</span>
+              <p class="headline">"${def.headline}"</p>
+              <div class="chips">${Object.entries(def.effects)
+                .map(
+                  ([sector, v]) =>
+                    `<span class="chip ${tone(v)}">${SECTOR_NAMES[sector as Sector]} ${v > 0 ? '▲' : '▼'}</span>`,
+                )
+                .join('')}</div>
+            </li>`,
+          )
+          .join('')}
+        ${state.companyEvents
+          .map((e) => {
+            const company = getCompany(e.companyId);
+            return `<li>
+              <button class="linkish news-link" data-action="open-asset" data-asset="${company.id}">
+                <span class="news-tag">${getGuild(company.guildId).short}</span>
+              </button>
+              <p class="headline">"${esc(e.headline)}"</p>
+              <div class="chips"><span class="chip ${tone(e.shift)}">${company.name} ${e.shift > 0 ? '▲' : '▼'}</span></div>
+            </li>`;
+          })
+          .join('')}
+      </ul>
     </article>
     <article class="card px">
       <h2>${sprite('coin', 20)} Sua semana</h2>
@@ -299,13 +311,13 @@ function renderSquare(state: GameState, ui: UiState): string {
         report && net !== null
           ? `<p class="big ${tone(net)}">${signed(net)} fl</p>
              <ul class="ledger">
-               <li><span>Guildas</span><span class="${tone(sumPnl(report))}">${signed(sumPnl(report))}</span></li>
+               <li><span>Cotas</span><span class="${tone(sumPnl(report))}">${signed(sumPnl(report))}</span></li>
                <li><span>Títulos da Coroa</span><span class="up">${signed(report.bondIncome)}</span></li>
                <li><span>Seguros</span><span class="down">${signed(-report.hedgeFees)}</span></li>
                <li><span>Custo de vida</span><span class="down">${signed(-report.livingCost)}</span></li>
              </ul>`
           : `<p>Você chegou à cidade com <strong class="gold">100 florins</strong> e um sonho: virar <strong>Conde</strong>.</p>
-             <p class="muted">Vá ao <strong>Mercado</strong> comprar cotas, à <strong>Taverna</strong> ouvir rumores e, quando estiver pronto, encerre a semana.</p>`
+             <p class="muted">No <strong>Mercado</strong>, compre a cesta de uma guilda ou aposte numa empresa. Na <strong>Taverna</strong>, ouça rumores. Depois, encerre a semana.</p>`
       }
     </article>
     <article class="card px">
@@ -332,41 +344,69 @@ function renderSquare(state: GameState, ui: UiState): string {
 // ---------------------------------------------------------------------------
 
 function renderMarket(state: GameState, ui: UiState): string {
-  const guild = getGuild(ui.selectedGuild);
   return `<div class="market ${ui.marketDetailOpen ? 'detail-open' : ''}">
-    <ul class="guild-list px" aria-label="Guildas">
-      ${GUILDS.map((g) => renderGuildRow(state, ui, g)).join('')}
+    <ul class="guild-list px" aria-label="Guildas e empresas">
+      ${GUILDS.map((g) => renderGuildGroup(state, ui, g)).join('')}
     </ul>
-    <article class="guild-detail px">${renderGuildDetail(state, ui, guild)}</article>
+    <article class="guild-detail px">${renderAssetDetail(state, ui, ui.selectedAsset)}</article>
   </div>`;
 }
 
-function renderGuildRow(state: GameState, ui: UiState, guild: GuildDef): string {
+function renderGuildGroup(state: GameState, ui: UiState, guild: GuildDef): string {
   const unlocked = isGuildUnlocked(state, guild);
-  const f = state.forecasts[guild.id]!;
-  const position = state.positions[guild.id];
-  const selected = ui.selectedGuild === guild.id;
-  return `<li>
-    <button class="guild-row ${selected ? 'selected' : ''} ${unlocked ? '' : 'locked'}" data-action="select-guild" data-guild="${guild.id}">
+  const expanded = unlocked && guildOfAsset(ui.selectedAsset).id === guild.id;
+  const companies = companiesOf(guild.id);
+  const held = [guild.id, ...companies.map((c) => c.id)].reduce(
+    (s, id) => s + (state.positions[id]?.value ?? 0),
+    0,
+  );
+  const row = (assetId: string, label: string, isCompany: boolean) => {
+    const r = assetRange(state, assetId);
+    const position = state.positions[assetId];
+    return `<button class="guild-row ${isCompany ? 'company-row' : ''} ${ui.selectedAsset === assetId ? 'selected' : ''}"
+      data-action="select-asset" data-asset="${assetId}">
+      ${isCompany ? '<span class="tree">└</span>' : sprite(GUILD_SPRITE[guild.id]!, 28)}
+      <span class="row-name">${label}</span>
+      <span class="row-range">${pct(r.low, 0)} a ${pct(r.high, 0)}</span>
+      <span class="row-pos ${position ? 'gold' : 'muted'}">${position ? `${fmt(position.value)} fl${position.hedged ? ' 🛡' : ''}` : '—'}</span>
+    </button>`;
+  };
+
+  if (!unlocked) {
+    return `<li><button class="guild-row locked" data-action="select-asset" data-asset="${guild.id}">
       ${sprite(GUILD_SPRITE[guild.id]!, 28)}
-      <span class="row-name">${GUILD_SHORT[guild.id]}</span>
-      ${
-        unlocked
-          ? `<span class="row-range">${pct(f.low, 0)} a ${pct(f.high, 0)}</span>
-             <span class="row-pos ${position ? 'gold' : 'muted'}">${position ? `${fmt(position.value)} fl${position.hedged ? ' 🛡' : ''}` : '—'}</span>`
-          : `<span class="row-range muted">🔒 ${getClass(guild.minClass).name}</span><span></span>`
-      }
-    </button>
+      <span class="row-name">${guild.short}</span>
+      <span class="row-range muted">🔒 ${getClass(guild.minClass).name}</span><span></span>
+    </button></li>`;
+  }
+  if (!expanded) {
+    const r = assetRange(state, guild.id);
+    return `<li><button class="guild-row" data-action="select-asset" data-asset="${guild.id}">
+      ${sprite(GUILD_SPRITE[guild.id]!, 28)}
+      <span class="row-name">${guild.short} <span class="muted small">▸ 3 empresas</span></span>
+      <span class="row-range">cesta ${pct(r.low, 0)} a ${pct(r.high, 0)}</span>
+      <span class="row-pos ${held ? 'gold' : 'muted'}">${held ? `${fmt(held)} fl` : '—'}</span>
+    </button></li>`;
+  }
+  return `<li class="group-open">
+    ${row(guild.id, `${guild.short} <span class="muted small">(cesta)</span>`, false)}
+    ${companies.map((c) => row(c.id, c.name, true)).join('')}
   </li>`;
 }
 
-function renderGuildDetail(state: GameState, ui: UiState, guild: GuildDef): string {
+function renderAssetDetail(state: GameState, ui: UiState, assetId: string): string {
+  const guild = guildOfAsset(assetId);
+  const basket = isBasket(assetId);
+  const company = basket ? null : getCompany(assetId);
   const back = `<button class="pbtn pbtn-small back-btn" data-action="close-detail">◀ Guildas</button>`;
+  const subtitle = basket
+    ? `Cesta da ${guild.name}: um pouco de cada uma das 3 empresas`
+    : `${guild.name} · sensibilidade ao setor ×${fmtBeta(company!.beta)}`;
   const head = (extra = '') => `<header class="detail-head">
       ${sprite(GUILD_SPRITE[guild.id]!, 48)}
       <div class="detail-title">
-        <h2>${guild.name}</h2>
-        <span class="muted">${SECTOR_NAMES[guild.sector]}</span>
+        <h2>${assetName(assetId)}</h2>
+        <span class="muted small">${subtitle}</span>
       </div>
       ${extra}
     </header>`;
@@ -377,71 +417,202 @@ function renderGuildDetail(state: GameState, ui: UiState, guild: GuildDef): stri
       Suba na escada social para entrar.</p>`;
   }
 
-  const gs = state.guilds[guild.id]!;
-  const forecast = state.forecasts[guild.id]!;
-  const position = state.positions[guild.id];
-  const insights = state.insights.filter((i) => i.guildId === guild.id);
+  const asset = state.assets[assetId]!;
+  const range = assetRange(state, assetId);
+  const position = state.positions[assetId];
   const playing = state.status === 'playing';
-  const hedgeRange = hedgeBounds(forecast);
+  const hedgeRange = hedgeBounds(range);
   const fee = position ? position.value * currentClass(state).hedgeFeeRate : 0;
-  const lastMove = ui.lastReport?.marketReturns[guild.id];
-  const lastPnl = ui.lastReport?.positionPnl[guild.id];
-  const events = state.events
+  const lastMove = ui.lastReport?.marketReturns[assetId];
+  const lastPnl = ui.lastReport?.positionPnl[assetId];
+  const components = componentsOf(assetId);
+
+  const targets = [guild.id, ...(basket ? [] : [assetId])];
+  const insights = state.insights.filter((i) => targets.includes(i.targetId));
+  const sectorNews = state.events
     .map((e) => getEvent(e.id))
-    .filter((e) => (e.effects[guild.sector] ?? 0) !== 0);
+    .filter((e) => (e.effects[guild.sector] ?? 0) !== 0)
+    .map((e) => ({ label: e.name, shift: e.effects[guild.sector] ?? 0 }));
+  const companyNews = state.companyEvents
+    .filter((e) => components.some((c) => c.id === e.companyId))
+    .map((e) => ({ label: e.headline, shift: e.shift }));
+  const news = [...sectorNews, ...companyNews];
 
   const price = `<div class="detail-price">
-      ${sparkline(gs.history)}
-      <strong>${fmt(gs.price)} fl</strong>
+      <strong>${fmt(asset.price)} fl</strong>
       ${lastMove === undefined ? '' : `<span class="${tone(lastMove)}">${pct(lastMove)}</span>`}
     </div>`;
 
+  const chartSeries = basket
+    ? [
+        { values: asset.history, color: 'var(--gold)', main: true, label: 'Cesta' },
+        ...components.map((c, i) => ({
+          values: state.assets[c.id]!.history,
+          color: COMPANY_COLORS[i] ?? 'var(--muted)',
+          main: false,
+          label: c.name,
+        })),
+      ]
+    : [{ values: asset.history, color: 'var(--gold)', main: true, label: assetName(assetId) }];
+
+  const members = basket
+    ? `<div class="members">${components
+        .map((c, i) => {
+          const r = assetRange(state, c.id);
+          const move = ui.lastReport?.marketReturns[c.id];
+          return `<button class="member" data-action="select-asset" data-asset="${c.id}">
+            <span class="swatch" style="background:${COMPANY_COLORS[i]}"></span>
+            <span class="member-name">${c.name}</span>
+            <span class="muted">${pct(r.low, 0)} a ${pct(r.high, 0)}</span>
+            ${move === undefined ? '' : `<span class="${tone(move)}">${pct(move)}</span>`}
+          </button>`;
+        })
+        .join('')}</div>`
+    : '';
+
+  const breakdown = company
+    ? `<p class="muted small">= setor ${pct(state.sectorForecasts[guild.id]!.low, 0)} a ${pct(state.sectorForecasts[guild.id]!.high, 0)} × ${fmtBeta(company.beta)}
+       + própria ${pct(state.companyForecasts[company.id]!.low, 0)} a ${pct(state.companyForecasts[company.id]!.high, 0)}</p>`
+    : '';
+
   return `${back}${head(price)}
-    <div class="forecast">
-      <div class="forecast-label">O arauto prevê <strong>${pct(forecast.low, 0)} a ${pct(forecast.high, 0)}</strong> nesta semana</div>
-      ${rangeBar(forecast, position?.hedged ? hedgeRange : null, insights)}
-      ${insights.length ? `<div class="insights">${insights.map((i) => renderInsight(i, true)).join('')}</div>` : `<p class="muted small">Quer saber para que lado pende? <button class="linkish" data-action="go" data-screen="tavern">Pergunte na Taverna ▶</button></p>`}
-      ${events.length ? `<div class="chips">${events.map((e) => `<span class="chip ${tone(e.effects[guild.sector] ?? 0)}">${e.name} ${(e.effects[guild.sector] ?? 0) > 0 ? '▲' : '▼'}</span>`).join('')}</div>` : ''}
-    </div>
-    <div class="trade-box">
-      <div class="holding">
-        Sua posição: <strong class="gold">${fmt(position?.value ?? 0)} fl</strong>
-        ${lastPnl === undefined ? '' : `<span class="${tone(lastPnl)}">(${signed(lastPnl)} na semana passada)</span>`}
+    <div class="detail-grid">
+      <div class="detail-main">
+        ${company ? `<p class="trait">${company.trait}</p>` : ''}
+        ${renderChart(chartSeries, basket)}
+        ${members}
+        <div class="forecast">
+          <div class="forecast-label">O arauto prevê <strong>${pct(range.low, 0)} a ${pct(range.high, 0)}</strong> nesta semana</div>
+          ${rangeBar(range, position?.hedged ? hedgeRange : null)}
+          ${breakdown}
+        </div>
       </div>
-      <div class="trade">
-        <input id="amount-${guild.id}" type="number" inputmode="decimal" min="0" step="1" placeholder="florins"
-          aria-label="Valor em florins" data-amount="${guild.id}" value="${esc(ui.amounts[guild.id] ?? '')}" ${playing ? '' : 'disabled'} />
-        <button class="pbtn pbtn-small" data-action="fill" data-fraction="0.25" data-guild="${guild.id}" ${playing ? '' : 'disabled'}>25%</button>
-        <button class="pbtn pbtn-small" data-action="fill" data-fraction="0.5" data-guild="${guild.id}" ${playing ? '' : 'disabled'}>50%</button>
-        <button class="pbtn pbtn-small" data-action="fill" data-fraction="1" data-guild="${guild.id}" ${playing ? '' : 'disabled'}>Tudo</button>
+      <div class="detail-side">
+        ${news.length ? `<div class="chips">${news.map((n) => `<span class="chip ${tone(n.shift)}">${esc(n.label)} ${n.shift > 0 ? '▲' : '▼'}</span>`).join('')}</div>` : ''}
+        ${
+          insights.length
+            ? `<div class="insights">${insights.map((i) => renderInsight(i, true)).join('')}</div>`
+            : `<p class="muted small">Quer saber para que lado pende? <button class="linkish" data-action="go" data-screen="tavern">Pergunte na Taverna ▶</button></p>`
+        }
+        <div class="trade-box">
+          <div class="holding">
+            Sua posição: <strong class="gold">${fmt(position?.value ?? 0)} fl</strong>
+            ${lastPnl === undefined ? '' : `<span class="${tone(lastPnl)}">(${signed(lastPnl)} na semana passada)</span>`}
+          </div>
+          <div class="trade">
+            <input id="amount-${assetId}" type="number" inputmode="decimal" min="0" step="1" placeholder="florins"
+              aria-label="Valor em florins" data-amount="${assetId}" value="${esc(ui.amounts[assetId] ?? '')}" ${playing ? '' : 'disabled'} />
+          </div>
+          <div class="trade">
+            <button class="pbtn pbtn-small" data-action="fill" data-fraction="0.25" data-asset="${assetId}" ${playing ? '' : 'disabled'}>25%</button>
+            <button class="pbtn pbtn-small" data-action="fill" data-fraction="0.5" data-asset="${assetId}" ${playing ? '' : 'disabled'}>50%</button>
+            <button class="pbtn pbtn-small" data-action="fill" data-fraction="1" data-asset="${assetId}" ${playing ? '' : 'disabled'}>Tudo</button>
+          </div>
+          <div class="trade">
+            <button class="pbtn pbtn-buy" data-action="buy" data-asset="${assetId}" ${playing ? '' : 'disabled'}>Comprar</button>
+            <button class="pbtn pbtn-sell" data-action="sell" data-asset="${assetId}" ${playing && position ? '' : 'disabled'}>Vender</button>
+          </div>
+          ${
+            position
+              ? `<label class="hedge ${position.hedged ? 'on' : ''}">
+                  <input type="checkbox" data-hedge="${assetId}" ${position.hedged ? 'checked' : ''} ${playing ? '' : 'disabled'} />
+                  ${sprite('shield', 20)}
+                  <span>Seguro: limita a <strong>${pct(hedgeRange.floor)} a ${pct(hedgeRange.cap)}</strong> por ${fmt(fee)} fl/sem</span>
+                </label>`
+              : '<p class="muted small">Vender sem valor vende tudo.</p>'
+          }
+        </div>
       </div>
-      <div class="trade">
-        <button class="pbtn pbtn-buy" data-action="buy" data-guild="${guild.id}" ${playing ? '' : 'disabled'}>Comprar</button>
-        <button class="pbtn pbtn-sell" data-action="sell" data-guild="${guild.id}" ${playing && position ? '' : 'disabled'}>Vender</button>
-      </div>
-      ${
-        position
-          ? `<label class="hedge ${position.hedged ? 'on' : ''}">
-              <input type="checkbox" data-hedge="${guild.id}" ${position.hedged ? 'checked' : ''} ${playing ? '' : 'disabled'} />
-              ${sprite('shield', 20)}
-              <span>Seguro: limita a <strong>${pct(hedgeRange.floor)} a ${pct(hedgeRange.cap)}</strong> por ${fmt(fee)} fl/semana</span>
-            </label>`
-          : '<p class="muted small">Vender sem informar valor vende tudo. Com uma posição aberta, você pode contratar seguro.</p>'
-      }
     </div>`;
 }
 
+interface Series {
+  values: number[];
+  color: string;
+  main: boolean;
+  label: string;
+}
+
+/**
+ * Price history as a stepped pixel line chart. For a basket, the companies are rescaled to
+ * start where the basket starts, so the lines compare performance rather than price levels.
+ */
+function renderChart(series: Series[], rescale: boolean): string {
+  const main = series.find((s) => s.main)!;
+  const n = Math.min(CHART_WEEKS + 1, main.values.length);
+  if (n < 2) {
+    return `<div class="chart chart-empty px"><span class="muted">O gráfico aparece depois da primeira semana.</span></div>`;
+  }
+  const firstWeek = main.values.length - n;
+  const windowed = series.map((s) => {
+    const values = s.values.slice(-n);
+    if (!rescale || s.main) return { ...s, values };
+    const base = values[0]!;
+    const target = main.values[firstWeek]!;
+    return { ...s, values: values.map((v) => (v / base) * target) };
+  });
+  const all = windowed.flatMap((s) => s.values);
+  const min = Math.min(...all);
+  const max = Math.max(...all);
+  const pad = (max - min) * 0.08 || max * 0.05 || 1;
+  const lo = min - pad;
+  const hi = max + pad;
+  const W = 300;
+  const H = 100;
+  const x = (i: number) => (i / (n - 1)) * W;
+  const y = (v: number) => H - ((v - lo) / (hi - lo)) * H;
+  const stepPath = (values: number[]) =>
+    values
+      .map((v, i) =>
+        i === 0 ? `M0 ${y(v).toFixed(1)}` : `H${x(i).toFixed(1)} V${y(v).toFixed(1)}`,
+      )
+      .join(' ');
+  const mainValues = windowed.find((s) => s.main)!.values;
+  const area = `${stepPath(mainValues)} V${H} H0 Z`;
+  const startValue = mainValues[0]!;
+  const endValue = mainValues[mainValues.length - 1]!;
+  const change = ((endValue - startValue) / startValue) * 100;
+
+  return `<figure class="chart px">
+    <figcaption class="chart-head">
+      <span>Preço nas últimas ${n - 1} semana(s): <strong class="${tone(change)}">${pct(change)}</strong></span>
+      ${
+        windowed.length > 1
+          ? `<span class="legend">${windowed.map((s) => `<span><i style="background:${s.color}"></i>${s.main ? 'Cesta' : s.label}</span>`).join('')}</span>`
+          : ''
+      }
+    </figcaption>
+    <div class="chart-body">
+      <div class="chart-axis"><span>${fmt(hi)}</span><span>${fmt(lo)}</span></div>
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Gráfico de preço">
+        <line x1="0" x2="${W}" y1="${y(startValue).toFixed(1)}" y2="${y(startValue).toFixed(1)}" class="chart-base" vector-effect="non-scaling-stroke" />
+        <path d="${area}" class="chart-area" />
+        ${windowed
+          .filter((s) => !s.main)
+          .map(
+            (s) =>
+              `<path d="${stepPath(s.values)}" fill="none" stroke="${s.color}" stroke-width="1.5" vector-effect="non-scaling-stroke" opacity="0.85" />`,
+          )
+          .join('')}
+        <path d="${stepPath(mainValues)}" fill="none" stroke="var(--gold)" stroke-width="3" vector-effect="non-scaling-stroke" />
+      </svg>
+    </div>
+    <div class="chart-foot"><span>sem. ${firstWeek + 1}</span><span>agora</span></div>
+  </figure>`;
+}
+
 function renderInsight(insight: Insight, full: boolean): string {
+  const about = `<span class="insight-about">${targetName(insight.targetId)}</span>`;
   switch (insight.expert) {
     case 'drunk':
-      return `<div class="insight">${sprite('mug', 20)}<span><em>"${insight.leansUp ? 'Vai subir, confia em mim! *hic*' : 'Vende tudo! Vai despencar! *hic*'}"</em></span></div>`;
+      return `<div class="insight">${sprite('mug', 20)}${about}<span><em>"${insight.leansUp ? 'Vai subir, confia em mim! *hic*' : 'Vende tudo! Vai despencar! *hic*'}"</em></span></div>`;
     case 'astrologer':
-      return `<div class="insight">${sprite('crystal', 20)}<span>Os astros apontam para <strong class="${insight.leansUp ? 'up' : 'down'}">${insight.leansUp ? 'ALTA' : 'BAIXA'}</strong>.</span></div>`;
+      return `<div class="insight">${sprite('crystal', 20)}${about}<span>Os astros apontam para <strong class="${insight.leansUp ? 'up' : 'down'}">${insight.leansUp ? 'ALTA' : 'BAIXA'}</strong>.</span></div>`;
     case 'spy':
       if (!full) {
-        return `<div class="insight">${sprite('hood', 20)}<span>Chances: ${insight.bands.map((b) => `${Math.round(b.p * 100)}%`).join(' · ')}</span></div>`;
+        return `<div class="insight">${sprite('hood', 20)}${about}<span>Chances: ${insight.bands.map((b) => `${Math.round(b.p * 100)}%`).join(' · ')}</span></div>`;
       }
-      return `<div class="insight insight-spy">${sprite('hood', 20)}
+      return `<div class="insight insight-spy">${sprite('hood', 20)}${about}
         <div class="bands">${insight.bands
           .map(
             (b) => `<div class="band" title="${pct(b.from)} a ${pct(b.to)}">
@@ -454,24 +625,10 @@ function renderInsight(insight: Insight, full: boolean): string {
   }
 }
 
-function rangeBar(
-  f: Forecast,
-  hedge: { floor: number; cap: number } | null,
-  insights: Insight[],
-): string {
+function rangeBar(r: Range, hedge: { floor: number; cap: number } | null): string {
   const x = (v: number) => clampPct(((v + SCALE) / (2 * SCALE)) * 100);
-  const spy = insights.find((i) => i.expert === 'spy');
-  const fill =
-    spy?.expert === 'spy'
-      ? bands(f)
-          .map(
-            (b) =>
-              `<div class="range-band" style="left:${x(b.from)}%;width:${x(b.to) - x(b.from)}%;opacity:${(0.2 + b.p * 0.8).toFixed(2)}"></div>`,
-          )
-          .join('')
-      : `<div class="range-band" style="left:${x(f.low)}%;width:${x(f.high) - x(f.low)}%"></div>`;
   return `<div class="range" aria-hidden="true">
-    ${fill}
+    <div class="range-band" style="left:${x(r.low)}%;width:${x(r.high) - x(r.low)}%"></div>
     ${hedge ? `<div class="range-hedge" style="left:${x(hedge.floor)}%;width:${x(hedge.cap) - x(hedge.floor)}%"></div>` : ''}
     <div class="range-zero" style="left:${x(0)}%"></div>
   </div>
@@ -486,6 +643,12 @@ function renderTavern(state: GameState, ui: UiState): string {
   const playing = state.status === 'playing';
   const expert = EXPERTS.find((e) => e.id === ui.tavernExpert)!;
   const expertLocked = state.classIndex < expert.minClass;
+  const askButton = (targetId: string, label: string, icon: string) => {
+    const asked = state.insights.some((i) => i.expert === expert.id && i.targetId === targetId);
+    return `<button class="ask-btn ${asked ? 'done' : ''}" data-action="consult" data-expert="${expert.id}" data-asset="${targetId}" ${asked || !playing ? 'disabled' : ''}>
+      ${icon}<span>${label}</span>${asked ? '<span class="tick">✔</span>' : ''}
+    </button>`;
+  };
   return `<div class="cols tavern">
     <div class="experts">
       ${EXPERTS.map((e) => {
@@ -498,36 +661,32 @@ function renderTavern(state: GameState, ui: UiState): string {
             <strong>${e.name}</strong>
             <span class="small">${e.description}</span>
           </span>
-          <span class="expert-cost ${locked ? 'muted' : 'gold'}">${locked ? `🔒 ${getClass(e.minClass).name}` : cost === 0 ? 'grátis' : `${fmt(cost)} fl`}</span>
+          <span class="expert-cost ${locked ? 'muted' : 'gold'}">${locked ? `🔒 ${getClass(e.minClass).name}` : cost === 0 ? 'grátis' : `${fmt(cost)} fl por pergunta`}</span>
         </button>`;
       }).join('')}
     </div>
     <article class="card px ask">
-      <h2>${sprite(EXPERT_SPRITE[expert.id], 20)} Perguntar ${expert.id === 'drunk' ? 'ao' : expert.id === 'spy' ? 'ao' : 'à'} ${expert.name} sobre…</h2>
+      <h2>${sprite(EXPERT_SPRITE[expert.id], 20)} Perguntar ${expert.id === 'astrologer' ? 'à' : 'ao'} ${expert.name} sobre…</h2>
       ${
         expertLocked
           ? `<p class="locked-note">🔒 O ${expert.name} não atende quem está abaixo de ${getClass(expert.minClass).name}.</p>`
-          : `<div class="ask-grid">${GUILDS.filter((g) => isGuildUnlocked(state, g))
-              .map((g) => {
-                const asked = state.insights.some(
-                  (i) => i.expert === expert.id && i.guildId === g.id,
-                );
-                return `<button class="ask-btn ${asked ? 'done' : ''}" data-action="consult" data-expert="${expert.id}" data-guild="${g.id}" ${asked || !playing ? 'disabled' : ''}>
-                  ${sprite(GUILD_SPRITE[g.id]!, 24)}<span>${GUILD_SHORT[g.id]}</span>${asked ? '<span class="tick">✔</span>' : ''}
-                </button>`;
-              })
-              .join('')}</div>`
+          : `<p class="muted small">"Setor" responde pela guilda inteira; uma empresa responde só pelos negócios dela.</p>
+             <div class="ask-groups">${GUILDS.filter((g) => isGuildUnlocked(state, g))
+               .map(
+                 (g) => `<div class="ask-group">
+                   ${askButton(g.id, `Setor ${g.short}`, sprite(GUILD_SPRITE[g.id]!, 20))}
+                   ${companiesOf(g.id)
+                     .map((c) => askButton(c.id, c.name, ''))
+                     .join('')}
+                 </div>`,
+               )
+               .join('')}</div>`
       }
       <h3>Rumores desta semana</h3>
       ${
         state.insights.length === 0
           ? '<p class="muted">Ninguém te contou nada ainda.</p>'
-          : `<ul class="rumors">${state.insights
-              .map(
-                (i) =>
-                  `<li><span class="rumor-guild">${GUILD_SHORT[i.guildId]}</span>${renderInsight(i, false)}</li>`,
-              )
-              .join('')}</ul>`
+          : `<ul class="rumors">${state.insights.map((i) => `<li>${renderInsight(i, false)}</li>`).join('')}</ul>`
       }
     </article>
   </div>`;
@@ -543,7 +702,7 @@ function renderCastle(state: GameState, ui: UiState): string {
   const next = isTop ? null : getClass(state.classIndex + 1);
   const unlocksNext = next
     ? [
-        ...GUILDS.filter((g) => g.minClass === state.classIndex + 1).map((g) => GUILD_SHORT[g.id]),
+        ...GUILDS.filter((g) => g.minClass === state.classIndex + 1).map((g) => g.short),
         ...EXPERTS.filter((e) => e.minClass === state.classIndex + 1).map((e) => e.name),
       ]
     : [];
@@ -642,10 +801,10 @@ function renderModal(state: GameState, ui: UiState): string {
         ? `<ul class="ledger">${held
             .map(([id, pnl]) => {
               const move = report.marketReturns[id] ?? 0;
-              return `<li><span>${sprite(GUILD_SPRITE[id]!, 20)} ${GUILD_SHORT[id]} <span class="${tone(move)}">${pct(move)}</span></span><span class="${tone(pnl)}">${signed(pnl)}</span></li>`;
+              return `<li><span>${sprite(assetSprite(id), 20)} ${assetName(id)} <span class="${tone(move)}">${pct(move)}</span></span><span class="${tone(pnl)}">${signed(pnl)}</span></li>`;
             })
             .join('')}</ul>`
-        : '<p class="muted">Você não tinha cotas de nenhuma guilda.</p>'
+        : '<p class="muted">Você não tinha cotas de nada.</p>'
     }
     <ul class="ledger">
       <li><span>Títulos da Coroa</span><span class="up">${signed(report.bondIncome)}</span></li>
@@ -682,21 +841,8 @@ function reportNet(report: WeekReport): number {
   return sumPnl(report) + report.bondIncome - report.hedgeFees - report.livingCost;
 }
 
-function sparkline(history: number[]): string {
-  const points = history.slice(-20);
-  if (points.length < 2) return '';
-  const min = Math.min(...points);
-  const max = Math.max(...points);
-  const span = max - min || 1;
-  const coords = points
-    .map(
-      (p, i) =>
-        `${Math.round((i / (points.length - 1)) * 60)},${Math.round(18 - ((p - min) / span) * 16)}`,
-    )
-    .join(' ');
-  const up = points[points.length - 1]! >= points[0]!;
-  return `<svg class="spark ${up ? 'up' : 'down'}" viewBox="0 0 60 20" width="60" height="20" aria-hidden="true" shape-rendering="crispEdges">
-    <polyline points="${coords}" fill="none" stroke="currentColor" stroke-width="2" /></svg>`;
+function fmtBeta(beta: number): string {
+  return beta.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
 
 function pct(value: number, digits = 1): string {
@@ -708,7 +854,8 @@ function pct(value: number, digits = 1): string {
 }
 
 function signed(value: number): string {
-  return `${value >= 0 ? '+' : ''}${fmt(value)}`;
+  if (Math.abs(value) < 0.05) return '0,0';
+  return `${value > 0 ? '+' : ''}${fmt(value)}`;
 }
 
 function whole(value: number): string {
