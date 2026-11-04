@@ -132,4 +132,4 @@ melhorias ~128 semanas; oráculo (teto) ~88. Quem usa o Espião não vai para a 
 | `cea8ed2`                       | Investidores por 3 meses, promoções/quedas múltiplas, gestores           |
 | `7c64891`                       | Último aviso antes da masmorra, saques param acima do piso               |
 | `9803b83`                       | Profecia do trimestre, corretagem, perguntas valem o trimestre           |
-| (este)                          | Bêbado que nunca mente: fofocas a interpretar, bobagens, 5 patentes      |
+| `c6fbe64`                       | Bêbado que nunca mente: fofocas a interpretar, bobagens, 5 patentes      |
