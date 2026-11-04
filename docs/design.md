@@ -14,19 +14,22 @@ Pilares:
 - **Decisões claras sob informação imperfeita.** O arauto anuncia uma faixa pública, e o
   lado da faixa que é mais provável fica escondido.
 - **Informação custa caro e vale a pena.** Especialistas revelam parte da verdade.
-- **Pressão constante.** O custo de vida cresce com a classe, e a cada estação você pode
+- **Pressão constante.** O custo de vida cresce com a classe, e a cada trimestre você pode
   cair, ficar onde está ou subir.
-- **Runs curtas e com humor.** Bom jogador: ~60 a 70 semanas (cliques rápidos).
+- **Comprar melhores decisões.** Sem melhorias o jogo é difícil; a rentabilidade sobe
+  conforme o gestor contrata especialistas melhores.
+- **Humor e cerimônia.** Oficiais arrogantes ou bajuladores, festas de fechamento, visitantes.
 
 ## Loop de turno (1 turno = 1 semana)
 
-1. **O Arauto** anuncia, para cada guilda, a faixa de variação esperada (ex: `-3% a +5%`)
-   e os eventos do reino.
-2. O jogador **consulta especialistas** (opcional, pago).
-3. **Aloca** florins entre guildas e liga ou desliga o **seguro** de cada posição.
-4. **Encerrar semana:** o mercado se move, os seguros são cobrados, o dinheiro livre rende,
-   o custo de vida é pago.
-5. A cada **4 semanas (uma estação)** acontece a **avaliação de classe**.
+1. **O Arauto** anuncia a faixa de variação esperada de cada ativo (ex: `-3% a +5%`) e as
+   notícias do reino, da cidade, dos bairros e das empresas.
+2. O gestor **consulta especialistas** (opcional, pago do bolso).
+3. **Aloca** o fundo entre cotas, cestas e Títulos da Coroa, e liga ou desliga o **seguro**.
+4. **Encerrar semana:** o mercado se move (com possíveis choques), os seguros são cobrados,
+   os títulos rendem, as taxas vão do fundo para o bolso e o custo de vida sai do bolso.
+5. Nas semanas **4 e 8** de cada trimestre chega um **visitante**; na semana **12** há a
+   **avaliação de classe** e a festa de fechamento.
 
 ## Mecânicas
 
@@ -41,7 +44,7 @@ O patrimônio é **dinheiro de investidores**: o **fundo**. Você, o gestor, tem
 - Do bolso saem: **especialistas**, **melhorias**, **títulos de nobreza** e o **custo de vida**.
 - Seguros são custo do fundo.
 - A **classe** é medida pelo tamanho do fundo (a fama do gestor).
-- **Derrota:** fundo abaixo do piso de Servo no fim da estação (fundo fechado), ou bolso sem
+- **Derrota:** fundo abaixo do piso de Servo no fim do trimestre (fundo fechado), ou bolso sem
   dinheiro para o custo de vida (masmorra por dívidas).
 
 Isso impede gastar o patrimônio todo em melhorias no dia 0: elas são compradas com as taxas
@@ -56,7 +59,7 @@ que você acumula, e performar bem rende mais taxa de performance.
 | Coroa (livre)  | taxa da classe: 0,20% (Servo) a 0,50% (Barão) | compra e venda a qualquer momento                                       |
 | Coroa (4 sem.) | 2× a taxa da classe, fixa na compra           | preso por 4 semanas; no vencimento volta sozinho para os florins livres |
 
-O título preso conta no patrimônio para a avaliação da estação, mas **não** pode ser vendido
+O título preso conta no patrimônio para a avaliação do trimestre, mas **não** pode ser vendido
 para pagar contas nem para comprar um título de nobreza. É a troca entre rendimento e liquidez.
 
 ### Guildas, empresas e cestas (ações)
@@ -157,11 +160,9 @@ bolso, semanas no azul, gráfico, destaque e decepção, e o veredito.
 
 ### Avaliação do oficial
 
-Quem discursa na festa:
-rentabilidade do fundo na estação, quanto entrou no seu bolso, as 4 semanas, o destaque e a
-decepção, e o veredito (cai, fica ou pode subir, com o título à venda ali mesmo).
-
-Quem lê o veredito muda com a sua classe, e o tom muda com o resultado (triste, neutro, feliz):
+Quem discursa na festa muda com a sua classe, e o tom muda com o resultado: triste (caiu de
+classe ou o fundo perdeu mais de 6% no trimestre), feliz (pode subir ou ganhou mais de 15%)
+ou neutro. Cada combinação tem 2 frases que se alternam.
 
 | Classe              | Quem fala              | Tom                                                             |
 | ------------------- | ---------------------- | --------------------------------------------------------------- |
@@ -216,15 +217,16 @@ no cartão (com estrelas) e em cada resposta, e o retrato fica mais caprichado a
 A diversão vem de comprar melhores decisões. Sem melhorias, a informação ajuda pouco;
 com elas, a rentabilidade sobe de verdade. Compradas na Taverna, aba "Contratar melhorias".
 
-| Melhoria                    | Níveis (custo · classe mínima)              | Efeito                                                                |
-| --------------------------- | ------------------------------------------- | --------------------------------------------------------------------- |
-| Telescópio da Astróloga     | 8 · Servo / 25 · Camponês                   | 60% → 68% → 75% de acerto                                             |
-| Espião Veterano             | 15 · Camponês / 35 · Artesão / 80 · Burguês | erro do Espião cai muito; furos plantados 25% → 12% → 5% → 1%         |
-| Rede de Informantes         | 35 · Artesão                                | avisa (⚠) quais empresas estão com risco alto de choque na semana     |
-| Contrato com os Seguradores | 8 · Camponês                                | seguro 40% mais barato                                                |
-| Cronista                    | 30 · Artesão                                | mostra os pesos de cidade, setor e bairro na previsão de cada empresa |
-| Livro-caixa do Escriba      | 10 · Servo                                  | gráficos com 40 semanas (antes 8)                                     |
-| Amigo do Tesoureiro         | 60 · Mercador                               | Títulos da Coroa rendem 50% a mais                                    |
+| Melhoria                    | Níveis (custo do bolso · classe mínima)    | Efeito                                                                |
+| --------------------------- | ------------------------------------------ | --------------------------------------------------------------------- |
+| Banho e Sopa para o Bêbado  | 1 · Servo / 3 · Camponês                   | Bêbado acerta 50% → 55% → 60%                                         |
+| Telescópio da Astróloga     | 3 · Servo / 8 · Camponês                   | Astróloga acerta 60% → 68% → 75%                                      |
+| Espião Veterano             | 6 · Camponês / 15 · Artesão / 35 · Burguês | erro do Espião cai muito; furos plantados 25% → 12% → 5% → 1%         |
+| Rede de Informantes         | 15 · Artesão                               | avisa (⚠) quais empresas estão com risco alto de choque na semana     |
+| Contrato com os Seguradores | 8 · Camponês                               | seguro 40% mais barato                                                |
+| Cronista                    | 10 · Artesão                               | mostra os pesos de cidade, setor e bairro na previsão de cada empresa |
+| Livro-caixa do Escriba      | 4 · Servo                                  | gráficos com 40 semanas (antes 8)                                     |
+| Amigo do Tesoureiro         | 20 · Mercador                              | Títulos da Coroa rendem 50% a mais                                    |
 
 ### Choques
 
@@ -239,25 +241,35 @@ Para qualquer posição (cesta ou empresa), o jogador pode contratar seguro da G
 resultado encolhe 1/4 da largura de cada lado (`[-3, +5]` vira `[-1, +3]`). O prêmio é
 cobrado toda semana, de 1,0% (Servo) a 0,4% (Barão) do valor segurado.
 
-### Escada social e avaliação por estação
+### Escada social e avaliação por trimestre
 
 `Servo → Camponês → Artesão → Mercador → Burguês → Cavaleiro → Barão → Conde 👑`
 
-Cada classe tem **piso**, **teto**, **custo de vida** semanal e **taxa de ascensão**. A cada
-4 semanas o patrimônio é comparado com o piso e o teto:
+| Classe    | Piso | Teto | Título seguinte (bolso) | Custo de vida/sem | Adm./sem | Performance |
+| --------- | ---- | ---- | ----------------------- | ----------------- | -------- | ----------- |
+| Servo     | 60   | 125  | 3                       | 0,12              | 0,15%    | 20%         |
+| Camponês  | 112  | 155  | 4                       | 0,18              | 0,17%    | 21%         |
+| Artesão   | 140  | 195  | 6                       | 0,25              | 0,19%    | 22%         |
+| Mercador  | 175  | 245  | 8                       | 0,35              | 0,21%    | 23%         |
+| Burguês   | 220  | 305  | 10                      | 0,45              | 0,23%    | 24%         |
+| Cavaleiro | 275  | 380  | 13                      | 0,60              | 0,25%    | 25%         |
+| Barão     | 345  | 475  | 17                      | 0,80              | 0,28%    | 27%         |
+| Conde     | —    | —    | —                       | 0                 | 0,30%    | 30%         |
+
+Cada classe tem **piso** e **teto** do fundo. A cada **12 semanas** o fundo é comparado com eles:
 
 - **L1 (abaixo do piso):** cai uma classe. Servo abaixo do piso vai para a **masmorra** (game over).
 - **L2 (entre os dois):** mantém a classe.
 - **L3 (acima do teto):** o camareiro oferece o próximo título, que deve ser pago até o fim da semana.
 
-O teto menos a taxa sempre cai acima do piso da classe seguinte, então comprar um título
-não derruba o jogador imediatamente, mas deixa pouca margem.
+O título é pago do bolso, então comprá-lo não reduz o fundo; o teto de cada classe fica
+acima do piso da seguinte.
 
 **Regalias por classe:** guildas novas, especialistas, juros maiores nos Títulos e seguros
 mais baratos. **Vitória:** virar Conde. A pontuação é o número de semanas.
 
-Se faltar dinheiro vivo para pagar as contas, cotas são vendidas proporcionalmente. Sem
-patrimônio, masmorra.
+Se faltar dinheiro livre no fundo para as taxas, cotas são vendidas proporcionalmente. Se o
+bolso não paga o custo de vida, masmorra.
 
 ## Balanceamento
 
@@ -286,14 +298,16 @@ Alavancas principais: `DRIFT_SCALE`, `CENTER_NOISE`, `NEWS_VISIBILITY`, `NEWS_LE
 
 ## Ideias para depois
 
+- **Aportes e resgates de investidores** conforme o desempenho do trimestre.
+- **Promoção dupla** num trimestre excepcional (o fundo passa de dois tetos).
+- **Tutorial / primeiro trimestre guiado** pelo Meirinho.
+- **Dilemas no meio do jogo:** empréstimo forçado do Rei, fundo rival, cotas com desconto.
+
 - **Fase 2: etiquetas de empresa e analistas contratáveis.** Cada empresa ganha
   características (atendimento, equipamento, fornecedores, reputação…). Algumas notícias
   acertam empresas por etiqueta ("Fiscais inspecionam fornos antigos"). As etiquetas
   começam escondidas e são reveladas contratando analistas, como um **analista de
   atendimento ao cliente** que avalia as empresas nesse quesito.
-- **Cronista** (comprável): revela as sensibilidades exatas de cada empresa à cidade, ao
-  setor e ao bairro.
-
 - 🧪 **Alquimista**: revela correlações entre setores.
 - 🧑‍🏫 **Coach de mercadores** na taverna, que vende cursos de enriquecimento (palpites ruins, muito meme).
 - **Calote da Coroa** em tempos de guerra (risco na renda fixa).
