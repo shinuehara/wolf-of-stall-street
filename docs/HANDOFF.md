@@ -139,4 +139,4 @@ melhorias ~128 semanas; oráculo (teto) ~88. Quem usa o Espião não vai para a 
 | `7c64891`                       | Último aviso antes da masmorra, saques param acima do piso               |
 | `9803b83`                       | Profecia do trimestre, corretagem, perguntas valem o trimestre           |
 | `c6fbe64`                       | Bêbado que nunca mente: fofocas a interpretar, bobagens, 5 patentes      |
-| (este)                          | Árvores dos ajudantes (5 patentes), astros, análise completa, confidente |
+| `5ce6055`                       | Árvores dos ajudantes (5 patentes), astros, análise completa, confidente |
