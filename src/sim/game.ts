@@ -54,13 +54,21 @@ import {
   FLOW_DEAD_ZONE,
   FLOW_MAX_IN,
   FLOW_MAX_OUT,
-  FLOW_SENSITIVITY,
+  FLOW_MONTHS,
+  FLOW_SENSITIVITY_IN,
+  FLOW_SENSITIVITY_OUT,
+  getManager,
   INVESTORS,
   OFFER_CHANCE,
   getInvestor,
 } from './data';
 import {
   ASSET_IDS,
+  assetExpectedReturn,
+  isBasket,
+  isManager,
+  managerAsset,
+  managerOf,
   BOND_LIQUID,
   BOND_LOCKED,
   bondRate,
@@ -89,6 +97,7 @@ import type {
   Shock,
   SocialClass,
   InvestorKind,
+  ManagerId,
 } from './types';
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
@@ -126,6 +135,8 @@ export interface WeekReport {
   confiscations: { kind: InvestorKind; amount: number; fine: number }[];
   /** Someone offered to invest in the fund (answer before the week ends). */
   offerArrived: InvestorKind | null;
+  /** What each hired manager held this week (asset ids and weights). */
+  managerPicks: Partial<Record<ManagerId, { id: string; weight: number }[]>>;
 }
 
 const MAX_LOG = 60;
@@ -211,7 +222,7 @@ function cityProfile(state: GameState): { drift: number; width: number } {
 
 export function newGame(seed: number = Date.now() >>> 0): GameState {
   const state: GameState = {
-    version: 11,
+    version: 12,
     seed,
     rngState: seed,
     week: 0,
@@ -245,7 +256,9 @@ export function newGame(seed: number = Date.now() >>> 0): GameState {
     weekFlows: 0,
     investorOffer: null,
     riskyDeposits: [],
-    ascensionOffer: false,
+    monthlyExcess: [],
+    managers: [],
+    ascensionOffer: 0,
     status: 'playing',
     log: [],
   };
@@ -298,6 +311,7 @@ export function isGuildUnlocked(state: GameState, guild: GuildDef): boolean {
 }
 
 export function isAssetUnlocked(state: GameState, assetId: string): boolean {
+  if (isManager(assetId)) return state.managers.includes(managerOf(assetId));
   return isBond(assetId) || isGuildUnlocked(state, guildOfAsset(assetId));
 }
 
@@ -396,7 +410,9 @@ export function isTargetUnlocked(state: GameState, targetId: string): boolean {
 
 export function buy(state: GameState, assetId: string, amount: number): ActionResult {
   if (state.status !== 'playing') return fail('O jogo terminou.');
-  if (!isBond(assetId)) {
+  if (isManager(assetId)) {
+    if (!isAssetUnlocked(state, assetId)) return fail('Contrate esse gestor antes.');
+  } else if (!isBond(assetId)) {
     const guild = guildOfAsset(assetId);
     if (onlyBonds(state)) return fail('Por enquanto o Rei só permite ao povo os Títulos da Coroa.');
     if (!isGuildUnlocked(state, guild)) {
@@ -466,6 +482,7 @@ export function setHedge(state: GameState, assetId: string, hedged: boolean): Ac
   if (state.status !== 'playing') return fail('O jogo terminou.');
   if (isBond(assetId))
     return fail('Títulos da Coroa não precisam de seguro: o rendimento é garantido.');
+  if (isManager(assetId)) return fail('O gestor cuida do próprio risco; não há seguro para ele.');
   const position = state.positions[assetId];
   if (!position) return fail('Só dá para segurar uma posição que você tem.');
   position.hedged = hedged;
@@ -507,17 +524,31 @@ export function consult(state: GameState, expertId: ExpertId, targetId: string):
   return ok;
 }
 
-export function acceptAscension(state: GameState): ActionResult {
-  if (!state.ascensionOffer) return fail('Não há título à venda para você agora.');
-  const cls = currentClass(state);
-  if (state.purse < cls.ascensionFee) {
+/**
+ * Buys titles on offer, one class each, cheapest first, as many as `levels` (default all)
+ * and the purse allow.
+ */
+export function acceptAscension(state: GameState, levels = state.ascensionOffer): ActionResult {
+  if (state.ascensionOffer <= 0) return fail('Não há título à venda para você agora.');
+  levels = Math.min(levels, state.ascensionOffer);
+  if (state.purse < currentClass(state).ascensionFee) {
     return fail('O título sai do seu bolso, e ele não tem florins suficientes.');
   }
-  state.purse -= cls.ascensionFee;
-  state.classIndex += 1;
-  state.ascensionOffer = false;
+  let bought = 0;
+  while (bought < levels && state.purse >= currentClass(state).ascensionFee) {
+    state.purse -= currentClass(state).ascensionFee;
+    state.classIndex += 1;
+    bought += 1;
+  }
+  state.ascensionOffer = 0;
   const next = currentClass(state);
-  log(state, `Você comprou o título e agora é ${next.name}!`, 'good');
+  log(
+    state,
+    bought > 1
+      ? `Você comprou ${bought} títulos de uma vez e agora é ${next.name}!`
+      : `Você comprou o título e agora é ${next.name}!`,
+    'good',
+  );
   announceGuilds(state);
   if (state.classIndex >= TOP_CLASS) {
     state.status = 'won';
@@ -528,7 +559,7 @@ export function acceptAscension(state: GameState): ActionResult {
 
 export function declineAscension(state: GameState): ActionResult {
   if (!state.ascensionOffer) return fail('Não há título à venda para você agora.');
-  state.ascensionOffer = false;
+  state.ascensionOffer = 0;
   log(state, 'Você recusou o título. Por ora.', 'neutral');
   return ok;
 }
@@ -559,10 +590,11 @@ export function endWeek(state: GameState): WeekReport {
     investorFlow: 0,
     confiscations: [],
     offerArrived: null,
+    managerPicks: {},
   };
 
   // Unanswered offers expire when the week ends.
-  state.ascensionOffer = false;
+  state.ascensionOffer = 0;
   state.investorOffer = null;
 
   // 1. Insurance premiums are paid up front.
@@ -594,6 +626,21 @@ export function endWeek(state: GameState): WeekReport {
     const basketShare = move / companiesOf(company.guildId).length;
     shockShare[company.guildId] = (shockShare[company.guildId] ?? 0) + basketShare;
     if (isAssetUnlocked(state, company.id)) log(state, headline, good ? 'good' : 'bad');
+  }
+
+  // Hired managers: what they picked, minus their fees.
+  for (const id of state.managers) {
+    if (!state.positions[managerAsset(id)]) continue;
+    const manager = getManager(id);
+    const picks = managerPicks(state, id);
+    report.managerPicks[id] = picks;
+    const gross = picks.reduce(
+      (sum, p) =>
+        sum + p.weight * (isBond(p.id) ? bondRate(state, p.id) * 100 : (moves[p.id] ?? 0)),
+      0,
+    );
+    const afterFee = gross - manager.weeklyFee * 100;
+    moves[managerAsset(id)] = afterFee - Math.max(0, afterFee) * manager.performanceShare;
   }
 
   for (const [assetId, position] of Object.entries(state.positions)) {
@@ -713,6 +760,7 @@ function buildSeasonReview(
     classBefore,
     classAfter: state.classIndex,
     outcome: state.status === 'lost' ? 'lost' : (change ?? 'stay'),
+    offerLevels: state.ascensionOffer,
     startWealth: start.wealth,
     endWealth: wealth(state),
     startPurse: start.purse,
@@ -775,19 +823,23 @@ function applyInvestorFlows(state: GameState, report: WeekReport): void {
     const ret = (wealth(state) / state.monthStart - 1) * 100;
     const benchmark = bondRate(state, BOND_LIQUID) * MONTH_LENGTH * 100;
     const excess = ret - benchmark;
-    if (Math.abs(excess) > FLOW_DEAD_ZONE) {
+    state.monthlyExcess = [...state.monthlyExcess, excess].slice(-FLOW_MONTHS);
+    const average = state.monthlyExcess.reduce((a, b) => a + b, 0) / state.monthlyExcess.length;
+    // Trust builds on the track record; fear needs only one bad month.
+    let share = 0;
+    const worst = Math.min(excess, average);
+    if (worst < -FLOW_DEAD_ZONE) share = (worst * FLOW_SENSITIVITY_OUT) / 100;
+    else if (average > FLOW_DEAD_ZONE && excess > 0) share = (average * FLOW_SENSITIVITY_IN) / 100;
+    if (share !== 0) {
       const mood = 0.75 + nextRandom(state) * 0.5;
-      const share = Math.max(
-        -FLOW_MAX_OUT,
-        Math.min(FLOW_MAX_IN, ((excess * FLOW_SENSITIVITY) / 100) * mood),
-      );
+      share = Math.max(-FLOW_MAX_OUT, Math.min(FLOW_MAX_IN, share * mood));
       const moved = moveFunds(state, wealth(state) * share);
       report.investorFlow = moved;
       log(
         state,
         moved > 0
-          ? `Mês bom! Novos investidores aportaram ${fmt(moved)} florins no fundo.`
-          : `Mês ruim: investidores assustados sacaram ${fmt(-moved)} florins do fundo.`,
+          ? `Sua fama corre a cidade: novos investidores aportaram ${fmt(moved)} florins no fundo.`
+          : `Investidores assustados sacaram ${fmt(-moved)} florins do fundo.`,
         moved > 0 ? 'good' : 'bad',
       );
     }
@@ -855,6 +907,64 @@ export function acceptInvestor(state: GameState): ActionResult {
   return ok;
 }
 
+// ---------------------------------------------------------------------------
+// Hired managers
+// ---------------------------------------------------------------------------
+
+export function hireManager(state: GameState, id: ManagerId): ActionResult {
+  if (state.status !== 'playing') return fail('O jogo terminou.');
+  const manager = getManager(id);
+  if (state.managers.includes(id)) return fail(`${manager.name} já trabalha para você.`);
+  if (state.classIndex < manager.minClass) {
+    return fail(
+      `${manager.name} só trabalha para quem é ${getClass(manager.minClass).name} ou mais.`,
+    );
+  }
+  if (state.purse < manager.hireCost) return fail('Seu bolso não paga a contratação.');
+  state.purse -= manager.hireCost;
+  state.managers.push(id);
+  log(state, `${manager.name}, ${manager.title}, agora gere parte do seu fundo.`, 'good');
+  return ok;
+}
+
+/** Sends the manager away; the money they managed comes back as free gold. */
+export function dismissManager(state: GameState, id: ManagerId): ActionResult {
+  if (!state.managers.includes(id)) return fail('Esse gestor não trabalha para você.');
+  const position = state.positions[managerAsset(id)];
+  if (position) sell(state, managerAsset(id), position.value);
+  state.managers = state.managers.filter((m) => m !== id);
+  log(state, `${getManager(id).name} foi dispensado e devolveu o ouro ao fundo.`, 'neutral');
+  return ok;
+}
+
+/** What a manager holds this week: asset ids with weights (summing to 1). */
+export function managerPicks(state: GameState, id: ManagerId): { id: string; weight: number }[] {
+  const manager = getManager(id);
+  const candidates = ASSET_IDS.filter(
+    (a) => isAssetUnlocked(state, a) && (manager.style === 'bold' ? !isBasket(a) : isBasket(a)),
+  );
+  const bond = bondRate(state, BOND_LIQUID) * 100;
+  const scored = candidates
+    .map((a) => {
+      const r = assetRange(state, a);
+      const noise = (nextRandom(state) + nextRandom(state) + nextRandom(state) - 1.5) * 2;
+      return {
+        id: a,
+        score: assetExpectedReturn(state, a) + noise * manager.noise * (r.high - r.low),
+      };
+    })
+    .filter((c) => c.score > bond)
+    .sort((a, b) => b.score - a.score);
+  const count = manager.style === 'balanced' ? 3 : manager.style === 'bold' ? 2 : 1;
+  const chosen = scored.slice(0, count);
+  const riskShare = manager.style === 'cautious' ? 0.3 : 1;
+  if (chosen.length === 0) return [{ id: BOND_LIQUID, weight: 1 }];
+  const picks = chosen.map((c) => ({ id: c.id, weight: (riskShare * 1) / count }));
+  const rest = 1 - picks.reduce((s2, p) => s2 + p.weight, 0);
+  if (rest > 1e-9) picks.push({ id: BOND_LIQUID, weight: rest });
+  return picks;
+}
+
 export function declineInvestor(state: GameState): ActionResult {
   if (!state.investorOffer) return fail('Ninguém está oferecendo dinheiro agora.');
   state.investorOffer = null;
@@ -862,10 +972,13 @@ export function declineInvestor(state: GameState): ActionResult {
 }
 
 function reviewSeason(state: GameState): WeekReport['classChange'] {
-  const cls = currentClass(state);
   const total = wealth(state);
-  if (total < cls.floor) {
-    if (state.classIndex === 0) {
+  const before = currentClass(state);
+  const startIndex = state.classIndex;
+  // Below the floor: fall as many classes as needed (below the Serf's floor is the dungeon).
+  if (total < before.floor) {
+    while (state.classIndex > 0 && total < currentClass(state).floor) state.classIndex -= 1;
+    if (total < currentClass(state).floor) {
       state.status = 'lost';
       log(
         state,
@@ -874,26 +987,43 @@ function reviewSeason(state: GameState): WeekReport['classChange'] {
       );
       return 'down';
     }
-    state.classIndex -= 1;
+    const fell = startIndex - state.classIndex;
     log(
       state,
-      `Fim do trimestre: abaixo do piso de ${cls.name}. Você caiu para ${currentClass(state).name}.`,
+      `Fim do trimestre: abaixo do piso de ${before.name}. Você caiu ${fell > 1 ? `${fell} classes, ` : ''}para ${currentClass(state).name}.`,
       'bad',
     );
     return 'down';
   }
-  if (total >= cls.ceiling && state.classIndex < TOP_CLASS) {
-    state.ascensionOffer = true;
-    const next = getClass(state.classIndex + 1);
+  // Above the ceiling: one title on offer for every ceiling the fund passed.
+  let levels = 0;
+  while (
+    state.classIndex + levels < TOP_CLASS &&
+    total >= getClass(state.classIndex + levels).ceiling
+  ) {
+    levels += 1;
+  }
+  if (levels > 0) {
+    state.ascensionOffer = levels;
+    const target = getClass(state.classIndex + levels);
     log(
       state,
-      `Fim do trimestre: o camareiro oferece o título de ${next.name} por ${fmt(cls.ascensionFee)} florins.`,
+      levels > 1
+        ? `Fim do trimestre: o fundo passou ${levels} tetos! O camareiro oferece os títulos até ${target.name} por ${fmt(ascensionCost(state, levels))} florins.`
+        : `Fim do trimestre: o camareiro oferece o título de ${target.name} por ${fmt(ascensionCost(state, 1))} florins.`,
       'good',
     );
     return 'up-offer';
   }
-  log(state, `Fim do trimestre: você segue ${cls.name}.`, 'neutral');
+  log(state, `Fim do trimestre: você segue ${before.name}.`, 'neutral');
   return 'stay';
+}
+
+/** Price of the next `levels` titles, paid from the purse. */
+export function ascensionCost(state: GameState, levels: number): number {
+  let cost = 0;
+  for (let i = 0; i < levels; i++) cost += getClass(state.classIndex + i).ascensionFee;
+  return cost;
 }
 
 function tickEvents(state: GameState): void {

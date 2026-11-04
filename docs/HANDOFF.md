@@ -28,7 +28,10 @@ O jogo é jogável do começo ao fim e passa em 54 testes. Visão geral do que e
 - **Abertura em história:** decreto do Rei → 1º trimestre só com Títulos da Coroa → Meirinho
   humilha → cena do influencer Lucrécio Lucrativo libera as Padarias → no 3º trimestre abrem
   Minas e Boticários → depois, por classe.
-- **Investidores:** aportes e resgates mensais conforme o desempenho; propostas de aporte
+- **Gestores contratados** (Carteira → Gestores): Frei Prudêncio, Dona Ambrosina, Rodrigo
+  Rompe-Bolsa investem parte do fundo sozinhos, com estilo e taxa próprios.
+- **Promoções e quedas múltiplas** no fim do trimestre (um título por teto ultrapassado).
+- **Investidores:** julgam os últimos 3 meses (aporte lento, resgate rápido); propostas de aporte
   (Milícia suja, Abade talvez desviado, Viúva limpa) com risco de confisco e multa.
 - **Influencer a cada guilda nova** ("A nova febre: …"), ganhando seguidores.
 - **Time-lapse** de ~2 s no fim de cada semana com explosão de pixels verdes/vermelhos.
@@ -36,8 +39,8 @@ O jogo é jogável do começo ao fim e passa em 54 testes. Visão geral do que e
   Contrabandista (itens fortes com risco de flagrante quando o efeito acaba).
 
 Balanceamento atual (bots, 60 partidas, até 300 semanas): só títulos nunca vence; sem
-informação vence ~75%, em ~186 semanas, com ~1,9 quedas de classe; Espião sem melhorias
-~140 semanas; com melhorias ~121 semanas, sem quedas de classe. Os bots ainda não compram itens de visitantes.
+informação vence 30% e vai para a masmorra em 1 de cada 3 partidas; Espião sem melhorias
+~149 semanas; com melhorias ~100 semanas, quase sem quedas. Os bots ainda não compram itens de visitantes.
 
 ## Decisões do dono (não desfazer sem perguntar)
 
@@ -62,26 +65,24 @@ informação vence ~75%, em ~186 semanas, com ~1,9 quedas de classe; Espião sem
 - Uma cena nova do influencer a cada setor liberado ("padaria não está com nada, a nova
   tendência é boticário").
 - Animação curta no fim da semana: time-lapse do preço + explosão de pixels verde/vermelha.
+- Investidores julgam o histórico (3 meses), não um mês isolado; resgates mais rápidos.
+- Idles = **sub-gestores** que cuidam de parte do fundo (opção b).
+- Promoções múltiplas se o fundo bate a meta de várias classes; quedas múltiplas também.
 - Ideias aceitas para depois: relatórios por setor e panorama macro do Espião (pacotes),
-  assinatura semanal, e "idles" de deixar dinheiro investido com investidores (forma a
-  definir: bolso aplicado ou sub-gestores).
+  assinatura semanal.
 
 ## Perguntas em aberto (aguardando o dono)
 
-1. **Promoção dupla:** com a abertura o mínimo é 96 semanas até Conde. Permitir
-   subir duas classes num trimestre excepcional (fundo acima de dois tetos)?
-2. **Espião sem treino mostra números extremos** ("93%") que parecem certeza. Proposta:
+1. **Espião sem treino mostra números extremos** ("93%") que parecem certeza. Proposta:
    achatar as estimativas para o meio quanto pior a patente.
-3. **Ritmo geral:** ~121 semanas no melhor bot. Encurtar a escada?
-4. **Idles:** "deixar dinheiro investido em investidores" quer dizer bolso aplicado com um
-   banqueiro ou sub-gestores que cuidam de parte do fundo?
-5. **Próximas etapas da história:** o que libera a Astróloga/Espião, seguro, visitantes, etc.
-6. **Sem informação vence mais** com os aportes (~75%, era ~62%). Aceitável (mais volátil,
-   mais quedas) ou endurecer?
+2. **Ritmo geral:** ~100 semanas no melhor bot. Está bom ou encurtar a escada?
+3. **Próximas etapas da história:** o que libera a Astróloga/Espião, seguro, visitantes, etc.
+4. **Masmorra para quem chuta:** 1 em 3 partidas sem informação acaba na masmorra. Duro
+   demais para um iniciante?
 
 ## Próximos passos sugeridos (prioridade sugerida por Claude)
 
-1. **Relatórios por setor e panorama macro** (pedido do dono), depois os idles.
+1. **Relatórios por setor e panorama macro** (pedido do dono).
 2. **Reputação do gestor:** muda o tamanho e o tipo das propostas de aporte (nobres só
    aparecem para quem tem boa fama; a Milícia procura quem está desesperado).
 3. **Continuar a abertura guiada:** próximas etapas da história (especialistas, seguro, visitantes).
@@ -112,3 +113,4 @@ informação vence ~75%, em ~186 semanas, com ~1,9 quedas de classe; Espião sem
 | `46f8700`                       | Trimestres de 12 semanas, festa de fechamento, visitantes mensais        |
 | `2882f27`                       | Abertura em história: só títulos, Meirinho, influencer libera Padarias   |
 | `222ce6e`                       | Aportes/resgates, propostas de aporte, influencer por guilda, time-lapse |
+| (este)                          | Investidores por 3 meses, promoções/quedas múltiplas, gestores           |

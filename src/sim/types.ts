@@ -270,6 +270,8 @@ export interface SeasonReview {
   classBefore: number;
   classAfter: number;
   outcome: 'down' | 'stay' | 'up-offer' | 'lost';
+  /** Titles on offer after the review (several when the fund passed several ceilings). */
+  offerLevels: number;
   startWealth: number;
   endWealth: number;
   startPurse: number;
@@ -342,6 +344,29 @@ export interface StoryState {
   announced: string[];
 }
 
+/** Hired managers who invest part of the fund on their own. */
+export type ManagerId = 'prudencio' | 'ambrosina' | 'rodrigo';
+export type ManagerStyle = 'cautious' | 'balanced' | 'bold';
+
+export interface ManagerDef {
+  id: ManagerId;
+  name: string;
+  title: string;
+  style: ManagerStyle;
+  /** What the player is told about how this manager invests. */
+  styleText: string;
+  line: string;
+  minClass: number;
+  /** One-off signing fee, paid from the purse. */
+  hireCost: number;
+  /** Weekly fee on the money managed (0.0005 = 0.05%). */
+  weeklyFee: number;
+  /** Share of each week's gain the manager keeps. */
+  performanceShare: number;
+  /** How far off the manager reads the forecasts, as a share of the range width. */
+  noise: number;
+}
+
 /** Someone wants to put money in the fund; it may be dirty. */
 export type InvestorKind = 'militia' | 'abbot' | 'widow';
 
@@ -380,7 +405,7 @@ export interface RiskyDeposit {
 }
 
 export interface GameState {
-  version: 11;
+  version: 12;
   seed: number;
   rngState: number;
   /** Weeks elapsed. A season is SEASON_LENGTH weeks. */
@@ -439,8 +464,12 @@ export interface GameState {
   investorOffer: InvestorOffer | null;
   /** Accepted deposits that can still be traced and confiscated. */
   riskyDeposits: RiskyDeposit[];
-  /** Set at a season's end when wealth reached the class ceiling. */
-  ascensionOffer: boolean;
+  /** Excess return over the Crown bond of the last months (%, newest last, up to 3). */
+  monthlyExcess: number[];
+  /** Managers hired; their money is a position with id `mgr.<id>`. */
+  managers: ManagerId[];
+  /** Titles on offer after a season review (0 = none); one per ceiling the fund passed. */
+  ascensionOffer: number;
   status: GameStatus;
   log: LogEntry[];
 }

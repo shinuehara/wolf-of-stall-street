@@ -14,6 +14,9 @@ import {
 } from './data';
 import {
   acceptAscension,
+  ascensionCost,
+  hireManager,
+  dismissManager,
   acceptInvestor,
   declineInvestor,
   buy,
@@ -426,13 +429,21 @@ describe('endWeek', () => {
     expect(endWeek(state).seasonReview).toBeNull();
   });
 
-  it('drops you a class when a season ends below the floor', () => {
-    const state = newGame(3);
-    state.classIndex = 2;
-    state.cash = 100; // way below the Artisan floor
-    for (let i = 0; i < SEASON_LENGTH; i++) endWeek(state);
-    expect(state.classIndex).toBe(1);
-    expect(state.status).toBe('playing');
+  it('drops as many classes as the fund requires when a season ends below the floor', () => {
+    const one = newGame(3);
+    one.classIndex = 2;
+    one.cash = CLASSES[1]!.floor + 15; // below the Artisan floor, above the Peasant's
+    one.monthStart = one.cash;
+    for (let i = 0; i < SEASON_LENGTH; i++) endWeek(one);
+    expect(one.classIndex).toBe(1);
+
+    const two = newGame(3);
+    two.classIndex = 2;
+    two.cash = 100; // below both the Artisan and the Peasant floors
+    two.monthStart = 100;
+    for (let i = 0; i < SEASON_LENGTH; i++) endWeek(two);
+    expect(two.classIndex).toBe(0);
+    expect(two.status).toBe('playing');
   });
 
   it('sends a broke Serf to the dungeon', () => {
@@ -444,9 +455,10 @@ describe('endWeek', () => {
 
   it('offers a title when the season ends above the ceiling, paid from the purse', () => {
     const state = newGame(3);
-    state.cash = 200;
+    state.cash = 140;
+    state.monthStart = 140;
     for (let i = 0; i < SEASON_LENGTH; i++) endWeek(state);
-    expect(state.ascensionOffer).toBe(true);
+    expect(state.ascensionOffer).toBe(1);
     const fund = wealth(state);
     const purse = state.purse;
     expect(acceptAscension(state).ok).toBe(true);
@@ -454,6 +466,21 @@ describe('endWeek', () => {
     expect(wealth(state)).toBeCloseTo(fund);
     expect(state.purse).toBeCloseTo(purse - CLASSES[0]!.ascensionFee);
   });
+  it('offers one title per ceiling passed and sells as many as the purse pays', () => {
+    const state = newGame(3);
+    state.cash = CLASSES[2]!.ceiling + 30; // past the Serf, Peasant and Artisan ceilings
+    state.monthStart = state.cash;
+    for (let i = 0; i < SEASON_LENGTH; i++) endWeek(state);
+    expect(state.ascensionOffer).toBe(3);
+    expect(ascensionCost(state, 3)).toBeCloseTo(
+      CLASSES[0]!.ascensionFee + CLASSES[1]!.ascensionFee + CLASSES[2]!.ascensionFee,
+    );
+    state.purse = CLASSES[0]!.ascensionFee + CLASSES[1]!.ascensionFee + 0.5;
+    expect(acceptAscension(state).ok).toBe(true);
+    expect(state.classIndex).toBe(2);
+    expect(state.ascensionOffer).toBe(0);
+  });
+
   it('becoming Count wins the game', () => {
     const state = newGame(3);
     state.classIndex = TOP_CLASS - 1;
@@ -631,9 +658,30 @@ describe('investors', () => {
 
   it('each guild opened by a promotion gets its own influencer video', () => {
     const state = newGame(4);
-    state.ascensionOffer = true;
+    state.ascensionOffer = 1;
     state.purse = 50;
     acceptAscension(state);
     expect(state.story.queue).toEqual([{ id: 'trend', guilds: ['changers', 'fair'] }]);
+  });
+});
+
+describe('hired managers', () => {
+  it('need the class and a signing fee, then invest the money handed to them', () => {
+    const state = newGame(6);
+    expect(hireManager(state, 'prudencio').ok).toBe(false); // Serf
+    state.classIndex = 2;
+    state.purse = 20;
+    expect(hireManager(state, 'prudencio').ok).toBe(true);
+    expect(state.purse).toBeCloseTo(15);
+    expect(buy(state, 'mgr.prudencio', 50).ok).toBe(true);
+    expect(setHedge(state, 'mgr.prudencio', true).ok).toBe(false);
+    const report = endWeek(state);
+    expect(report.managerPicks.prudencio!.reduce((s, p) => s + p.weight, 0)).toBeCloseTo(1);
+    expect(report.positionPnl['mgr.prudencio']).toBeDefined();
+    expect(Math.abs(state.ledger.at(-1)!.other)).toBeLessThan(1e-6);
+    const before = state.cash + state.positions['mgr.prudencio']!.value;
+    expect(dismissManager(state, 'prudencio').ok).toBe(true);
+    expect(state.positions['mgr.prudencio']).toBeUndefined();
+    expect(state.cash).toBeCloseTo(before);
   });
 });

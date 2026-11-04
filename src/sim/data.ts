@@ -6,6 +6,8 @@ import type {
   GuildDef,
   InvestorDef,
   InvestorKind,
+  ManagerDef,
+  ManagerId,
   ItemDef,
   LocalNewsTemplate,
   PerkDef,
@@ -1077,8 +1079,14 @@ export function getClass(index: number): SocialClass {
 // Investors: monthly deposits and withdrawals, and special offers
 // ---------------------------------------------------------------------------
 
-/** Investors deposit or withdraw this share of the fund per point of monthly excess return. */
-export const FLOW_SENSITIVITY = 0.8;
+/**
+ * Investors judge the average excess return of the last FLOW_MONTHS months over the Crown
+ * bond. Deposits follow that average; withdrawals react to it or to a bad month alone, and
+ * harder (fear is faster than trust). Shares of the fund per point of excess return.
+ */
+export const FLOW_MONTHS = 3;
+export const FLOW_SENSITIVITY_IN = 0.8;
+export const FLOW_SENSITIVITY_OUT = 1;
 /** Months within this excess return (in %) over the Crown bond leave investors indifferent. */
 export const FLOW_DEAD_ZONE = 2;
 /** Largest monthly deposit and withdrawal, as a share of the fund. */
@@ -1135,4 +1143,54 @@ export const INVESTORS: InvestorDef[] = [
 
 export function getInvestor(id: InvestorKind): InvestorDef {
   return INVESTORS.find((i) => i.id === id)!;
+}
+
+// ---------------------------------------------------------------------------
+// Hired managers
+// ---------------------------------------------------------------------------
+
+export const MANAGERS: ManagerDef[] = [
+  {
+    id: 'prudencio',
+    name: 'Frei Prudêncio',
+    title: 'o Cauteloso',
+    style: 'cautious',
+    styleText: '70% em Títulos da Coroa, o resto na cesta que achar melhor.',
+    line: 'Devagar se vai ao longe, meu filho. E de joelhos, se preciso.',
+    minClass: 2,
+    hireCost: 5,
+    weeklyFee: 0.0005,
+    performanceShare: 0.1,
+    noise: 0.5,
+  },
+  {
+    id: 'ambrosina',
+    name: 'Dona Ambrosina',
+    title: 'a Equilibrada',
+    style: 'balanced',
+    styleText: 'Divide entre as 3 cestas que achar melhores; foge para a Coroa se nada presta.',
+    line: 'Nunca ponha todos os ovos na mesma cesta. Eu ponho em três, e conto os ovos.',
+    minClass: 3,
+    hireCost: 12,
+    weeklyFee: 0.0008,
+    performanceShare: 0.15,
+    noise: 0.4,
+  },
+  {
+    id: 'rodrigo',
+    name: 'Rodrigo Rompe-Bolsa',
+    title: 'o Ousado',
+    style: 'bold',
+    styleText: 'Aposta tudo nas 2 empresas que achar mais promissoras. Sem seguro.',
+    line: 'Quem não arrisca não petisca! E eu, gestor, petisco muito.',
+    minClass: 4,
+    hireCost: 20,
+    weeklyFee: 0.001,
+    performanceShare: 0.2,
+    noise: 0.6,
+  },
+];
+
+export function getManager(id: ManagerId): ManagerDef {
+  return MANAGERS.find((m) => m.id === id)!;
 }

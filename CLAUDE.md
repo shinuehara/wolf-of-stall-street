@@ -71,7 +71,13 @@ Key model facts (details in `docs/design.md`):
   (`state.investorOffer`, `INVESTORS` in data.ts), dirty deposits (`riskyDeposits`) that can
   be confiscated. Flows go through `moveFunds` → `state.weekFlows` → `WeekRecord.flows`;
   returns, performance fees and bot metrics exclude them. `state.monthStart` must be bumped
-  whenever money enters or leaves outside the market.
+  whenever money enters or leaves outside the market. Deposits follow the 3-month average
+  excess (`monthlyExcess`); withdrawals react to the month or the average.
+- **Managers.** Hired managers hold a position `mgr.<id>` (`managerAsset`, `isManager`);
+  `endWeek` sets its weekly move from `managerPicks` (noisy read of the forecasts) minus fees.
+  Code that walks `state.positions` must handle manager ids (no `guildOfAsset`/`assetRange`).
+- **Class review.** Multiple drops (below the Serf floor = dungeon) and multiple promotions:
+  `ascensionOffer` is a number of titles; `acceptAscension(state, levels)` buys up to that.
   Tests use a `newGame` wrapper in `game.test.ts` that skips the opening (chapter 2).
 - **Shocks** happen outside the announced range; insurance (hedge) clamps them too.
 

@@ -2552,3 +2552,64 @@ img.sprite,
     grid-template-columns: 1fr;
   }
 }
+
+/* Hired managers */
+.managers {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.managers-intro {
+  margin: 0;
+}
+
+.manager-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.manager-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+}
+
+.manager-card header {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.manager-card header div {
+  display: flex;
+  flex-direction: column;
+}
+
+.manager-card p {
+  margin: 0;
+}
+
+.manager-card.hired {
+  border-color: var(--gold);
+}
+
+.manager-card.locked {
+  opacity: 0.7;
+}
+
+.manager-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+@media (max-width: 900px) {
+  .manager-grid {
+    grid-template-columns: 1fr;
+  }
+}

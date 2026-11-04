@@ -1,6 +1,8 @@
 import {
   MONTH_LENGTH,
   getItem,
+  getManager,
+  MANAGERS,
   getInvestor,
   ASTROLOGER_ACCURACY,
   DRUNK_ACCURACY,
@@ -35,6 +37,9 @@ import {
   assetRange,
   bondRate,
   isBond,
+  isManager,
+  managerAsset,
+  managerOf,
   companyExposures,
   componentsOf,
   factorForecast,
@@ -47,6 +52,7 @@ import {
   expertCost,
   fmt,
   hedgeFee,
+  ascensionCost,
   expertLevel,
   expertRankName,
   hasShockWarnings,
@@ -68,6 +74,7 @@ import type {
   SeasonReview,
   Sector,
   WeekRecord,
+  ManagerId,
 } from '../sim/types';
 import { seasonReturn, seasonSpeech } from './ceremony';
 import { GALA_NAMES, galaUrl, sceneUrl, storyUrl, type SceneName } from './scenes';
@@ -95,7 +102,7 @@ export interface UiState {
   /** The visitor of the month was sent away (or not yet). */
   visitorDismissed: boolean;
   /** Which view the portfolio shows: today's holdings or past returns. */
-  portfolioTab: 'position' | 'returns';
+  portfolioTab: 'position' | 'returns' | 'managers';
   /** Guilds whose companies are listed under the basket in the market. */
   expandedGuilds: Record<string, boolean>;
   /** On narrow screens the market shows either the list or one asset's detail. */
@@ -202,6 +209,34 @@ const GUILD_SPRITE: Record<string, SpriteName> = {
   spices: 'pepper',
 };
 
+const MANAGER_SPRITE: Record<ManagerId, SpriteName> = {
+  prudencio: 'scroll',
+  ambrosina: 'coin',
+  rodrigo: 'hood2',
+};
+
+/**
+ * Buttons to buy the titles on offer: one per class you can climb to, each with the total
+ * price; the ones the purse cannot pay are disabled.
+ */
+function titleOfferHtml(
+  state: GameState,
+  lead: string,
+  laterAction: string,
+  laterLabel: string,
+): string {
+  const levels = state.ascensionOffer;
+  const buttons = Array.from({ length: levels }, (_, i) => {
+    const target = getClass(state.classIndex + i + 1);
+    const cost = ascensionCost(state, i + 1);
+    return `<button class="pbtn" data-action="accept-title" data-levels="${i + 1}" ${state.purse >= cost ? '' : 'disabled'}>${levels > 1 ? `Até ${target.name}` : `Virar ${target.name}`} · ${fmt(cost)} fl</button>`;
+  }).join('');
+  return `<div class="offer">
+      <p>${sprite('scroll', 20)} <span>${lead} ${levels > 1 ? `Você pode subir <strong>${levels} classes</strong> de uma vez, um título por classe.` : ''} Pago do seu bolso (<strong class="gold">${fmt(state.purse)} fl</strong>).</span></p>
+      <div class="actions">${buttons}<button class="pbtn pbtn-ghost" data-action="${laterAction}">${laterLabel}</button></div>
+    </div>`;
+}
+
 /** Distinct line colours for the companies of a basket chart. */
 const COMPANY_COLORS = ['var(--blue)', 'var(--purple)', 'var(--orange)'];
 
@@ -214,6 +249,7 @@ let CHART_WEEKS = CHART_WEEKS_BASE;
 
 function assetSprite(assetId: string): SpriteName {
   if (isBond(assetId)) return 'crown';
+  if (isManager(assetId)) return MANAGER_SPRITE[managerOf(assetId)];
   return GUILD_SPRITE[guildOfAsset(assetId).id]!;
 }
 
@@ -1185,8 +1221,45 @@ function renderPortfolio(state: GameState, ui: UiState): string {
   const tab = (id: UiState['portfolioTab'], label: string) =>
     `<button role="tab" class="tab ${ui.portfolioTab === id ? 'active' : ''}" aria-selected="${ui.portfolioTab === id}" data-action="portfolio-tab" data-tab="${id}">${label}</button>`;
   return `<div class="portfolio">
-    <div class="tabs" role="tablist">${tab('position', 'Posição de hoje')}${tab('returns', 'Rentabilidade')}</div>
-    ${ui.portfolioTab === 'returns' ? renderReturns(state) : renderPositions(state)}
+    <div class="tabs" role="tablist">${tab('position', 'Posição de hoje')}${tab('returns', 'Rentabilidade')}${tab('managers', 'Gestores')}</div>
+    ${ui.portfolioTab === 'returns' ? renderReturns(state) : ui.portfolioTab === 'managers' ? renderManagers(state, ui) : renderPositions(state)}
+  </div>`;
+}
+
+function renderManagers(state: GameState, ui: UiState): string {
+  const playing = state.status === 'playing';
+  const lastPicks = ui.lastReport?.managerPicks ?? {};
+  return `<div class="managers">
+    <p class="muted small managers-intro">Entregue parte do fundo a um gestor: ele investe sozinho toda semana, com o estilo dele, e cobra pelo trabalho. O dinheiro continua no fundo (conta para a classe e para as suas taxas). Retire quando quiser.</p>
+    <div class="manager-grid">${MANAGERS.map((m) => {
+      const hired = state.managers.includes(m.id);
+      const locked = state.classIndex < m.minClass;
+      const asset = managerAsset(m.id);
+      const position = state.positions[asset];
+      const pnl = state.assetPnl[asset] ?? 0;
+      const picks = lastPicks[m.id];
+      const lastMove = ui.lastReport?.marketReturns[asset];
+      return `<article class="manager-card px ${hired ? 'hired' : ''} ${locked ? 'locked' : ''}">
+        <header>${sprite(MANAGER_SPRITE[m.id], 40)}<div><strong>${m.name}</strong><span class="muted small">${m.title}</span></div></header>
+        <p class="small">“${m.line}”</p>
+        <p class="small">${m.styleText}</p>
+        <p class="small muted">Cobra ${(m.weeklyFee * 100).toFixed(2).replace('.', ',')}% do que gere por semana + ${whole(m.performanceShare * 100)}% do ganho.</p>
+        ${
+          locked
+            ? `<p class="small down">🔒 Só trabalha para quem é ${getClass(m.minClass).name} ou mais.</p>`
+            : !hired
+              ? `<button class="pbtn pbtn-small" data-action="hire-manager" data-manager="${m.id}" ${playing && state.purse >= m.hireCost ? '' : 'disabled'}>Contratar · ${fmt(m.hireCost)} fl do bolso</button>`
+              : `<div class="manager-status">
+                  <span>Gere <strong class="gold">${fmt(position?.value ?? 0)} fl</strong></span>
+                  <span class="${tone(pnl)}">${signed(pnl)} fl no total</span>
+                  ${lastMove !== undefined ? `<span class="${tone(lastMove)}">última semana ${pct(lastMove)}</span>` : ''}
+                </div>
+                ${picks ? `<p class="small muted">Investiu em: ${picks.map((p) => `${assetName(p.id)} (${whole(p.weight * 100)}%)`).join(', ')}</p>` : ''}
+                ${quickBar(state, asset)}
+                <button class="linkish small" data-action="dismiss-manager" data-manager="${m.id}">Dispensar ${m.name}</button>`
+        }
+      </article>`;
+    }).join('')}</div>
   </div>`;
 }
 
@@ -1206,6 +1279,18 @@ interface Holding {
 
 function holdings(state: GameState): Holding[] {
   const fromPositions = Object.entries(state.positions).map(([id, p]) => {
+    if (isManager(id)) {
+      const manager = getManager(managerOf(id));
+      return {
+        id,
+        name: manager.name,
+        where: '<span class="muted small">gestor</span>',
+        value: p.value,
+        cost: p.cost,
+        range: manager.title,
+        hedged: false,
+      };
+    }
     const r = assetRange(state, id);
     const company = isBond(id) || isBasket(id) ? null : getCompany(id);
     return {
@@ -1520,19 +1605,18 @@ function renderCastle(state: GameState, ui: UiState): string {
           </li>`,
         )
         .join('')}</ol>
-      <p class="muted small">A cada ${SEASON_LENGTH} semanas: abaixo do piso você cai; acima do teto pode comprar o próximo título.</p>
+      <p class="muted small">A cada ${SEASON_LENGTH} semanas: abaixo do piso você cai (quantas classes forem precisas); acima do teto pode comprar o próximo título, um por teto ultrapassado.</p>
     </article>
     <article class="card px">
       <h2>${sprite('shield', 20)} Seu título: ${cls.name}</h2>
       ${
         state.ascensionOffer && next
-          ? `<div class="offer">
-              <p>${sprite('scroll', 20)} O camareiro oferece o título de <strong>${next.name}</strong> por <strong class="gold">${fmt(cls.ascensionFee)} fl</strong>. A oferta expira no fim da semana.</p>
-              <div class="actions">
-                <button class="pbtn" data-action="accept-title">Comprar título</button>
-                <button class="pbtn pbtn-ghost" data-action="decline-title">Recusar</button>
-              </div>
-            </div>`
+          ? titleOfferHtml(
+              state,
+              'O camareiro tem títulos à venda. A oferta expira no fim da semana.',
+              'decline-title',
+              'Recusar',
+            )
           : ''
       }
       <ul class="ledger">
@@ -1605,7 +1689,6 @@ function renderModal(state: GameState, ui: UiState): string {
   const report = ui.lastReport;
   const net = reportNet(report);
   const held = Object.entries(report.positionPnl);
-  const cls = currentClass(state);
   const next = state.ascensionOffer ? getClass(state.classIndex + 1) : null;
   const news = ui.weekNews.filter((n) => !n.text.startsWith('Semana '));
   return modal(`
@@ -1645,13 +1728,7 @@ function renderModal(state: GameState, ui: UiState): string {
     ${news.length ? `<ul class="report-news">${news.map((n) => `<li class="log-${n.tone}">${esc(n.text)}</li>`).join('')}</ul>` : ''}
     ${
       next
-        ? `<div class="offer">
-            <p>${sprite('scroll', 20)} Título de <strong>${next.name}</strong> por <strong class="gold">${fmt(cls.ascensionFee)} fl</strong>?</p>
-            <div class="actions">
-              <button class="pbtn" data-action="accept-title">Comprar título</button>
-              <button class="pbtn pbtn-ghost" data-action="close-report">Depois</button>
-            </div>
-          </div>`
+        ? titleOfferHtml(state, 'Títulos à venda.', 'close-report', 'Depois')
         : '<button class="pbtn" data-action="close-report">Continuar</button>'
     }`);
 }
@@ -1866,7 +1943,7 @@ function renderSeasonModal(state: GameState, ui: UiState, review: SeasonReview):
         <button class="pbtn" data-action="new-game">Tentar de novo</button>`;
       break;
     case 'down':
-      verdict = `<p class="verdict down">O fundo ficou abaixo do piso de ${whole(before.floor)} fl. Você caiu de <strong>${before.name}</strong> para <strong>${after.name}</strong>.</p>
+      verdict = `<p class="verdict down">O fundo ficou abaixo do piso de ${whole(before.floor)} fl. Você caiu de <strong>${before.name}</strong> para <strong>${after.name}</strong>${review.classBefore - review.classAfter > 1 ? ` (${review.classBefore - review.classAfter} classes de uma vez)` : ''}.</p>
         <button class="pbtn" data-action="close-report">Seguir em frente</button>`;
       break;
     case 'stay':
@@ -1874,14 +1951,17 @@ function renderSeasonModal(state: GameState, ui: UiState, review: SeasonReview):
         <button class="pbtn" data-action="close-report">Continuar</button>`;
       break;
     default: {
-      const next = getClass(review.classAfter + 1);
-      verdict = `<div class="offer">
-          <p>${sprite('scroll', 20)} O fundo passou do teto de ${whole(before.ceiling)} fl. O título de <strong>${next.name}</strong> está à venda por <strong class="gold">${fmt(before.ascensionFee)} fl</strong>, pagos do seu bolso (${fmt(state.purse)} fl).</p>
-          <div class="actions">
-            <button class="pbtn" data-action="accept-title" ${state.purse >= before.ascensionFee ? '' : 'disabled'}>Comprar título</button>
-            <button class="pbtn pbtn-ghost" data-action="close-report">Depois</button>
-          </div>
-        </div>`;
+      verdict =
+        state.ascensionOffer > 0
+          ? titleOfferHtml(
+              state,
+              review.offerLevels > 1
+                ? `O fundo passou <strong>${review.offerLevels} tetos</strong>!`
+                : `O fundo passou do teto de ${whole(before.ceiling)} fl.`,
+              'close-report',
+              'Depois',
+            )
+          : '<button class="pbtn" data-action="close-report">Continuar</button>';
     }
   }
 

@@ -3,6 +3,8 @@ import {
   acceptAscension,
   acceptInvestor,
   declineInvestor,
+  dismissManager,
+  hireManager,
   finishStory,
   buy,
   buyPerk,
@@ -18,7 +20,7 @@ import {
   fmt,
 } from './sim/game';
 import { BOND_LIQUID, assetName, guildOfAsset, isBasket, isBond } from './sim/assets';
-import type { ExpertId, GameState, ItemId, PerkId } from './sim/types';
+import type { ExpertId, GameState, ItemId, ManagerId, PerkId } from './sim/types';
 import { SCREENS, initialUi, render, type Screen } from './ui/render';
 import { clearGame, loadGame, saveGame } from './ui/storage';
 
@@ -149,7 +151,12 @@ root.addEventListener('click', (event) => {
       report(buyPerk(state, target.dataset.perk as PerkId));
       break;
     case 'portfolio-tab':
-      ui.portfolioTab = target.dataset.tab === 'returns' ? 'returns' : 'position';
+      ui.portfolioTab =
+        target.dataset.tab === 'returns'
+          ? 'returns'
+          : target.dataset.tab === 'managers'
+            ? 'managers'
+            : 'position';
       break;
     case 'square-tab':
       ui.squareTab = target.dataset.tab === 'almanac' ? 'almanac' : 'news';
@@ -199,8 +206,14 @@ root.addEventListener('click', (event) => {
     case 'consult':
       report(consult(state, target.dataset.expert as ExpertId, assetId));
       break;
+    case 'hire-manager':
+      report(hireManager(state, target.dataset.manager as ManagerId));
+      break;
+    case 'dismiss-manager':
+      report(dismissManager(state, target.dataset.manager as ManagerId));
+      break;
     case 'accept-title':
-      report(acceptAscension(state));
+      report(acceptAscension(state, Number(target.dataset.levels ?? state.ascensionOffer)));
       if (!ui.message) ui.showReport = false;
       break;
     case 'decline-title':

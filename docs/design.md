@@ -160,10 +160,13 @@ e da demanda de cada bairro, empresas de cada bairro e notícias ativas.
 
 O fundo é dinheiro dos investidores, e eles reagem ao seu desempenho:
 
-- **No fim de cada mês** (a partir do 2º trimestre) comparam o retorno do mês com o do Título
-  da Coroa. Se o excesso passar de ±2 pontos, aportam ou resgatam
-  `0,8 × excesso` % do fundo (com um humor aleatório de ±25%), no máximo **+12%** de entrada
-  e **-15%** de saída por mês. Resgates vendem posições se faltar ouro livre.
+- **No fim de cada mês** (a partir do 2º trimestre) calculam o excesso de retorno do mês sobre
+  o Título da Coroa e guardam os últimos **3 meses** (`state.monthlyExcess`).
+  - **Aporte** (confiança é lenta): só se a **média dos 3 meses** passar de +2 pontos e o mês
+    também for positivo: `0,8 × média` % do fundo, no máximo **+12%**.
+  - **Resgate** (medo é rápido): basta o mês **ou** a média ficar abaixo de -2 pontos:
+    `1,0 × o pior dos dois` % do fundo, no máximo **-15%**.
+  - Humor aleatório de ±25% sobre o valor. Resgates vendem posições se faltar ouro livre.
 - Aportes e resgates **não contam como lucro**: ficam fora da taxa de performance, do
   retorno do trimestre (cerimônia) e da pior semana dos bots. O livro-caixa registra `flows`.
 - **Propostas de aporte** (10% de chance por semana, fora das semanas de visitante). Valem até
@@ -183,6 +186,24 @@ propostas.
 Ao encerrar a semana, antes do relatório, um replay de ~2 s mostra o caminho do fundo na
 semana (linha que se desenha) e uma explosão de pixels verdes ou vermelhos, maior quanto
 maior o movimento, com os ativos da carteira aparecendo em seguida. Clique ou tecla pula.
+
+### Gestores contratados ("idle")
+
+Na **Carteira → Gestores** você contrata gestores (taxa única do bolso) e entrega parte do
+fundo a eles. Cada um investe sozinho toda semana, lendo as previsões com algum erro, e cobra
+uma taxa semanal sobre o que gere mais uma parte do ganho. O dinheiro continua no fundo (é uma
+posição `mgr.<id>`), conta para a classe e para as suas taxas; entra e sai pelos botões
+rápidos. Dispensar devolve tudo como ouro livre.
+
+| Gestor              | Estilo                                   | Classe   | Contratação | Taxa/sem + ganho | Média/sem* | Pior semana* |
+| ------------------- | ---------------------------------------- | -------- | ----------- | ---------------- | ---------- | ------------ |
+| Frei Prudêncio      | 70% Coroa + 30% na melhor cesta          | Artesão  | 5 fl        | 0,05% + 10%      | 0,6%       | -11%         |
+| Dona Ambrosina      | 3 melhores cestas (Coroa se nada presta) | Mercador | 12 fl       | 0,08% + 15%      | 0,8%       | -12%         |
+| Rodrigo Rompe-Bolsa | 2 empresas mais promissoras, sem seguro  | Burguês  | 20 fl       | 0,10% + 20%      | 1,3%       | -28%         |
+
+\* medido com 30 partidas × 80 semanas como Burguês; a Coroa rendia 0,4%/sem. Ficam abaixo
+de um jogador ativo bem informado: são conveniência, não atalho. Erro de leitura: `noise` em
+`MANAGERS` (data.ts); escolhas em `managerPicks` (game.ts).
 
 ### Trimestres, meses e visitantes
 
@@ -308,9 +329,12 @@ cobrado toda semana, de 1,0% (Servo) a 0,4% (Barão) do valor segurado.
 
 Cada classe tem **piso** e **teto** do fundo. A cada **12 semanas** o fundo é comparado com eles:
 
-- **L1 (abaixo do piso):** cai uma classe. Servo abaixo do piso vai para a **masmorra** (game over).
+- **L1 (abaixo do piso):** cai **quantas classes forem precisas** até o fundo caber no piso.
+  Abaixo do piso do Servo é a **masmorra** (game over), venha de onde vier.
 - **L2 (entre os dois):** mantém a classe.
-- **L3 (acima do teto):** o camareiro oferece o próximo título, que deve ser pago até o fim da semana.
+- **L3 (acima do teto):** o camareiro oferece **um título por teto ultrapassado** (fundo acima
+  dos tetos de Servo e Camponês = 2 títulos). Você escolhe até onde subir, pagando a soma dos
+  títulos; vale até o fim da semana.
 
 O título é pago do bolso, então comprá-lo não reduz o fundo; o teto de cada classe fica
 acima do piso da seguinte.
@@ -334,15 +358,16 @@ e respostas dos especialistas, com erro). `src/sim/balance.test.ts` garante que:
 Referência (60 partidas, limite de 300 semanas, trimestres de 12 semanas, com a abertura
 gradual):
 
-| Bot                  | Vence    | Semanas até Conde | Quedas de classe | Pior semana |
-| -------------------- | -------- | ----------------- | ---------------- | ----------- |
-| Só títulos           | 0        | —                 | —                | —           |
-| Sem informação       | 45 de 60 | ~186              | 1,85             | -17%        |
-| Espião sem melhorias | 60 de 60 | ~140              | 0,23             | -16%        |
-| Espião com melhorias | 60 de 60 | ~121              | 0,02             | -13%        |
+| Bot                  | Vence    | Semanas até Conde | Quedas de classe   | Pior semana |
+| -------------------- | -------- | ----------------- | ------------------ | ----------- |
+| Só títulos           | 0        | —                 | —                  | —           |
+| Sem informação       | 18 de 60 | ~178              | 1,9 (20 masmorras) | -15%        |
+| Espião sem melhorias | 55 de 60 | ~149              | 1,1 (2 masmorras)  | -15%        |
+| Espião com melhorias | 58 de 60 | ~100              | 0,03 (2 masmorras) | -12%        |
 
-Com os aportes e resgates o jogo ficou mais rápido para quem vai bem (era ~135 semanas) e
-mais volátil para quem chuta (mais quedas de classe, mas também mais vitórias). Antes da
+Com investidores julgando 3 meses, promoções e quedas múltiplas: quem joga bem chega em ~100
+semanas (sobe várias classes num trimestre bom); quem chuta perde de verdade (1 em 3 vai para
+a masmorra). Versões anteriores: ~135 (abertura) e ~121 (aportes por mês). Antes da
 abertura gradual o melhor bot levava ~118 semanas. Os bots ainda não compram itens
 dos visitantes. O mínimo possível hoje é 96 semanas (1 trimestre só de títulos + 7
 promoções).

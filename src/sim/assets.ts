@@ -7,11 +7,12 @@ import {
   companiesOf,
   getCompany,
   getGuild,
+  getManager,
   getRegion,
   isRegionId,
 } from './data';
 import { expectedReturn, type Range } from './forecast';
-import type { CompanyDef, Forecast, GameState, GuildDef } from './types';
+import type { CompanyDef, Forecast, GameState, GuildDef, ManagerId } from './types';
 
 /**
  * Tradeable assets: every guild's basket (id = guild id) and every company (id = company id).
@@ -54,6 +55,19 @@ export function bondRate(state: GameState, assetId: string): number {
   return assetId === BOND_LOCKED ? base * BOND_LOCK_MULTIPLIER : base;
 }
 
+/** Money handed to a hired manager is held as a position with this id. */
+export function managerAsset(id: ManagerId): string {
+  return `mgr.${id}`;
+}
+
+export function isManager(assetId: string): boolean {
+  return assetId.startsWith('mgr.');
+}
+
+export function managerOf(assetId: string): ManagerId {
+  return assetId.slice(4) as ManagerId;
+}
+
 export function isBasket(assetId: string): boolean {
   return GUILDS.some((g) => g.id === assetId);
 }
@@ -70,6 +84,7 @@ export function componentsOf(assetId: string): CompanyDef[] {
 export function assetName(assetId: string): string {
   if (assetId === BOND_LIQUID) return 'Título da Coroa (livre)';
   if (assetId === BOND_LOCKED) return 'Título da Coroa (4 sem.)';
+  if (isManager(assetId)) return `Gestor: ${getManager(managerOf(assetId)).name}`;
   return isBasket(assetId) ? `Cesta ${getGuild(assetId).short}` : getCompany(assetId).name;
 }
 

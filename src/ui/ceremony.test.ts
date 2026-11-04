@@ -13,6 +13,7 @@ function review(over: Partial<SeasonReview>): SeasonReview {
     startPurse: 10,
     endPurse: 11,
     flows: 0,
+    offerLevels: 0,
     weeks: [],
     assetPnl: {},
     ...over,
