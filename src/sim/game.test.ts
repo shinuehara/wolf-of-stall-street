@@ -40,8 +40,8 @@ import {
   wealth,
 } from './game';
 import { BOND_LIQUID, BOND_LOCKED } from './assets';
-import { assetRange, companyExposures } from './assets';
-import { getCompany } from './data';
+import { assetProphecy, assetRange, companyExposures } from './assets';
+import { DRUNK_MIN_DEVIATION, getCompany } from './data';
 import type { GameState } from './types';
 
 /** Most rules are tested with the market already open (after the opening quarter). */
@@ -200,9 +200,51 @@ describe('experts', () => {
     state.perks.veteranSpy = 3;
     expect(expertRankName('spy', expertLevel(state, 'spy'))).toBe('Mestre Espião');
     expect(buyPerk(state, 'drunkCare').ok).toBe(true);
-    expect(expertRankName('drunk', expertLevel(state, 'drunk'))).toBe('Bêbado Remediado');
-    consult(state, 'drunk', 'bakers');
-    expect(state.insights[0]!.level).toBe(1);
+    expect(expertRankName('drunk', expertLevel(state, 'drunk'))).toBe('Bêbado de Meio-Dia');
+    state.perks.drunkCare = 4;
+    expect(expertRankName('drunk', expertLevel(state, 'drunk'))).toBe('Ex-Bêbado');
+  });
+
+  it('the Drunk never lies: a drink buys a true rumour or useless rambling', () => {
+    let told = 0;
+    let rambled = 0;
+    for (let seed = 1; seed <= 60; seed++) {
+      const state = newGame(seed);
+      state.purse = 5;
+      expect(consult(state, 'drunk', '').ok).toBe(true);
+      expect(state.purse).toBeCloseTo(5 - expertCost(state, 'drunk'));
+      const rumour = state.insights[0]!;
+      if (rumour.expert !== 'drunk') throw new Error('expected a rumour');
+      if (rumour.ramble) {
+        rambled++;
+        continue;
+      }
+      told++;
+      const p = assetProphecy(state, rumour.targetId);
+      const gap = p.target - (p.low + p.high) / 2;
+      expect(rumour.up).toBe(gap > 0);
+      expect(Math.abs(gap)).toBeGreaterThanOrEqual(DRUNK_MIN_DEVIATION);
+    }
+    // Rookie: about half of the drinks are wasted
+    expect(told).toBeGreaterThan(15);
+    expect(rambled).toBeGreaterThan(15);
+  });
+
+  it('the Drunk takes three drinks a week and rambles less when trained', () => {
+    const state = newGame(3);
+    state.purse = 5;
+    for (let d = 0; d < 3; d++) expect(consult(state, 'drunk', '').ok).toBe(true);
+    expect(consult(state, 'drunk', '').ok).toBe(false);
+    let rambles = 0;
+    for (let seed = 1; seed <= 60; seed++) {
+      const trained = newGame(seed);
+      trained.purse = 5;
+      trained.perks.drunkCare = 4;
+      consult(trained, 'drunk', '');
+      const r = trained.insights[0]!;
+      if (r.expert === 'drunk' && r.ramble) rambles++;
+    }
+    expect(rambles).toBeLessThan(15);
   });
 
   it('the Veteran Spy perk makes the estimate sharper', () => {

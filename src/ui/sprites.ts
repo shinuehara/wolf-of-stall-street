@@ -348,17 +348,30 @@ const RANK_SPRITES = {
     [0, 10, 'y'],
     [1, 11, 'w'],
   ]),
+  // Nearly sober: a glass of water with a lemon; finally a fine cup of tea with a gold rim.
+  mug3: patch(recolor(MUG, { y: 'u', o: 'U', w: 'u' }), [
+    [0, 10, 'g'],
+    [1, 11, 'y'],
+  ]),
+  mug4: patch(recolor(MUG, { y: 'o', o: 'b', w: 'w', k: 'y' }), [
+    [0, 10, 'w'],
+    [1, 11, 'w'],
+  ]),
 };
 
 const ALL_SPRITES: Record<string, readonly string[]> = { ...SPRITES, ...RANK_SPRITES };
 
 export type SpriteName = keyof typeof SPRITES | keyof typeof RANK_SPRITES;
 
+/** Highest rank of each expert (perk levels). */
+export function maxRank(expert: 'drunk' | 'astrologer' | 'spy'): number {
+  return expert === 'drunk' ? 4 : expert === 'spy' ? 3 : 2;
+}
+
 /** Portrait for an expert at a given rank. */
 export function expertSprite(expert: 'drunk' | 'astrologer' | 'spy', level: number): SpriteName {
   const base = expert === 'spy' ? 'hood' : expert === 'astrologer' ? 'crystal' : 'mug';
-  const max = expert === 'spy' ? 3 : 2;
-  return `${base}${Math.max(0, Math.min(level, max))}` as SpriteName;
+  return `${base}${Math.max(0, Math.min(level, maxRank(expert)))}` as SpriteName;
 }
 
 const cache = new Map<string, string>();

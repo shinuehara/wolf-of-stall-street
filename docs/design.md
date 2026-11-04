@@ -288,13 +288,30 @@ Um local próprio com duas visões:
 
 ### Especialistas (falíveis)
 
-|              | Custo por pergunta                  | O que diz                                                                                                   | Base   |
-| ------------ | ----------------------------------- | ----------------------------------------------------------------------------------------------------------- | ------ |
-| 🍺 Bêbado    | grátis                              | alta ou baixa, 50% de acerto (puro meme)                                                                    | sempre |
-| 🔮 Astróloga | 0,01 + 0,01% do fundo, do seu bolso | alta ou baixa, **60%** de acerto                                                                            | sempre |
-| 🕵️ Espião    | 0,04 + 0,05% do patrimônio          | uma **estimativa** da chance de cada faixa, com erro, e às vezes um **furo plantado** (o oposto da verdade) | sempre |
+|              | Custo                                | O que diz                                                                                                      | Base   |
+| ------------ | ------------------------------------ | -------------------------------------------------------------------------------------------------------------- | ------ |
+| 🍺 Bêbado    | 0,05 fl por bebida, até 3 por semana | uma **fofoca verdadeira** e difícil de ler, ou **bobagem** (50% como aprendiz, 10% treinado)                   | sempre |
+| 🔮 Astróloga | 0,01 + 0,01% do fundo, do seu bolso  | se o trimestre termina acima ou abaixo do meio da profecia, **60%** de acerto                                  | sempre |
+| 🕵️ Espião    | 0,04 + 0,05% do patrimônio           | uma **estimativa** de onde o ativo termina o trimestre, faixa por faixa, com erro e às vezes **furo plantado** | sempre |
 
-Cada pergunta é sobre o **PIB da cidade**, um **bairro**, uma **cesta** ou uma **empresa**
+**O Bêbado nunca mente.** Ideia do dono: materializar a sensação de falar com um bêbado.
+Cada bebida (um único botão, sem escolher o assunto) compra uma fofoca sobre uma das empresas
+cujo destino do trimestre está mais longe do meio da faixa pública (pelo menos 3 pontos),
+ou só bobagem ("minha filha foi cantar na escola hoje"). A fofoca fala da **causa**, não do
+efeito ("O grão de trigo tá vindo meio esquisito" = Padarias para baixo); o jogador interpreta.
+O treino (Banho e Sopa, 4 níveis) acrescenta pistas, e vale também para fofocas antigas:
+
+| Patente            | O que aparece na mesma frase                                 | Bobagem |
+| ------------------ | ------------------------------------------------------------ | ------- |
+| Bêbado da Taverna  | só a frase                                                   | 50%     |
+| Bêbado de Meio-Dia | ícone da guilda + o bairro dito na frase                     | 40%     |
+| Bêbado Remediado   | + selo do bairro                                             | 30%     |
+| Quase Sóbrio       | + seta ▲/▼ junto ao ícone                                    | 20%     |
+| Ex-Bêbado          | o selo do bairro vira o nome da empresa (e aparece no ativo) | 10%     |
+
+Frases por setor e direção em `DRUNK_RUMORS` (data.ts), bobagens em `DRUNK_RAMBLES`.
+
+Cada pergunta à Astróloga e ao Espião é sobre o **PIB da cidade**, um **bairro**, uma **cesta** ou uma **empresa**
 (o ativo inteiro, como é negociado) e fala de **onde termina o trimestre**. A resposta vale
 até o fim do trimestre; dá para **perguntar de novo** (pagando de novo) quando notícias mudam
 o quadro. A resposta é lida em relação à faixa pública: se a faixa andou desde então (um
@@ -305,11 +322,11 @@ incêndio), o palpite anda junto. O Espião aprendiz erra mais e planta furos (1
 Cada especialista tem uma patente, que sobe com a melhoria que o treina. A patente aparece
 no cartão (com estrelas) e em cada resposta, e o retrato fica mais caprichado a cada nível.
 
-| Especialista             | Patentes                                               | Retrato                                                                             |
-| ------------------------ | ------------------------------------------------------ | ----------------------------------------------------------------------------------- |
-| Bêbado (Banho e Sopa)    | Bêbado da Taverna → Bêbado Remediado → Ex-Bêbado       | caneca suja → caneca limpa → copo de leite                                          |
-| Astróloga (Telescópio)   | Astróloga Aprendiz → Astróloga Formada → Grã-Astróloga | bola rachada → bola limpa → suporte de ouro e brilhos                               |
-| Espião (Espião Veterano) | Espião Aprendiz → Júnior → Experiente → Mestre Espião  | capuz remendado → capa azul → capa roxa com ouro → máscara dourada e lenço vermelho |
+| Especialista             | Patentes                                                               | Retrato                                                                             |
+| ------------------------ | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Bêbado (Banho e Sopa)    | Bêbado da Taverna → de Meio-Dia → Remediado → Quase Sóbrio → Ex-Bêbado | caneca suja → caneca limpa → copo de leite → copo d'água → xícara de chá            |
+| Astróloga (Telescópio)   | Astróloga Aprendiz → Astróloga Formada → Grã-Astróloga                 | bola rachada → bola limpa → suporte de ouro e brilhos                               |
+| Espião (Espião Veterano) | Espião Aprendiz → Júnior → Experiente → Mestre Espião                  | capuz remendado → capa azul → capa roxa com ouro → máscara dourada e lenço vermelho |
 
 ### Melhorias (perks)
 

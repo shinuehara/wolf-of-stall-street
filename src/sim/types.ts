@@ -185,7 +185,24 @@ export interface Band {
  */
 export type Insight =
   | {
-      expert: 'drunk' | 'astrologer';
+      /**
+       * A true rumour about a company whose quarter is far from the public guess. How much
+       * of it the player can read depends on the Drunk's rank when it is shown.
+       */
+      expert: 'drunk';
+      /** The company the rumour is about. */
+      targetId: string;
+      up: boolean;
+      /** Which line of DRUNK_RUMORS for the sector and direction (or of DRUNK_RAMBLES). */
+      line: number;
+      /** Paid for a drink and got only rambling (targetId is empty). */
+      ramble?: boolean;
+      level: number;
+      week: number;
+      publicMid: number;
+    }
+  | {
+      expert: 'astrologer';
       targetId: string;
       leansUp: boolean;
       /** The expert's rank when asked (from perks); 0 is the rookie. */
@@ -425,7 +442,7 @@ export interface RiskyDeposit {
 }
 
 export interface GameState {
-  version: 14;
+  version: 15;
   seed: number;
   rngState: number;
   /** Weeks elapsed. A season is SEASON_LENGTH weeks. */

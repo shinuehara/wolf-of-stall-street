@@ -5,7 +5,11 @@ import {
   MANAGERS,
   getInvestor,
   ASTROLOGER_ACCURACY,
-  DRUNK_ACCURACY,
+  DRUNK_DRINKS_PER_WEEK,
+  DRUNK_PLACES,
+  DRUNK_RAMBLE_CHANCE,
+  DRUNK_RAMBLES,
+  DRUNK_RUMORS,
   SPY_FAKE_CHANCE,
   CHART_WEEKS_BASE,
   CHART_WEEKS_SCRIBE,
@@ -82,7 +86,7 @@ import type {
 import { seasonReturn, seasonSpeech } from './ceremony';
 import { GALA_NAMES, galaUrl, sceneUrl, storyUrl, type SceneName } from './scenes';
 import { storyFor } from './story';
-import { expertSprite, sprite, type SpriteName } from './sprites';
+import { expertSprite, maxRank, sprite, type SpriteName } from './sprites';
 
 export type Screen = SceneName;
 
@@ -250,6 +254,9 @@ const SCALE = 25;
 /** Weeks of history shown in charts; set per render from the Scribe perk. */
 let CHART_WEEKS = CHART_WEEKS_BASE;
 
+/** The Drunk's rank right now: his old rumours read better once he is trained. */
+let DRUNK_LEVEL = 0;
+
 function assetSprite(assetId: string): SpriteName {
   if (isBond(assetId)) return 'crown';
   if (isManager(assetId)) return MANAGER_SPRITE[managerOf(assetId)];
@@ -287,6 +294,7 @@ function cityBetaLabel(value: number): string {
 
 export function render(state: GameState, ui: UiState): string {
   CHART_WEEKS = state.perks.scribe ? CHART_WEEKS_SCRIBE : CHART_WEEKS_BASE;
+  DRUNK_LEVEL = expertLevel(state, 'drunk');
   const screen = SCREENS.find((s) => s.id === ui.screen) ?? SCREENS[0]!;
   return `
     <div class="game">
@@ -882,7 +890,9 @@ function renderAssetDetail(state: GameState, ui: UiState, assetId: string): stri
     guild.id,
     ...(basket ? [] : [assetId]),
   ];
-  const insights = state.insights.filter((i) => targets.includes(i.targetId));
+  const insights = state.insights.filter(
+    (i) => targets.includes(i.targetId) && (i.expert !== 'drunk' || DRUNK_LEVEL >= 4),
+  );
   const sectorNews = state.events
     .map((e) => getEvent(e.id))
     .filter((e) => (e.effects[guild.sector] ?? 0) !== 0)
@@ -1143,13 +1153,14 @@ function expertBlurb(expert: ExpertId, level: number): string {
   const pctText = (p: number) => `${Math.round(p * 100)}%`;
   switch (expert) {
     case 'drunk': {
-      const acc = DRUNK_ACCURACY[Math.min(level, DRUNK_ACCURACY.length - 1)]!;
-      const flavor = [
-        'Metade do que diz é mentira.',
-        'Tomou banho. Às vezes acerta.',
-        'Quase sóbrio. Bebe leite agora.',
+      const clues = [
+        'Fala enrolado: você que adivinhe de que guilda e de que lado.',
+        'Já diz de que guilda é a fofoca e o bairro.',
+        'Aponta o bairro no mapa.',
+        'Diz se é coisa boa ou ruim.',
+        'Diz até o nome da empresa.',
       ];
-      return `Grátis. ${flavor[Math.min(level, 2)]} Acerta ${pctText(acc)}.`;
+      return `Uma bebida, uma fofoca. Nunca mente, mas às vezes só fala bobagem. ${clues[Math.min(level, 4)]}`;
     }
     case 'astrologer': {
       const acc = ASTROLOGER_ACCURACY[Math.min(level, ASTROLOGER_ACCURACY.length - 1)]!;
@@ -1165,26 +1176,57 @@ function expertBlurb(expert: ExpertId, level: number): string {
   }
 }
 
+/**
+ * The Drunk's rumour as he can say it now: the more he is trained, the more clues come with
+ * it (guild icon and the district; the district icon; up or down; the company itself).
+ */
+function drunkLine(insight: Extract<Insight, { expert: 'drunk' }>): string {
+  if (insight.ramble) return esc(DRUNK_RAMBLES[insight.line] ?? '');
+  const company = getCompany(insight.targetId);
+  const guild = getGuild(company.guildId);
+  const text = DRUNK_RUMORS[guild.sector][insight.up ? 'up' : 'down'][insight.line] ?? '';
+  const lv = DRUNK_LEVEL;
+  const arrow =
+    lv >= 3
+      ? `<strong class="${insight.up ? 'up' : 'down'}">${insight.up ? '▲' : '▼'}</strong>`
+      : '';
+  const sectorClue =
+    lv >= 1
+      ? ` <span class="drunk-clue">${sprite(GUILD_SPRITE[guild.id]!, 16, guild.short)}${arrow}</span>`
+      : '';
+  const placeChip =
+    lv >= 4
+      ? ` <span class="drunk-clue company-chip">${esc(company.name)}</span>`
+      : lv >= 2
+        ? ` <span class="standing standing-${company.regionId}">${getRegion(company.regionId).name}</span>`
+        : '';
+  const place = lv >= 1 ? `${DRUNK_PLACES[company.regionId]}${placeChip}` : '';
+  return esc(text).replace('{S}', sectorClue).replace('{R}', place);
+}
+
 /** A rank badge for an expert, coloured from rookie to master. */
 function rankBadge(expert: ExpertId, level: number): string {
-  const max = expert === 'spy' ? 3 : 2;
+  const max = maxRank(expert);
   const tier = level <= 0 ? 0 : level >= max ? 3 : level === 1 ? 1 : 2;
   return `<span class="rank rank-${tier}">${expertRankName(expert, level)}</span>`;
 }
 
 function rankStars(expert: ExpertId, level: number): string {
-  const max = expert === 'spy' ? 3 : 2;
+  const max = maxRank(expert);
   return `<span class="stars" aria-label="nível ${level} de ${max}">${'★'.repeat(level)}${'☆'.repeat(max - level)}</span>`;
 }
 
 function renderInsight(insight: Insight, full: boolean, week = insight.week): string {
   const age = week - insight.week;
-  const about = `<span class="insight-about">${targetName(insight.targetId)} <span class="muted small">${age === 0 ? 'esta semana' : `há ${age} sem.`}</span></span>`;
+  const about = `<span class="insight-about">${insight.expert === 'drunk' ? '' : targetName(insight.targetId)} <span class="muted small">${age === 0 ? 'esta semana' : `há ${age} sem.`}</span></span>`;
   const face = sprite(expertSprite(insight.expert, insight.level), 20);
   const badge = rankBadge(insight.expert, insight.level);
   switch (insight.expert) {
-    case 'drunk':
-      return `<div class="insight">${face}${about}${badge}<span><em>"${insight.leansUp ? 'Vai subir, confia em mim! *hic*' : 'Vende tudo! Vai despencar! *hic*'}"</em></span></div>`;
+    case 'drunk': {
+      const drunkFace = sprite(expertSprite('drunk', DRUNK_LEVEL), 20);
+      const when = `<span class="insight-about">${insight.ramble ? 'Bobagem ' : DRUNK_LEVEL >= 4 ? `${getCompany(insight.targetId).name} ` : 'Fofoca '}<span class="muted small">${age === 0 ? 'esta semana' : `há ${age} sem.`}</span></span>`;
+      return `<div class="insight insight-drunk">${drunkFace}${when}${rankBadge('drunk', DRUNK_LEVEL)}<span><em>“${drunkLine(insight)}”</em></span></div>`;
+    }
     case 'astrologer':
       return `<div class="insight">${face}${about}${badge}<span>Os astros apontam para <strong class="${insight.leansUp ? 'up' : 'down'}">${insight.leansUp ? 'ALTA' : 'BAIXA'}</strong>.</span></div>`;
     case 'spy':
@@ -1547,6 +1589,26 @@ function renderPerkShop(state: GameState): string {
   }).join('')}</div>`;
 }
 
+function renderDrunkPanel(state: GameState): string {
+  const drinks = state.insights.filter((i) => i.expert === 'drunk' && i.week === state.week).length;
+  const asleep = drinks >= DRUNK_DRINKS_PER_WEEK;
+  const cost = expertCost(state, 'drunk');
+  const level = expertLevel(state, 'drunk');
+  const ramble = DRUNK_RAMBLE_CHANCE[Math.min(level, DRUNK_RAMBLE_CHANCE.length - 1)]!;
+  const rumours = state.insights.filter((i) => i.expert === 'drunk');
+  return `<p class="muted small">O Bêbado <strong>nunca mente</strong>: quando fala algo útil, é sobre uma empresa cujo trimestre vai bem diferente do que a faixa pública diz. O difícil é entender. E às vezes ele só fala bobagem (${whole(ramble * 100)}% das vezes agora). Com Banho e Sopa ele fica mais claro e enrola menos, inclusive sobre o que já contou.</p>
+    <button class="pbtn" data-action="consult" data-expert="drunk" data-asset="" ${asleep || state.status !== 'playing' || state.purse < cost ? 'disabled' : ''}>${asleep ? 'Ele dormiu em cima da mesa (ronc…)' : `Pagar uma bebida · ${fmtCost(cost)} fl (${DRUNK_DRINKS_PER_WEEK - drinks} de ${DRUNK_DRINKS_PER_WEEK} nesta semana)`}</button>
+    ${
+      rumours.length
+        ? `<div class="drunk-rumours">${rumours
+            .slice()
+            .reverse()
+            .map((i) => renderInsight(i, true, state.week))
+            .join('')}</div>`
+        : ''
+    }`;
+}
+
 function renderAsk(state: GameState, ui: UiState): string {
   if (onlyBonds(state)) {
     return `<div class="dialog px tavern-closed">
@@ -1584,11 +1646,13 @@ function renderAsk(state: GameState, ui: UiState): string {
       }).join('')}
     </div>
     <article class="card px ask">
-      <h2>${sprite(expertSprite(expert.id, expertLevel(state, expert.id)), 20)} Perguntar ${expert.id === 'astrologer' ? 'à' : 'ao'} ${expertRankName(expert.id, expertLevel(state, expert.id))} sobre…</h2>
+      <h2>${sprite(expertSprite(expert.id, expertLevel(state, expert.id)), 20)} ${expert.id === 'drunk' ? `Ouvir o ${expertRankName('drunk', expertLevel(state, 'drunk'))}` : `Perguntar ${expert.id === 'astrologer' ? 'à' : 'ao'} ${expertRankName(expert.id, expertLevel(state, expert.id))} sobre…`}</h2>
       ${
         expertLocked
           ? `<p class="locked-note">🔒 O ${expert.name} não atende quem está abaixo de ${getClass(expert.minClass).name}.</p>`
-          : `<p class="muted small">As respostas falam de <strong>onde o ativo termina o trimestre</strong> e valem até o fim dele. Notícias novas podem mudar o destino: pergunte de novo (pagando de novo) para atualizar. O PIB e os bairros ajudam a entender muitas empresas de uma vez.</p>
+          : expert.id === 'drunk'
+            ? renderDrunkPanel(state)
+            : `<p class="muted small">As respostas falam de <strong>onde o ativo termina o trimestre</strong> e valem até o fim dele. Notícias novas podem mudar o destino: pergunte de novo (pagando de novo) para atualizar. O PIB e os bairros ajudam a entender muitas empresas de uma vez.</p>
              <div class="ask-groups">
                <div class="ask-group">
                  ${askButton('city', `PIB de ${CITY.name}`, sprite('castle', 20))}
@@ -1607,9 +1671,12 @@ function renderAsk(state: GameState, ui: UiState): string {
       }
       <h3>Rumores deste trimestre</h3>
       ${
-        state.insights.length === 0
+        state.insights.every((i) => i.expert === 'drunk')
           ? '<p class="muted">Ninguém te contou nada ainda.</p>'
-          : `<ul class="rumors">${state.insights.map((i) => `<li>${renderInsight(i, false, state.week)}</li>`).join('')}</ul>`
+          : `<ul class="rumors">${state.insights
+              .filter((i) => i.expert !== 'drunk')
+              .map((i) => `<li>${renderInsight(i, false, state.week)}</li>`)
+              .join('')}</ul>`
       }
     </article>
   </div>`;

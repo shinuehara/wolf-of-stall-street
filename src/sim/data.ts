@@ -30,13 +30,18 @@ export const EVENT_CHANCE = 0.3;
 /** Astrologer accuracy by Telescope level. */
 export const ASTROLOGER_ACCURACY = [0.6, 0.68, 0.75];
 /** Drunk accuracy by Bath & Soup level. */
-export const DRUNK_ACCURACY = [0.5, 0.55, 0.6];
 /** Spy quality by Veteran Spy level: noise on his estimate and chance it is a planted lie. */
 export const SPY_NOISE = [0.8, 0.5, 0.3, 0.1];
 export const SPY_FAKE_CHANCE = [0.15, 0.08, 0.04, 0.01];
 /** Each expert's rank names, from rookie to master; the rank is the level of their perk. */
 export const EXPERT_RANKS = {
-  drunk: ['Bêbado da Taverna', 'Bêbado Remediado', 'Ex-Bêbado'],
+  drunk: [
+    'Bêbado da Taverna',
+    'Bêbado de Meio-Dia',
+    'Bêbado Remediado',
+    'Quase Sóbrio',
+    'Ex-Bêbado',
+  ],
   astrologer: ['Astróloga Aprendiz', 'Astróloga Formada', 'Grã-Astróloga'],
   spy: ['Espião Aprendiz', 'Espião Júnior', 'Espião Experiente', 'Mestre Espião'],
 } as const;
@@ -78,8 +83,18 @@ export const PERKS: readonly PerkDef[] = [
     icon: 'mug',
     description: 'Um prato quente e um balde de água fria fazem milagres.',
     levels: [
-      { cost: 1, minClass: 0, effect: 'O Bêbado vira Bêbado Remediado: acerta 55%.' },
-      { cost: 3, minClass: 1, effect: 'O Ex-Bêbado, quase sóbrio, acerta 60%.' },
+      {
+        cost: 1,
+        minClass: 0,
+        effect: 'Lembra de que guilda é a fofoca (ícone) e fala o bairro; enrola menos (40%).',
+      },
+      { cost: 3, minClass: 1, effect: 'Aponta o bairro no mapa (ícone do bairro); enrola 30%.' },
+      {
+        cost: 6,
+        minClass: 2,
+        effect: 'Quase sóbrio: diz se a coisa é boa ou ruim (seta); enrola 20%.',
+      },
+      { cost: 12, minClass: 3, effect: 'Ex-Bêbado: diz o nome da empresa; enrola só 10%.' },
     ],
   },
   {
@@ -1004,8 +1019,8 @@ export const EXPERTS: readonly ExpertDef[] = [
     id: 'drunk',
     name: 'Bêbado da Taverna',
     emoji: '🍺',
-    description: 'Grátis. Metade do que diz é mentira.',
-    baseCost: 0,
+    description: 'Nunca mente, mas às vezes só fala bobagem.',
+    baseCost: 0.05,
     wealthCost: 0,
     minClass: 0,
   },
@@ -1202,3 +1217,122 @@ export const MANAGERS: ManagerDef[] = [
 export function getManager(id: ManagerId): ManagerDef {
   return MANAGERS.find((m) => m.id === id)!;
 }
+
+// ---------------------------------------------------------------------------
+// The Drunk's rumours: always true, hard to read
+// ---------------------------------------------------------------------------
+
+/** Drinks you can buy him per week; after that he sleeps on the table. */
+export const DRUNK_DRINKS_PER_WEEK = 3;
+
+/** Chance a drink buys only rambling, by rank (training makes him ramble less). */
+export const DRUNK_RAMBLE_CHANCE = [0.5, 0.4, 0.3, 0.2, 0.1];
+
+/** What he says when he says nothing useful. */
+export const DRUNK_RAMBLES = [
+  'Minha filha foi cantar na escola hoje. Cantou bonito. *hic*',
+  'Lembro que meu pai gostava de pescar. Nunca pegou nada.',
+  'Tô sentindo um cheiro ruim nessa cerveja hoje… ou sou eu.',
+  'Sabia que o gato do taverneiro tem sete dedos? Contei duas vezes.',
+  'Uma vez eu vi um dragão. Ou era uma vaca. Era de noite.',
+  'Essa caneca é a mais bonita da taverna. Não conta pras outras.',
+  'Choveu ontem? Eu tava molhado, mas pode ter sido a cerveja.',
+  'Meu joelho dói quando vai chover. Ou quando não vai.',
+];
+
+/** The Drunk only gossips about a company whose quarter is this far (%) from the public guess. */
+export const DRUNK_MIN_DEVIATION = 3;
+
+/**
+ * One rumour per sector and direction. {S} is where the sector icon (and, trained, the arrow)
+ * goes; {R} is where the district goes once he is sober enough to say it.
+ */
+export const DRUNK_RUMORS: Record<Sector, { up: string[]; down: string[] }> = {
+  food: {
+    down: [
+      'O grão de trigo{S} tá vindo meio esquisito esta semana{R}… *hic*',
+      'Vi um padeiro{S} chorando em cima da massa{R}. Chorava farinha!',
+    ],
+    up: [
+      'Diz que o trigo{S} desse ano tá dourado que nem dente de rico{R}. *hic*',
+      'Fila de gente pra comprar pão{S}{R} dobrando a esquina, eu vi! Ou vi duas vezes.',
+    ],
+  },
+  commodities: {
+    down: [
+      'Os mineiros{S} tão voltando de mão abanando e tossindo poeira{R}… *hic*',
+      'Ouvi um túnel{S} desabando{R}. Ou era meu estômago.',
+    ],
+    up: [
+      'Um mineiro{S} pagou rodada pra taverna inteira{R}! Com prata! *hic*',
+      'Diz que acharam um veio{S} brilhando mais que essa vela{R}.',
+    ],
+  },
+  health: {
+    down: [
+      'Ninguém mais espirra{S}{R}, tá todo mundo com saúde. Que tédio. *hic*',
+      'O xarope{S}{R} tá com gosto de sola de bota, disse meu primo.',
+    ],
+    up: [
+      'Tá todo mundo tossindo{S}{R}… cof… eu também. Me passa o xarope.',
+      'Fila na porta da botica{S}{R}, gente com cara verde! *hic*',
+    ],
+  },
+  banking: {
+    down: [
+      'Um cambista{S} saiu correndo com o livro debaixo do braço{R}… estranho, né?',
+      'Tão contando moeda e faltando moeda{S}{R}. *hic*',
+    ],
+    up: [
+      'Os cambistas{S}{R} andam de chapéu novo. Chapéu novo é moeda nova.',
+      'Diz que o cofre{S}{R} não fecha mais de tão cheio. *hic*',
+    ],
+  },
+  retail: {
+    down: [
+      'As barracas{S}{R} tão às moscas. Até as moscas foram embora.',
+      'Ninguém compra nada{S}{R}, só olha e suspira. Que nem eu na taverna.',
+    ],
+    up: [
+      'A feira{S}{R} tava tão cheia que eu perdi meu sapato! *hic*',
+      'O povo tá comprando seda e panela{S}{R} que nem doido.',
+    ],
+  },
+  industry: {
+    down: [
+      'A forja{S}{R} tá fria que nem o coração da minha sogra… *hic*',
+      'Ferreiro{S}{R} dormindo em cima da bigorna, sem encomenda.',
+    ],
+    up: [
+      'Martelo{S} batendo dia e noite{R}, não consigo dormir! *hic*',
+      'Diz que o castelo encomendou espada{S}{R} que não acaba mais.',
+    ],
+  },
+  shipping: {
+    down: [
+      'Vi um barco{S} voltando torto, com a vela rasgada{R}… *hic*',
+      'Marinheiro{S}{R} chorando no cais. Marinheiro não chora à toa.',
+    ],
+    up: [
+      'O cais{S}{R} tá cheio de caixote cheiroso! *hic*',
+      'Navio{S} chegando de barriga cheia{R}, igual eu depois do jantar.',
+    ],
+  },
+  spices: {
+    down: [
+      'A pimenta{S}{R} chegou molhada, ninguém quer pimenta molhada… *hic*',
+      'Tem pimenta falsa{S} circulando{R}. Serragem pintada!',
+    ],
+    up: [
+      'Os nobres{S}{R} tão botando canela até no vinho! *hic*',
+      'Cheiro de açafrão{S} por toda parte{R}. Até eu tô cheiroso.',
+    ],
+  },
+};
+
+/** How the Drunk says where, once he is sober enough. */
+export const DRUNK_PLACES: Record<RegionId, string> = {
+  crown: ' lá no Alto da Coroa',
+  burgo: ' lá no Burgo Velho',
+  ribeira: ' lá pra Ribeira',
+};

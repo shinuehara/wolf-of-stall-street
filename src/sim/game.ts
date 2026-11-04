@@ -28,7 +28,10 @@ import {
   CYCLE_LIMIT,
   CYCLE_PERSISTENCE,
   CYCLE_SHOCK,
-  DRUNK_ACCURACY,
+  DRUNK_DRINKS_PER_WEEK,
+  DRUNK_MIN_DEVIATION,
+  DRUNK_RAMBLE_CHANCE,
+  DRUNK_RAMBLES,
   EXPERT_PERK,
   EXPERT_RANKS,
   EVENT_CHANCE,
@@ -248,7 +251,7 @@ function cityProfile(state: GameState): { drift: number; width: number } {
 
 export function newGame(seed: number = Date.now() >>> 0): GameState {
   const state: GameState = {
-    version: 14,
+    version: 15,
     seed,
     rngState: seed,
     week: 0,
@@ -548,6 +551,7 @@ export function consult(state: GameState, expertId: ExpertId, targetId: string):
     );
   }
   if (onlyBonds(state)) return fail('Quem só tem Títulos da Coroa não tem o que perguntar.');
+  if (expertId === 'drunk') return listenToDrunk(state);
   if (!isTargetUnlocked(state, targetId)) return fail('Você ainda não tem acesso a esta guilda.');
   const cost = expertCost(state, expertId);
   if (cost > state.purse) return fail('Seu bolso não tem florins para pagar a consulta.');
@@ -566,19 +570,67 @@ export function consult(state: GameState, expertId: ExpertId, targetId: string):
       : spyEstimate(state, forecast);
     state.insights.push({ expert: 'spy', targetId, bands: estimate, level, ...asked });
   } else {
-    const table = expertId === 'astrologer' ? ASTROLOGER_ACCURACY : DRUNK_ACCURACY;
-    const lenses = expertId === 'astrologer' && hasEffect(state, 'brassLenses') ? LENS_BONUS : 0;
+    const lenses = hasEffect(state, 'brassLenses') ? LENS_BONUS : 0;
+    const table = ASTROLOGER_ACCURACY;
     const accuracy = Math.min(0.95, table[Math.min(level, table.length - 1)]! + lenses);
     const truth = leansUp(forecast);
     const honest = nextRandom(state) < accuracy;
     state.insights.push({
-      expert: expertId,
+      expert: 'astrologer',
       targetId,
       leansUp: honest ? truth : !truth,
       level,
       ...asked,
     });
   }
+  return ok;
+}
+
+/**
+ * The Drunk's rumour of the week: always true, about one of the companies whose quarter is
+ * furthest from the public guess. What the player can read of it depends on his rank.
+ */
+export function listenToDrunk(state: GameState): ActionResult {
+  const drinks = state.insights.filter((i) => i.expert === 'drunk' && i.week === state.week);
+  if (drinks.length >= DRUNK_DRINKS_PER_WEEK) {
+    return fail('O Bêbado dormiu em cima da mesa. Volte semana que vem.');
+  }
+  const cost = expertCost(state, 'drunk');
+  if (cost > state.purse) return fail('Seu bolso não paga nem uma caneca.');
+  state.purse -= cost;
+  const level = expertLevel(state, 'drunk');
+  const base = { expert: 'drunk' as const, level, week: state.week };
+  // Sometimes the drink buys only rambling: less often as he is trained.
+  const rambleChance = DRUNK_RAMBLE_CHANCE[Math.min(level, DRUNK_RAMBLE_CHANCE.length - 1)]!;
+  const told = new Set(state.insights.filter((i) => i.expert === 'drunk').map((i) => i.targetId));
+  const candidates = COMPANIES.filter((c) => isAssetUnlocked(state, c.id) && !told.has(c.id))
+    .map((c) => {
+      const p = assetProphecy(state, c.id);
+      const publicMid = (p.low + p.high) / 2;
+      return { id: c.id, gap: p.target - publicMid, publicMid };
+    })
+    .filter((c) => Math.abs(c.gap) >= DRUNK_MIN_DEVIATION)
+    .sort((a, b) => Math.abs(b.gap) - Math.abs(a.gap))
+    .slice(0, 3);
+  if (candidates.length === 0 || nextRandom(state) < rambleChance) {
+    state.insights.push({
+      ...base,
+      targetId: '',
+      up: false,
+      line: Math.floor(nextRandom(state) * DRUNK_RAMBLES.length),
+      ramble: true,
+      publicMid: 0,
+    });
+    return ok;
+  }
+  const chosen = pick(state, candidates);
+  state.insights.push({
+    ...base,
+    targetId: chosen.id,
+    up: chosen.gap > 0,
+    line: nextRandom(state) < 0.5 ? 0 : 1,
+    publicMid: chosen.publicMid,
+  });
   return ok;
 }
 

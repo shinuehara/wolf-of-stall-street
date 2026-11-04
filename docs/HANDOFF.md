@@ -31,6 +31,8 @@ O jogo é jogável do começo ao fim e passa em 54 testes. Visão geral do que e
 - **Profecia do trimestre:** cada ativo tem um destino oculto para o trimestre e é puxado para
   ele; especialistas respondem sobre o trimestre (vale o trimestre todo, dá para perguntar de
   novo); **corretagem** de 0,5% por compra/venda.
+- **Bêbado que nunca mente:** cada bebida compra uma fofoca verdadeira sobre a causa (o
+  jogador interpreta) ou bobagem; o treino acrescenta ícone da guilda, bairro, seta e empresa.
 - **Gestores contratados** (Carteira → Gestores): Frei Prudêncio, Dona Ambrosina, Rodrigo
   Rompe-Bolsa investem parte do fundo sozinhos, com estilo e taxa próprios.
 - **Promoções e quedas múltiplas** no fim do trimestre (um título por teto ultrapassado).
@@ -78,6 +80,11 @@ melhorias ~128 semanas; oráculo (teto) ~88. Quem usa o Espião não vai para a 
   vale o trimestre; o jogador segura ou realiza conforme o que já aconteceu frente à
   profecia. Implementado junto com a corretagem. O Arauto passou a anunciar a faixa do
   trimestre e a semana virou só o "humor da semana" (decisão de Claude, dono não opinou).
+- O Bêbado era inútil. Pedido do dono: fala **sempre verdadeira mas pouco compreensível**,
+  sobre causas macro sem dizer o impacto; cada nível de treino acrescenta uma pista na mesma
+  frase (ícone da guilda + bairro, ícone do bairro, seta, empresa). Furo do Bêbado não é
+  mentira, é **bobagem paga** ("minha filha cantou na escola"), cada vez mais rara com o
+  treino. Um botão só, "Pagar uma bebida", sem escolher o assunto.
 - Ideias aceitas para depois: relatórios por setor e panorama macro do Espião (pacotes),
   assinatura semanal.
 
@@ -125,3 +132,4 @@ melhorias ~128 semanas; oráculo (teto) ~88. Quem usa o Espião não vai para a 
 | `cea8ed2`                       | Investidores por 3 meses, promoções/quedas múltiplas, gestores           |
 | `7c64891`                       | Último aviso antes da masmorra, saques param acima do piso               |
 | `9803b83`                       | Profecia do trimestre, corretagem, perguntas valem o trimestre           |
+| (este)                          | Bêbado que nunca mente: fofocas a interpretar, bobagens, 5 patentes      |
