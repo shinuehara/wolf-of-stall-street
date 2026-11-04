@@ -111,6 +111,34 @@ export interface CompanyNewsTemplate {
 
 export type ExpertId = 'drunk' | 'astrologer' | 'spy';
 
+export type PerkId =
+  'telescope' | 'veteranSpy' | 'informants' | 'insurers' | 'chronicler' | 'scribe' | 'treasurer';
+
+export interface PerkLevel {
+  cost: number;
+  /** Minimum social class index to buy this level. */
+  minClass: number;
+  /** What this level does, for the shop. */
+  effect: string;
+}
+
+/** An upgrade bought once per level that improves the player's information or costs. */
+export interface PerkDef {
+  id: PerkId;
+  name: string;
+  icon: string;
+  description: string;
+  levels: PerkLevel[];
+}
+
+/** A surprise outside the announced range that hit a company this week. */
+export interface Shock {
+  companyId: string;
+  /** Extra move in percentage points. */
+  move: number;
+  headline: string;
+}
+
 export interface ExpertDef {
   id: ExpertId;
   name: string;
@@ -144,7 +172,14 @@ export interface Band {
  */
 export type Insight =
   | { expert: 'drunk' | 'astrologer'; targetId: string; leansUp: boolean }
-  | { expert: 'spy'; targetId: string; bands: Band[] };
+  | {
+      expert: 'spy';
+      targetId: string;
+      /** The spy's estimate, which may be off or even planted. */
+      bands: Band[];
+      /** How sure the spy says he is (depends on the Veteran Spy perk), not whether he is right. */
+      confidence: 'baixa' | 'média' | 'alta';
+    };
 
 export interface Position {
   value: number;
@@ -204,7 +239,7 @@ export interface LogEntry {
 export type GameStatus = 'playing' | 'won' | 'lost';
 
 export interface GameState {
-  version: 5;
+  version: 6;
   seed: number;
   rngState: number;
   /** Weeks elapsed. A season is SEASON_LENGTH weeks. */
@@ -235,6 +270,10 @@ export interface GameState {
   localNews: ActiveLocalNews[];
   /** Crown bonds locked until maturity (the liquid bond is a normal position). */
   lockedBonds: LockedBond[];
+  /** Level bought of each perk (missing = 0). */
+  perks: Partial<Record<PerkId, number>>;
+  /** This week's chance (0-1) of a surprise shock per company; hidden unless informants are hired. */
+  shockRisk: Record<string, number>;
   /** One record per finished week, oldest first. */
   ledger: WeekRecord[];
   /** Lifetime gains and losses per asset, in gold. */

@@ -133,15 +133,39 @@ Um local próprio com duas visões:
 - **De empresas**, que afetam uma empresa só: "Nobres se mudaram para perto do Forno do Norte",
   "Piratas atacaram a Nau do Levante". Até 3 ativas, com 40% de chance por semana, duram 1 a 3 semanas.
 
-### Especialistas
+### Especialistas (falíveis)
 
-|                      | Custo                      | O que revela                                             | Classe   |
-| -------------------- | -------------------------- | -------------------------------------------------------- | -------- |
-| 🍺 Bêbado da Taverna | grátis                     | alta ou baixa, com 50% de acerto (puro ruído, e um meme) | Servo    |
-| 🔮 Astróloga         | 0,05 + 0,03% do patrimônio | alta ou baixa, com 75% de acerto                         | Servo    |
-| 🕵️ Espião            | 0,15 + 0,1% do patrimônio  | a probabilidade real de cada uma das 4 faixas            | Camponês |
+|              | Custo por pergunta         | O que diz                                                                                                   | Base   |
+| ------------ | -------------------------- | ----------------------------------------------------------------------------------------------------------- | ------ |
+| 🍺 Bêbado    | grátis                     | alta ou baixa, 50% de acerto (puro meme)                                                                    | sempre |
+| 🔮 Astróloga | 0,02 + 0,02% do patrimônio | alta ou baixa, **60%** de acerto                                                                            | sempre |
+| 🕵️ Espião    | 0,04 + 0,05% do patrimônio | uma **estimativa** da chance de cada faixa, com erro, e às vezes um **furo plantado** (o oposto da verdade) | sempre |
 
-Cada pergunta é sobre o **PIB da cidade**, um **bairro**, um **setor** (a guilda inteira) ou uma **empresa** (só o movimento próprio dela).
+Cada pergunta é sobre o **PIB da cidade**, um **bairro**, um **setor** ou uma **empresa**.
+O Espião mostra um selo de confiança (baixa, média, alta) conforme o nível do Espião
+Veterano. O selo diz quão bom ele é, não se aquela resposta está certa.
+
+### Melhorias (perks)
+
+A diversão vem de comprar melhores decisões. Sem melhorias, a informação ajuda pouco;
+com elas, a rentabilidade sobe de verdade. Compradas na Taverna, aba "Contratar melhorias".
+
+| Melhoria                    | Níveis (custo · classe mínima)              | Efeito                                                                |
+| --------------------------- | ------------------------------------------- | --------------------------------------------------------------------- |
+| Telescópio da Astróloga     | 8 · Servo / 25 · Camponês                   | 60% → 68% → 75% de acerto                                             |
+| Espião Veterano             | 15 · Camponês / 35 · Artesão / 80 · Burguês | erro do Espião cai muito; furos plantados 25% → 12% → 5% → 1%         |
+| Rede de Informantes         | 35 · Artesão                                | avisa (⚠) quais empresas estão com risco alto de choque na semana     |
+| Contrato com os Seguradores | 25 · Camponês                               | seguro 40% mais barato                                                |
+| Cronista                    | 30 · Artesão                                | mostra os pesos de cidade, setor e bairro na previsão de cada empresa |
+| Livro-caixa do Escriba      | 10 · Servo                                  | gráficos com 40 semanas (antes 8)                                     |
+| Amigo do Tesoureiro         | 60 · Mercador                               | Títulos da Coroa rendem 50% a mais                                    |
+
+### Choques
+
+Toda semana, cada empresa tem uma pequena chance (2%, ou 12% em semanas de risco alto) de
+um **choque fora da faixa anunciada**: incêndio, escândalo, roubo (-14% a -28%) ou, mais
+raramente, um golpe de sorte (+12% a +22%). O **seguro protege também dos choques**, pois
+limita o resultado à faixa segurada. A Rede de Informantes avisa as semanas de risco alto.
 
 ### Seguro (hedge)
 
@@ -171,12 +195,26 @@ patrimônio, masmorra.
 
 ## Balanceamento
 
-`src/sim/bots.ts` tem três jogadores automáticos, e `src/sim/balance.test.ts` garante que:
+`src/sim/bots.ts` tem jogadores automáticos que só usam o que um jogador vê (faixas públicas
+e respostas dos especialistas, com erro). `src/sim/balance.test.ts` garante que:
 
-- pagar por informação faz subir mais rápido (`naive` > `astrologer` > `spy` em semanas);
-- uma run bem informada dura entre 40 e 90 semanas.
+- só renda fixa não paga o custo de vida (nunca vence);
+- informação vence o chute, e melhorias vencem a informação crua;
+- com melhorias há menos quedas de classe, mas ainda há semanas de -10% ou pior;
+- chutar não é um caminho confiável para a nobreza.
 
-Referência atual (60 seeds): naive ~79 semanas, astróloga ~63, espião ~53.
+Referência (60 partidas, limite de 300 semanas):
+
+| Bot                  | Vence | Perde | Semanas até Conde | Quedas de classe |
+| -------------------- | ----- | ----- | ----------------- | ---------------- |
+| Só títulos           | 0     | 60    | —                 | —                |
+| Sem informação       | 40    | 0     | ~212              | 2,4              |
+| Astróloga            | 47    | 1     | ~181              | 2,4              |
+| Espião sem melhorias | 48    | 9     | ~160              | 1,0              |
+| Espião com melhorias | 51    | 9     | ~147              | 0,25             |
+
+Alavancas principais: `DRIFT_SCALE`, `CENTER_NOISE`, `NEWS_VISIBILITY`, `NEWS_LEAN` e
+`LEAN_SHARPNESS` em `forecast.ts`; ruído do Espião, choques e preços das melhorias em `data.ts`.
 
 ## Ideias para depois
 
@@ -187,10 +225,6 @@ Referência atual (60 seeds): naive ~79 semanas, astróloga ~63, espião ~53.
   atendimento ao cliente** que avalia as empresas nesse quesito.
 - **Cronista** (comprável): revela as sensibilidades exatas de cada empresa à cidade, ao
   setor e ao bairro.
-
-- 📚 **Perk "Livro-caixa do Escriba"** (comprável): hoje o jogo começa com 26 semanas de
-  histórico simulado nos gráficos. No futuro, o histórico visível pode ser curto por padrão
-  (ex: 8 semanas) e o perk amplia para meses ou anos, ajudando a ler a tendência de cada empresa.
 
 - 🧪 **Alquimista**: revela correlações entre setores.
 - 🧑‍🏫 **Coach de mercadores** na taverna, que vende cursos de enriquecimento (palpites ruins, muito meme).

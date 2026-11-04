@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { bands } from './forecast';
 import {
   BOND_LOCK_MULTIPLIER,
   BOND_LOCK_WEEKS,
@@ -14,6 +15,8 @@ import {
   endWeek,
   expertCost,
   newGame,
+  buyPerk,
+  perkLevel,
   quickTrade,
   PRE_HISTORY_WEEKS,
   sell,
@@ -148,9 +151,66 @@ describe('experts', () => {
     expect(state.insights).toHaveLength(1);
   });
 
-  it('keeps the spy away from the lower classes', () => {
-    const state = newGame(5);
-    expect(consult(state, 'spy', 'bakers').ok).toBe(false);
+  it('the spy is open from the start, but his estimate can be off', () => {
+    let off = 0;
+    for (let seed = 0; seed < 40; seed++) {
+      const state = newGame(seed);
+      expect(consult(state, 'spy', 'bakers').ok).toBe(true);
+      const insight = state.insights[0];
+      if (insight?.expert !== 'spy') throw new Error('expected a spy insight');
+      const truth = bands(state.sectorForecasts.bakers!);
+      const error = insight.bands.reduce((s, b, i) => s + Math.abs(b.p - truth[i]!.p), 0);
+      if (error > 0.2) off++;
+      expect(insight.confidence).toBe('baixa');
+    }
+    expect(off).toBeGreaterThan(5);
+  });
+
+  it('the Veteran Spy perk makes the estimate sharper', () => {
+    const errorWith = (level: number) => {
+      let total = 0;
+      for (let seed = 0; seed < 60; seed++) {
+        const state = newGame(seed);
+        state.classIndex = 6;
+        state.cash = 10000;
+        state.perks.veteranSpy = level;
+        consult(state, 'spy', 'bakers');
+        const insight = state.insights[0];
+        if (insight?.expert !== 'spy') throw new Error('expected a spy insight');
+        const truth = bands(state.sectorForecasts.bakers!);
+        total += insight.bands.reduce((s, b, i) => s + Math.abs(b.p - truth[i]!.p), 0);
+      }
+      return total / 60;
+    };
+    expect(errorWith(3)).toBeLessThan(errorWith(0) / 2);
+  });
+
+  it('perks are bought level by level, with class and cost requirements', () => {
+    const state = newGame(1);
+    expect(buyPerk(state, 'scribe').ok).toBe(true);
+    expect(buyPerk(state, 'scribe').ok).toBe(false); // max level
+    expect(buyPerk(state, 'veteranSpy').ok).toBe(false); // needs Camponês
+    state.classIndex = 1;
+    expect(buyPerk(state, 'veteranSpy').ok).toBe(true);
+    expect(perkLevel(state, 'veteranSpy')).toBe(1);
+    expect(buyPerk(state, 'veteranSpy').ok).toBe(false); // level 2 needs Artesão
+  });
+
+  it('insured positions are protected from surprise shocks', () => {
+    let shocked = 0;
+    for (let seed = 0; seed < 300 && shocked < 5; seed++) {
+      const state = newGame(seed);
+      for (const c of Object.keys(state.shockRisk)) state.shockRisk[c] = 1;
+      buy(state, 'mines.deep', 50);
+      setHedge(state, 'mines.deep', true);
+      const r = assetRange(state, 'mines.deep');
+      const report = endWeek(state);
+      if (report.shocks.some((s) => s.companyId === 'mines.deep')) shocked++;
+      const pct = (report.positionPnl['mines.deep']! / 50) * 100;
+      const d = (r.high - r.low) / 4;
+      expect(pct).toBeGreaterThanOrEqual(r.low + d - 1e-9);
+    }
+    expect(shocked).toBeGreaterThan(0);
   });
 
   it('can be asked about the city and the districts by anyone', () => {

@@ -2,6 +2,7 @@ import './style.css';
 import {
   acceptAscension,
   buy,
+  buyPerk,
   consult,
   declineAscension,
   endWeek,
@@ -13,7 +14,7 @@ import {
   fmt,
 } from './sim/game';
 import { assetName, guildOfAsset, isBasket, isBond } from './sim/assets';
-import type { ExpertId, GameState } from './sim/types';
+import type { ExpertId, GameState, PerkId } from './sim/types';
 import { SCREENS, initialUi, render, type Screen } from './ui/render';
 import { clearGame, loadGame, saveGame } from './ui/storage';
 
@@ -75,6 +76,12 @@ root.addEventListener('click', (event) => {
     case 'open-asset':
       selectAsset(assetId);
       go('market');
+      break;
+    case 'tavern-tab':
+      ui.tavernTab = target.dataset.tab === 'hire' ? 'hire' : 'ask';
+      break;
+    case 'buy-perk':
+      report(buyPerk(state, target.dataset.perk as PerkId));
       break;
     case 'portfolio-tab':
       ui.portfolioTab = target.dataset.tab === 'returns' ? 'returns' : 'position';

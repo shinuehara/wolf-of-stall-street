@@ -4,10 +4,22 @@ import { nextRandom, type RngHolder } from './rng';
 export const BAND_COUNT = 4;
 
 /** Share of a news shift that shows up in the public range; the rest hides in the lean. */
-export const NEWS_VISIBILITY = 0.4;
+export const NEWS_VISIBILITY = 0.25;
+
+/** How strongly a news shift tilts the hidden lean (relative to the range width). */
+export const NEWS_LEAN = 1;
 
 /** How strongly the hidden lean concentrates probability on one side of the range. */
-const LEAN_SHARPNESS = 1.8;
+const LEAN_SHARPNESS = 2.2;
+
+/**
+ * Scales every drift (average weekly move). Without information, shares should earn only a
+ * little more than Crown bonds, with far more risk; the edge must come from information.
+ */
+export const DRIFT_SCALE = 0.3;
+
+/** How much the public range centre wanders from week to week, as a share of its width. */
+export const CENTER_NOISE = 0.06;
 
 /** The public range split into equal bands, each with its hidden probability. */
 export function bands(f: Forecast): Band[] {
@@ -81,8 +93,11 @@ export function generateForecast(
   shift: number,
 ): Forecast {
   const width = profile.width * (0.8 + 0.4 * nextRandom(rng));
-  const center = profile.drift + shift * NEWS_VISIBILITY + (nextRandom(rng) - 0.5) * width * 0.2;
-  const lean = clamp(nextRandom(rng) * 2 - 1 + (shift / width) * 2, -1, 1);
+  const center =
+    profile.drift * DRIFT_SCALE +
+    shift * NEWS_VISIBILITY +
+    (nextRandom(rng) - 0.5) * width * CENTER_NOISE;
+  const lean = clamp(nextRandom(rng) * 2 - 1 + (shift / width) * NEWS_LEAN, -1, 1);
 
   let low = Math.round(center - width / 2);
   let high = Math.round(center + width / 2);

@@ -99,7 +99,7 @@ describe('generateForecast', () => {
     // The public range moves a little; the true expected return moves a lot more.
     const publicShift = average([getEvent('dragon')], center) - average([], center);
     const trueShift = average([getEvent('dragon')], expectedReturn) - average([], expectedReturn);
-    expect(publicShift).toBeLessThan(-2);
+    expect(publicShift).toBeLessThan(-1);
     expect(trueShift).toBeLessThan(publicShift - 1);
   });
 });

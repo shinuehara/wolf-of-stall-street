@@ -1,6 +1,7 @@
 import {
   BOND_LOCK_MULTIPLIER,
   GUILDS,
+  TREASURER_BONUS,
   getClass,
   LOCAL_DEMAND,
   companiesOf,
@@ -48,7 +49,8 @@ export function isBond(assetId: string): boolean {
 
 /** Weekly rate of a Crown bond for the player's class (0.002 = 0.2%). */
 export function bondRate(state: GameState, assetId: string): number {
-  const base = getClass(state.classIndex).bondRate;
+  const bonus = state.perks.treasurer ? 1 + TREASURER_BONUS : 1;
+  const base = getClass(state.classIndex).bondRate * bonus;
   return assetId === BOND_LOCKED ? base * BOND_LOCK_MULTIPLIER : base;
 }
 

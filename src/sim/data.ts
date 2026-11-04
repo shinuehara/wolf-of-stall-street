@@ -5,6 +5,7 @@ import type {
   ExpertDef,
   GuildDef,
   LocalNewsTemplate,
+  PerkDef,
   RegionDef,
   RegionId,
   Sector,
@@ -15,8 +16,120 @@ export const SEASON_LENGTH = 4;
 export const STARTING_GOLD = 100;
 export const MAX_ACTIVE_EVENTS = 2;
 export const EVENT_CHANCE = 0.3;
-export const ASTROLOGER_ACCURACY = 0.75;
+/** Astrologer accuracy by Telescope level. */
+export const ASTROLOGER_ACCURACY = [0.6, 0.68, 0.75];
 export const DRUNK_ACCURACY = 0.5;
+/** Spy quality by Veteran Spy level: noise on his estimate and chance it is a planted lie. */
+export const SPY_NOISE = [1.2, 0.6, 0.3, 0.1];
+export const SPY_FAKE_CHANCE = [0.25, 0.12, 0.05, 0.01];
+export const SPY_CONFIDENCE = ['baixa', 'média', 'média', 'alta'] as const;
+
+/** Surprise shocks outside the announced range. */
+export const SHOCK_BASE_CHANCE = 0.02;
+export const SHOCK_HIGH_CHANCE = 0.12;
+/** Share of companies with a high shock risk in a given week. */
+export const SHOCK_HIGH_SHARE = 0.12;
+/** Most shocks are bad; some are windfalls. */
+export const SHOCK_GOOD_SHARE = 0.25;
+export const SHOCK_BAD_RANGE: [number, number] = [-28, -14];
+export const SHOCK_GOOD_RANGE: [number, number] = [12, 22];
+
+export const SHOCK_BAD_NEWS: readonly string[] = [
+  'Incêndio destrói o armazém {do} {c}!',
+  'Escândalo: o dono {do} {c} fugiu com o cofre!',
+  'Febre derruba metade dos trabalhadores {do} {c}.',
+  'Ladrões esvaziaram o depósito {do} {c} durante a noite.',
+  'O Rei confiscou os bens {do} {c} por dívida antiga.',
+];
+export const SHOCK_GOOD_NEWS: readonly string[] = [
+  '{c} achou um baú de moedas antigas no porão!',
+  'O Rei comprou todo o estoque {do} {c} de uma vez.',
+  'Um nobre excêntrico deixou herança para {o} {c}.',
+];
+
+export const PERKS: readonly PerkDef[] = [
+  {
+    id: 'telescope',
+    name: 'Telescópio da Astróloga',
+    icon: 'crystal',
+    description: 'Lentes melhores, profecias melhores.',
+    levels: [
+      { cost: 8, minClass: 0, effect: 'A Astróloga acerta 68% (antes 60%).' },
+      { cost: 25, minClass: 1, effect: 'A Astróloga acerta 75%.' },
+    ],
+  },
+  {
+    id: 'veteranSpy',
+    name: 'Espião Veterano',
+    icon: 'hood',
+    description: 'Um espião com mais anos de ofício erra menos e cai menos em furos plantados.',
+    levels: [
+      { cost: 15, minClass: 1, effect: 'Erro pela metade; furos plantados caem de 25% para 12%.' },
+      { cost: 35, minClass: 2, effect: 'Erro bem menor; furos plantados 5%.' },
+      { cost: 80, minClass: 4, effect: 'Quase sempre certeiro; furos plantados 1%.' },
+    ],
+  },
+  {
+    id: 'informants',
+    name: 'Rede de Informantes',
+    icon: 'scroll',
+    description: 'Moleques de recado que ouvem tudo pelas esquinas.',
+    levels: [
+      {
+        cost: 35,
+        minClass: 2,
+        effect:
+          'Avisa quais empresas estão com risco alto de choque (incêndio, escândalo…) nesta semana.',
+      },
+    ],
+  },
+  {
+    id: 'insurers',
+    name: 'Contrato com os Seguradores',
+    icon: 'shield',
+    description: 'Cliente antigo paga menos.',
+    levels: [{ cost: 25, minClass: 1, effect: 'Seguro 40% mais barato.' }],
+  },
+  {
+    id: 'chronicler',
+    name: 'Cronista',
+    icon: 'scroll',
+    description: 'Um velho que sabe a história de cada empresa da cidade.',
+    levels: [
+      {
+        cost: 30,
+        minClass: 2,
+        effect:
+          'Mostra quanto cada empresa sente a cidade, o setor e o bairro (os pesos da previsão).',
+      },
+    ],
+  },
+  {
+    id: 'scribe',
+    name: 'Livro-caixa do Escriba',
+    icon: 'scroll',
+    description: 'Registros antigos de preços.',
+    levels: [{ cost: 10, minClass: 0, effect: 'Gráficos com 40 semanas de histórico (antes 8).' }],
+  },
+  {
+    id: 'treasurer',
+    name: 'Amigo do Tesoureiro',
+    icon: 'crown',
+    description: 'Um conhecido no tesouro da Coroa consegue taxas melhores.',
+    levels: [{ cost: 60, minClass: 3, effect: 'Títulos da Coroa rendem 50% a mais.' }],
+  },
+];
+
+export function getPerk(id: string): PerkDef {
+  const perk = PERKS.find((p) => p.id === id);
+  if (!perk) throw new Error(`Unknown perk: ${id}`);
+  return perk;
+}
+
+export const INSURERS_DISCOUNT = 0.4;
+export const TREASURER_BONUS = 0.5;
+export const CHART_WEEKS_BASE = 8;
+export const CHART_WEEKS_SCRIBE = 40;
 export const MAX_COMPANY_EVENTS = 3;
 export const COMPANY_EVENT_CHANCE = 0.4;
 /** Crown bonds: the locked one pays this many times the class rate, for LOCK_WEEKS weeks. */
@@ -747,19 +860,20 @@ export const EXPERTS: readonly ExpertDef[] = [
     name: 'Astróloga',
     emoji: '🔮',
     description:
-      'Lê nos astros se um setor ou empresa pende para alta ou baixa. Acerta 3 em cada 4.',
-    baseCost: 0.05,
-    wealthCost: 0.0003,
+      'Lê nos astros se algo pende para alta ou baixa. Acerta 6 em cada 10 (melhora com o Telescópio).',
+    baseCost: 0.02,
+    wealthCost: 0.0002,
     minClass: 0,
   },
   {
     id: 'spy',
     name: 'Espião',
     emoji: '🕵️',
-    description: 'Traz a chance real de cada faixa de variação. Informação de primeira.',
-    baseCost: 0.15,
-    wealthCost: 0.001,
-    minClass: 1,
+    description:
+      'Estima a chance de cada faixa. Pode errar e cair em furos (melhora com o Espião Veterano).',
+    baseCost: 0.04,
+    wealthCost: 0.0005,
+    minClass: 0,
   },
 ];
 

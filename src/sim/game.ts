@@ -1,6 +1,19 @@
 import {
   ASTROLOGER_ACCURACY,
   BOND_LOCK_WEEKS,
+  INSURERS_DISCOUNT,
+  PERKS,
+  SHOCK_BAD_NEWS,
+  SHOCK_BAD_RANGE,
+  SHOCK_BASE_CHANCE,
+  SHOCK_GOOD_NEWS,
+  SHOCK_GOOD_RANGE,
+  SHOCK_GOOD_SHARE,
+  SHOCK_HIGH_CHANCE,
+  SHOCK_HIGH_SHARE,
+  SPY_CONFIDENCE,
+  SPY_FAKE_CHANCE,
+  SPY_NOISE,
   CITY,
   CITY_NEWS,
   COMPANIES,
@@ -27,6 +40,7 @@ import {
   getEvent,
   getExpert,
   getGuild,
+  getPerk,
   isRegionId,
 } from './data';
 import {
@@ -50,7 +64,10 @@ import type {
   Forecast,
   GameState,
   GuildDef,
+  Band,
   LogEntry,
+  PerkId,
+  Shock,
   SocialClass,
 } from './types';
 
@@ -71,6 +88,8 @@ export interface WeekReport {
   livingCost: number;
   seasonEnded: boolean;
   classChange: 'down' | 'stay' | 'up-offer' | null;
+  /** Surprises outside the announced ranges this week. */
+  shocks: Shock[];
 }
 
 const MAX_LOG = 60;
@@ -156,7 +175,7 @@ function cityProfile(state: GameState): { drift: number; width: number } {
 
 export function newGame(seed: number = Date.now() >>> 0): GameState {
   const state: GameState = {
-    version: 5,
+    version: 6,
     seed,
     rngState: seed,
     week: 0,
@@ -177,6 +196,8 @@ export function newGame(seed: number = Date.now() >>> 0): GameState {
     companyEvents: [],
     localNews: [],
     lockedBonds: [],
+    perks: {},
+    shockRisk: {},
     ledger: [],
     assetPnl: {},
     ascensionOffer: false,
@@ -234,13 +255,63 @@ export function expertCost(state: GameState, expertId: ExpertId): number {
   const expert = getExpert(expertId);
   if (expert.baseCost === 0 && expert.wealthCost === 0) return 0;
   const raw = expert.baseCost + expert.wealthCost * Math.max(0, wealth(state));
-  return Math.round(raw * 10) / 10;
+  return Math.round(raw * 100) / 100;
 }
 
 export function hedgeFee(state: GameState, assetId: string): number {
   const position = state.positions[assetId];
   if (!position?.hedged) return 0;
-  return position.value * currentClass(state).hedgeFeeRate;
+  const discount = state.perks.insurers ? 1 - INSURERS_DISCOUNT : 1;
+  return position.value * currentClass(state).hedgeFeeRate * discount;
+}
+
+export function perkLevel(state: GameState, id: PerkId): number {
+  return state.perks[id] ?? 0;
+}
+
+/** The next level of a perk the player could buy, or null when maxed out. */
+export function nextPerkLevel(state: GameState, id: PerkId) {
+  return getPerk(id).levels[perkLevel(state, id)] ?? null;
+}
+
+export function buyPerk(state: GameState, id: PerkId): ActionResult {
+  if (state.status !== 'playing') return fail('O jogo terminou.');
+  const perk = getPerk(id);
+  const level = nextPerkLevel(state, id);
+  if (!level) return fail(`${perk.name} já está no nível máximo.`);
+  if (state.classIndex < level.minClass) {
+    return fail(`Só a partir de ${getClass(level.minClass).name}.`);
+  }
+  if (state.cash < level.cost) return fail('Você não tem florins livres para pagar.');
+  state.cash -= level.cost;
+  state.perks[id] = perkLevel(state, id) + 1;
+  log(
+    state,
+    `Você contratou: ${perk.name}${perk.levels.length > 1 ? ` (nível ${state.perks[id]})` : ''}.`,
+    'good',
+  );
+  return ok;
+}
+
+export { PERKS };
+
+/** Standard normal sample (Box-Muller). */
+function gaussian(state: GameState): number {
+  const u = Math.max(1e-9, nextRandom(state));
+  const v = nextRandom(state);
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+/** The spy's estimate: true bands blurred by noise, sometimes a planted mirror image. */
+function spyEstimate(state: GameState, forecast: Forecast): Band[] {
+  const level = Math.min(perkLevel(state, 'veteranSpy'), SPY_NOISE.length - 1);
+  const noise = SPY_NOISE[level]!;
+  const planted = nextRandom(state) < SPY_FAKE_CHANCE[level]!;
+  const truth = bands(forecast);
+  let weights = truth.map((b) => b.p * Math.exp(noise * gaussian(state)));
+  if (planted) weights = [...weights].reverse();
+  const total = weights.reduce((a, b) => a + b, 0);
+  return truth.map((b, i) => ({ ...b, p: weights[i]! / total }));
 }
 
 /**
@@ -355,9 +426,20 @@ export function consult(state: GameState, expertId: ExpertId, targetId: string):
 
   state.cash -= cost;
   if (expertId === 'spy') {
-    state.insights.push({ expert: 'spy', targetId, bands: bands(forecast) });
+    const level = Math.min(perkLevel(state, 'veteranSpy'), SPY_CONFIDENCE.length - 1);
+    state.insights.push({
+      expert: 'spy',
+      targetId,
+      bands: spyEstimate(state, forecast),
+      confidence: SPY_CONFIDENCE[level]!,
+    });
   } else {
-    const accuracy = expertId === 'astrologer' ? ASTROLOGER_ACCURACY : DRUNK_ACCURACY;
+    const accuracy =
+      expertId === 'astrologer'
+        ? ASTROLOGER_ACCURACY[
+            Math.min(perkLevel(state, 'telescope'), ASTROLOGER_ACCURACY.length - 1)
+          ]!
+        : DRUNK_ACCURACY;
     const truth = leansUp(forecast);
     const honest = nextRandom(state) < accuracy;
     state.insights.push({ expert: expertId, targetId, leansUp: honest ? truth : !truth });
@@ -409,6 +491,7 @@ export function endWeek(state: GameState): WeekReport {
     livingCost: cls.livingCost,
     seasonEnded: false,
     classChange: null,
+    shocks: [],
   };
 
   // An unanswered title offer expires when the week ends.
@@ -426,6 +509,20 @@ export function endWeek(state: GameState): WeekReport {
   const moves = sampled.assets;
   report.marketReturns = moves;
   report.factorMoves = sampled.factors;
+
+  // Surprises nobody announced: fires, scandals, windfalls.
+  for (const company of COMPANIES) {
+    if (nextRandom(state) >= (state.shockRisk[company.id] ?? SHOCK_BASE_CHANCE)) continue;
+    const good = nextRandom(state) < SHOCK_GOOD_SHARE;
+    const [lo, hi] = good ? SHOCK_GOOD_RANGE : SHOCK_BAD_RANGE;
+    const move = lo + (hi - lo) * nextRandom(state);
+    const headline = companyHeadline(pick(state, good ? SHOCK_GOOD_NEWS : SHOCK_BAD_NEWS), company);
+    moves[company.id] = (moves[company.id] ?? 0) + move;
+    moves[company.guildId] =
+      (moves[company.guildId] ?? 0) + move / companiesOf(company.guildId).length;
+    report.shocks.push({ companyId: company.id, move, headline });
+    if (isAssetUnlocked(state, company.id)) log(state, headline, good ? 'good' : 'bad');
+  }
 
   for (const [assetId, position] of Object.entries(state.positions)) {
     if (isBond(assetId)) continue;
@@ -632,6 +729,10 @@ export function localShift(state: GameState, targetId: string): number {
 
 function rollForecasts(state: GameState): void {
   stepCycle(state);
+  for (const company of COMPANIES) {
+    state.shockRisk[company.id] =
+      nextRandom(state) < SHOCK_HIGH_SHARE ? SHOCK_HIGH_CHANCE : SHOCK_BASE_CHANCE;
+  }
   state.cityForecast = generateForecast(state, cityProfile(state), localShift(state, 'city'));
   for (const region of REGIONS) {
     state.regionForecasts[region.id] = generateForecast(

@@ -1,4 +1,8 @@
 import {
+  CHART_WEEKS_BASE,
+  CHART_WEEKS_SCRIBE,
+  INSURERS_DISCOUNT,
+  PERKS,
   BOND_LOCK_MULTIPLIER,
   BOND_LOCK_WEEKS,
   CITY,
@@ -38,6 +42,8 @@ import {
   fmt,
   hedgeFee,
   isGuildUnlocked,
+  nextPerkLevel,
+  perkLevel,
   season,
   wealth,
   weeksUntilSeasonEnd,
@@ -64,6 +70,8 @@ export interface UiState {
   /** On narrow screens the market shows either the list or one asset's detail. */
   marketDetailOpen: boolean;
   tavernExpert: ExpertId;
+  /** Tavern view: ask experts or hire perks. */
+  tavernTab: 'ask' | 'hire';
   amounts: Record<string, string>;
   lastReport: WeekReport | null;
   weekNews: LogEntry[];
@@ -82,6 +90,7 @@ export function initialUi(): UiState {
     expandedGuilds: { bakers: true },
     marketDetailOpen: false,
     tavernExpert: 'astrologer',
+    tavernTab: 'ask',
     amounts: {},
     lastReport: null,
     weekNews: [],
@@ -170,7 +179,8 @@ const COMPANY_COLORS = ['var(--blue)', 'var(--purple)', 'var(--orange)'];
 const SCALE = 25;
 
 /** Weeks of history shown in charts. */
-const CHART_WEEKS = 40;
+/** Weeks of history shown in charts; set per render from the Scribe perk. */
+let CHART_WEEKS = CHART_WEEKS_BASE;
 
 function assetSprite(assetId: string): SpriteName {
   if (isBond(assetId)) return 'crown';
@@ -207,6 +217,7 @@ function cityBetaLabel(value: number): string {
 // ---------------------------------------------------------------------------
 
 export function render(state: GameState, ui: UiState): string {
+  CHART_WEEKS = state.perks.scribe ? CHART_WEEKS_SCRIBE : CHART_WEEKS_BASE;
   const screen = SCREENS.find((s) => s.id === ui.screen) ?? SCREENS[0]!;
   return `
     <div class="game">
@@ -596,7 +607,7 @@ function renderGuildGroup(state: GameState, ui: UiState, guild: GuildDef): strin
       ${toggle}
       <button class="guild-row ${isCompany ? 'company-row' : ''}" data-action="select-asset" data-asset="${assetId}">
         ${isCompany ? '<span class="tree">└</span>' : sprite(GUILD_SPRITE[guild.id]!, 28)}
-        <span class="row-name">${label}</span>
+        <span class="row-name">${label}${state.perks.informants && (state.shockRisk[assetId] ?? 0) > 0.05 ? ' <span class="warn" title="Informantes: risco alto de choque">⚠</span>' : ''}</span>
         <span class="row-range">${pct(r.low, 0)} a ${pct(r.high, 0)}</span>
         <span class="row-pos ${position ? 'gold' : 'muted'}">${position ? `${fmt(position.value)} fl${position.hedged ? ' 🛡' : ''}` : '—'}${extra}</span>
       </button>
@@ -737,7 +748,11 @@ function renderAssetDetail(state: GameState, ui: UiState, assetId: string): stri
   const position = state.positions[assetId];
   const playing = state.status === 'playing';
   const hedgeRange = hedgeBounds(range);
-  const fee = position ? position.value * currentClass(state).hedgeFeeRate : 0;
+  const fee = position
+    ? position.value *
+      currentClass(state).hedgeFeeRate *
+      (state.perks.insurers ? 1 - INSURERS_DISCOUNT : 1)
+    : 0;
   const lastMove = ui.lastReport?.marketReturns[assetId];
   const lastPnl = ui.lastReport?.positionPnl[assetId];
   const components = componentsOf(assetId);
@@ -759,7 +774,14 @@ function renderAssetDetail(state: GameState, ui: UiState, assetId: string): stri
   const localNews = state.localNews
     .filter((n) => n.targetId === 'city' || components.some((c) => c.regionId === n.targetId))
     .map((n) => ({ label: `${localTag(n.targetId)}: ${n.headline}`, shift: 0 }));
-  const news = [...sectorNews, ...companyNews, ...localNews];
+  const warned = state.perks.informants
+    ? components.filter((c) => (state.shockRisk[c.id] ?? 0) > 0.05)
+    : [];
+  const shockNews = warned.map((c) => ({
+    label: `⚠ Informantes: risco de choque em ${c.name}`,
+    shift: -1,
+  }));
+  const news = [...shockNews, ...sectorNews, ...companyNews, ...localNews];
 
   const price = `<div class="detail-price">
       <strong>${fmt(asset.price)} fl</strong>
@@ -805,10 +827,13 @@ function renderAssetDetail(state: GameState, ui: UiState, assetId: string): stri
     ? `<p class="muted small breakdown">= ${companyExposures(company)
         .map(({ factorId, weight }) => {
           const f = factorForecast(state, factorId);
-          const w = factorId === company.id ? '' : ` ×${fmtBeta(weight)}`;
+          const w =
+            factorId === company.id || !state.perks.chronicler ? '' : ` ×${fmtBeta(weight)}`;
           return `${factorLabel(factorId)} ${pct(f.low, 0)} a ${pct(f.high, 0)}${w}`;
         })
-        .join(' + ')}</p>`
+        .join(
+          ' + ',
+        )}${state.perks.chronicler ? '' : ' <span class="hint-perk">(os pesos de cada parte: contrate o Cronista)</span>'}</p>`
     : '';
 
   return `${back}${head(price)}
@@ -853,7 +878,7 @@ function renderAssetDetail(state: GameState, ui: UiState, assetId: string): stri
               ? `<label class="hedge ${position.hedged ? 'on' : ''}">
                   <input type="checkbox" data-hedge="${assetId}" ${position.hedged ? 'checked' : ''} ${playing ? '' : 'disabled'} />
                   ${sprite('shield', 20)}
-                  <span>Seguro: limita a <strong>${pct(hedgeRange.floor)} a ${pct(hedgeRange.cap)}</strong> por ${fmt(fee)} fl/sem</span>
+                  <span>Seguro: limita a <strong>${pct(hedgeRange.floor)} a ${pct(hedgeRange.cap)}</strong>, inclusive contra choques, por ${fmtCost(fee)} fl/sem</span>
                 </label>`
               : '<p class="muted small">Vender sem valor vende tudo.</p>'
           }
@@ -992,9 +1017,9 @@ function renderInsight(insight: Insight, full: boolean): string {
       return `<div class="insight">${sprite('crystal', 20)}${about}<span>Os astros apontam para <strong class="${insight.leansUp ? 'up' : 'down'}">${insight.leansUp ? 'ALTA' : 'BAIXA'}</strong>.</span></div>`;
     case 'spy':
       if (!full) {
-        return `<div class="insight">${sprite('hood', 20)}${about}<span>Chances: ${insight.bands.map((b) => `${Math.round(b.p * 100)}%`).join(' · ')}</span></div>`;
+        return `<div class="insight">${sprite('hood', 20)}${about}<span>Chances: ${insight.bands.map((b) => `${Math.round(b.p * 100)}%`).join(' · ')} <span class="confidence conf-${insight.confidence}">confiança ${insight.confidence}</span></span></div>`;
       }
-      return `<div class="insight insight-spy">${sprite('hood', 20)}${about}
+      return `<div class="insight insight-spy">${sprite('hood', 20)}${about}<span class="confidence conf-${insight.confidence}">confiança ${insight.confidence}</span>
         <div class="bands">${insight.bands
           .map(
             (b) => `<div class="band" title="${pct(b.from)} a ${pct(b.to)}">
@@ -1233,6 +1258,46 @@ function renderReturns(state: GameState): string {
 // ---------------------------------------------------------------------------
 
 function renderTavern(state: GameState, ui: UiState): string {
+  const tab = (id: UiState['tavernTab'], label: string) =>
+    `<button role="tab" class="tab ${ui.tavernTab === id ? 'active' : ''}" aria-selected="${ui.tavernTab === id}" data-action="tavern-tab" data-tab="${id}">${label}</button>`;
+  return `<div class="tavern-wrap">
+    <div class="tabs" role="tablist">${tab('ask', 'Perguntar')}${tab('hire', 'Contratar melhorias')}</div>
+    ${ui.tavernTab === 'hire' ? renderPerkShop(state) : renderAsk(state, ui)}
+  </div>`;
+}
+
+function renderPerkShop(state: GameState): string {
+  const playing = state.status === 'playing';
+  return `<div class="perk-grid">${PERKS.map((perk) => {
+    const level = perkLevel(state, perk.id);
+    const next = nextPerkLevel(state, perk.id);
+    const classOk = next ? state.classIndex >= next.minClass : false;
+    const affordable = next ? state.cash >= next.cost : false;
+    return `<article class="perk px ${level > 0 ? 'owned' : ''}">
+      <header class="perk-head">
+        ${sprite(perk.icon as SpriteName, 32)}
+        <div><h3>${perk.name}</h3><span class="muted small">${perk.description}</span></div>
+      </header>
+      <ol class="perk-levels">${perk.levels
+        .map(
+          (l, i) => `<li class="${i < level ? 'done' : i === level ? 'next' : ''}">
+            <span>${i < level ? '✔' : perk.levels.length > 1 ? `Nv ${i + 1}` : ''} ${l.effect}</span>
+          </li>`,
+        )
+        .join('')}</ol>
+      ${
+        next
+          ? `<div class="perk-buy">
+              <span class="${classOk ? 'muted' : 'down'} small">${classOk ? '' : `🔒 a partir de ${getClass(next.minClass).name}`}</span>
+              <button class="pbtn pbtn-small" data-action="buy-perk" data-perk="${perk.id}" ${playing && classOk && affordable ? '' : 'disabled'}>Contratar · ${fmt(next.cost)} fl</button>
+            </div>`
+          : '<div class="perk-buy"><span class="up small">Nível máximo</span></div>'
+      }
+    </article>`;
+  }).join('')}</div>`;
+}
+
+function renderAsk(state: GameState, ui: UiState): string {
   const playing = state.status === 'playing';
   const expert = EXPERTS.find((e) => e.id === ui.tavernExpert)!;
   const expertLocked = state.classIndex < expert.minClass;
@@ -1254,7 +1319,7 @@ function renderTavern(state: GameState, ui: UiState): string {
             <strong>${e.name}</strong>
             <span class="small">${e.description}</span>
           </span>
-          <span class="expert-cost ${locked ? 'muted' : 'gold'}">${locked ? `🔒 ${getClass(e.minClass).name}` : cost === 0 ? 'grátis' : `${fmt(cost)} fl por pergunta`}</span>
+          <span class="expert-cost ${locked ? 'muted' : 'gold'}">${locked ? `🔒 ${getClass(e.minClass).name}` : cost === 0 ? 'grátis' : `${fmtCost(cost)} fl por pergunta`}</span>
         </button>`;
       }).join('')}
     </div>
@@ -1438,6 +1503,11 @@ function sumPnl(report: WeekReport): number {
 
 function reportNet(report: WeekReport): number {
   return sumPnl(report) + report.bondIncome - report.hedgeFees - report.livingCost;
+}
+
+/** Small amounts (expert fees, premiums) with two decimals. */
+function fmtCost(value: number): string {
+  return value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function fmtBeta(beta: number): string {

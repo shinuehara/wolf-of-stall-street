@@ -1,83 +1,144 @@
-import { GUILDS, companiesOf } from './data';
-import { BOND_LIQUID, assetExpectedReturn, assetRange } from './assets';
-import { acceptAscension, buy, consult, endWeek, isGuildUnlocked, newGame, sell } from './game';
-import type { GameState, Insight } from './types';
+import { COMPANIES, GUILDS, companiesOf, getClass } from './data';
+import { BOND_LIQUID, companyExposures, factorForecast } from './assets';
+import {
+  acceptAscension,
+  buy,
+  buyPerk,
+  consult,
+  endWeek,
+  isGuildUnlocked,
+  newGame,
+  nextPerkLevel,
+  perkLevel,
+  sell,
+} from './game';
+import type { ExpertId, GameState, PerkId } from './types';
 
 /**
- * Scripted players used to check game balance. Not part of the game itself.
+ * Scripted players used to check game balance. Not part of the game itself. They only use
+ * what a player can see: public ranges and what experts told them (noisy, sometimes false).
+ *
+ * - bonds: everything in the liquid Crown bond.
  * - naive: trusts only the herald's public ranges.
- * - astrologer: asks the Astrologer about the two most promising guilds and their companies.
- * - spy: asks the Spy (when allowed) about the two most promising guilds and their companies.
+ * - astrologer: also asks the Astrologer, never buys perks.
+ * - spy: asks the Spy when allowed (Astrologer before that), never buys perks.
+ * - perks: like spy, but buys perks as soon as it can afford them, hedges risky picks.
  */
-export type BotStrategy = 'naive' | 'astrologer' | 'spy';
+export type BotStrategy = 'bonds' | 'naive' | 'astrologer' | 'spy' | 'perks';
 
 export interface BotResult {
   status: GameState['status'];
   weeks: number;
   classIndex: number;
+  classDrops: number;
+  /** Worst week, in % of wealth. */
+  worstWeek: number;
+  /** Average weekly change of wealth, in %. */
+  avgWeek: number;
+  /** Average weekly gain from positions alone, in % of wealth. */
+  avgMarket: number;
+  /** Average weekly spending on experts, perks and titles, in % of wealth. */
+  avgOther: number;
 }
 
-const MAX_WEEKS = 400;
+const MAX_WEEKS = 300;
 
-function center(state: GameState, assetId: string): number {
-  const r = assetRange(state, assetId);
-  return (r.low + r.high) / 2;
+const PERK_PRIORITY: PerkId[] = ['veteranSpy', 'informants', 'treasurer'];
+
+function center(state: GameState, factorId: string): number {
+  const f = factorForecast(state, factorId);
+  return (f.low + f.high) / 2;
 }
 
-function leanAdjust(insight: Insight | undefined, width: number): number {
-  if (!insight || insight.expert === 'spy') return 0;
-  return (insight.leansUp ? 1 : -1) * width * 0.1;
+/** What the bot believes a factor will do, from public ranges and expert insights. */
+function believedMove(state: GameState, factorId: string): number {
+  const f = factorForecast(state, factorId);
+  const spy = state.insights.find((i) => i.targetId === factorId && i.expert === 'spy');
+  if (spy?.expert === 'spy') return spy.bands.reduce((s, b) => s + b.p * ((b.from + b.to) / 2), 0);
+  const astro = state.insights.find((i) => i.targetId === factorId && i.expert === 'astrologer');
+  if (astro?.expert === 'astrologer') {
+    return center(state, factorId) + (astro.leansUp ? 1 : -1) * (f.high - f.low) * 0.06;
+  }
+  return center(state, factorId);
+}
+
+function believedAsset(state: GameState, assetId: string): number {
+  const companies = GUILDS.some((g) => g.id === assetId)
+    ? companiesOf(assetId)
+    : COMPANIES.filter((c) => c.id === assetId);
+  const moves = companies.map((c) =>
+    companyExposures(c).reduce((s, e) => s + e.weight * believedMove(state, e.factorId), 0),
+  );
+  return moves.reduce((a, b) => a + b, 0) / moves.length;
 }
 
 export function playBot(seed: number, strategy: BotStrategy): BotResult {
   const state = newGame(seed);
+  let classDrops = 0;
+  let worstWeek = 0;
   while (state.status === 'playing' && state.week < MAX_WEEKS) {
     for (const id of Object.keys(state.positions)) sell(state, id, Infinity);
 
-    const guilds = GUILDS.filter((g) => isGuildUnlocked(state, g)).sort(
-      (a, b) => center(state, b.id) - center(state, a.id),
-    );
-    const estimates: [string, number][] = [];
-    for (const [rank, guild] of guilds.entries()) {
-      const companies = companiesOf(guild.id);
-      const assets = [guild.id, ...companies.map((c) => c.id)];
-      const researched = strategy !== 'naive' && rank < 2;
-      if (!researched) {
-        for (const id of assets) estimates.push([id, center(state, id)]);
-        continue;
+    if (strategy === 'perks') {
+      for (const id of PERK_PRIORITY) {
+        const next = nextPerkLevel(state, id);
+        const floor = getClass(state.classIndex).floor;
+        if (next && state.classIndex >= next.minClass && state.cash - next.cost > floor * 1.15) {
+          buyPerk(state, id);
+        }
       }
-      const expert = strategy === 'spy' && state.classIndex >= 1 ? 'spy' : 'astrologer';
-      for (const id of assets) consult(state, expert, id);
-      if (expert === 'spy') {
-        for (const id of assets) estimates.push([id, assetExpectedReturn(state, id)]);
-        continue;
-      }
-      const find = (id: string) =>
-        state.insights.find((i) => i.targetId === id && i.expert === expert);
-      const sectorAdj = leanAdjust(find(guild.id), guild.width);
-      for (const c of companies) {
-        estimates.push([
-          c.id,
-          center(state, c.id) + c.beta * sectorAdj + leanAdjust(find(c.id), c.width),
-        ]);
-      }
-      const avgBeta = companies.reduce((s, c) => s + c.beta, 0) / companies.length;
-      estimates.push([guild.id, center(state, guild.id) + avgBeta * sectorAdj]);
     }
 
-    const picks = estimates
-      .filter(([, ev]) => ev > (strategy === 'naive' ? 0.3 : 0.8))
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, strategy === 'naive' ? 3 : 1);
-    const budget = state.cash * 0.9;
-    for (const [id] of picks) buy(state, id, budget / picks.length);
-    // Idle gold earns nothing: park the rest in the liquid Crown bond.
-    if (state.cash > 1) buy(state, BOND_LIQUID, state.cash - 1);
+    if (strategy !== 'bonds') {
+      const guilds = GUILDS.filter((g) => isGuildUnlocked(state, g)).sort(
+        (a, b) => believedAsset(state, b.id) - believedAsset(state, a.id),
+      );
+      if (strategy !== 'naive') {
+        const expert: ExpertId = strategy === 'spy' || strategy === 'perks' ? 'spy' : 'astrologer';
+        // Five questions a week (eight with perks): the most promising sectors and the best
+        // guilds' companies.
+        const deep = 1;
+        const targets = [
+          ...guilds.slice(0, 2).map((g) => g.id),
+          ...guilds.slice(0, deep).flatMap((g) => companiesOf(g.id).map((c) => c.id)),
+        ];
+        for (const id of targets) consult(state, expert, id);
+      }
 
+      const candidates = guilds.flatMap((g) => [g.id, ...companiesOf(g.id).map((c) => c.id)]);
+      const risky = (id: string) =>
+        perkLevel(state, 'informants') > 0 && (state.shockRisk[id] ?? 0) > 0.05;
+      const picks = candidates
+        .map((id) => [id, believedAsset(state, id)] as const)
+        .filter(([id, ev]) => ev > (strategy === 'naive' ? 0.3 : 0.8) && !risky(id))
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, strategy === 'naive' ? 3 : 2);
+      const budget = state.cash * 0.85;
+      for (const [id] of picks) buy(state, id, budget / picks.length);
+    }
+    // Idle gold earns nothing: park the rest in the liquid Crown bond.
+    if (state.cash > 2) buy(state, BOND_LIQUID, state.cash - 2);
+
+    const before = state.ledger.length;
+    const classBefore = state.classIndex;
     endWeek(state);
+    const record = state.ledger[before];
+    if (record) worstWeek = Math.min(worstWeek, (record.endWealth / record.startWealth - 1) * 100);
+    if (state.classIndex < classBefore) classDrops++;
     if (state.ascensionOffer) acceptAscension(state);
   }
-  return { status: state.status, weeks: state.week, classIndex: state.classIndex };
+  const pctOf = (f: (r: GameState['ledger'][number]) => number) =>
+    state.ledger.reduce((s, r) => s + (f(r) / r.startWealth) * 100, 0) / (state.ledger.length || 1);
+  return {
+    status: state.status,
+    weeks: state.week,
+    classIndex: state.classIndex,
+    classDrops,
+    worstWeek,
+    avgWeek: pctOf((r) => r.endWealth - r.startWealth),
+    avgMarket: pctOf((r) => r.marketPnl),
+    avgOther: pctOf((r) => r.other),
+  };
 }
 
 export function summarize(results: BotResult[]) {
@@ -85,6 +146,18 @@ export function summarize(results: BotResult[]) {
   return {
     won: won.length,
     lost: results.filter((r) => r.status === 'lost').length,
-    avgWeeksToWin: won.reduce((sum, r) => sum + r.weeks, 0) / (won.length || 1),
+    avgWeeksToWin: Math.round(won.reduce((sum, r) => sum + r.weeks, 0) / (won.length || 1)),
+    avgFinalClass: Number(
+      (results.reduce((s, r) => s + r.classIndex, 0) / results.length).toFixed(2),
+    ),
+    avgClassDrops: Number(
+      (results.reduce((s, r) => s + r.classDrops, 0) / results.length).toFixed(2),
+    ),
+    avgWorstWeek: Number(
+      (results.reduce((s, r) => s + r.worstWeek, 0) / results.length).toFixed(1),
+    ),
+    avgWeek: Number((results.reduce((s, r) => s + r.avgWeek, 0) / results.length).toFixed(2)),
+    avgMarket: Number((results.reduce((s, r) => s + r.avgMarket, 0) / results.length).toFixed(2)),
+    avgOther: Number((results.reduce((s, r) => s + r.avgOther, 0) / results.length).toFixed(2)),
   };
 }
