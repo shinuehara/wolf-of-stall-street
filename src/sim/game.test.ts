@@ -197,7 +197,7 @@ describe('experts', () => {
   it('experts rank up with their perk', () => {
     const state = newGame(2);
     expect(expertRankName('spy', expertLevel(state, 'spy'))).toBe('Espião Aprendiz');
-    state.perks.veteranSpy = 3;
+    state.perks.veteranSpy = 4;
     expect(expertRankName('spy', expertLevel(state, 'spy'))).toBe('Mestre Espião');
     expect(buyPerk(state, 'drunkCare').ok).toBe(true);
     expect(expertRankName('drunk', expertLevel(state, 'drunk'))).toBe('Bêbado de Meio-Dia');
@@ -245,6 +245,56 @@ describe('experts', () => {
       if (r.expert === 'drunk' && r.ramble) rambles++;
     }
     expect(rambles).toBeLessThan(15);
+  });
+
+  it('the Astrologer reads more stars as she is trained', () => {
+    const state = newGame(4);
+    state.purse = 50;
+    consult(state, 'astrologer', 'bakers');
+    const one = state.insights[0]!;
+    if (one.expert !== 'astrologer') throw new Error('expected a reading');
+    expect(one.votes).toHaveLength(1);
+    state.perks.telescope = 4;
+    consult(state, 'astrologer', 'mines');
+    // Oracle rank: five stars, and the guild map reads the three companies too
+    const readings = state.insights.filter((i) => i.expert === 'astrologer');
+    expect(readings).toHaveLength(5);
+    for (const r of readings.slice(1)) {
+      if (r.expert !== 'astrologer') continue;
+      expect(r.votes).toHaveLength(5);
+      expect(r.leansUp).toBe(r.votes.filter(Boolean).length >= 3);
+    }
+  });
+
+  it('the Analyst spy breaks an asset down; the Experienced one reports the whole guild', () => {
+    const state = newGame(6);
+    state.purse = 50;
+    state.perks.veteranSpy = 2;
+    consult(state, 'spy', 'bakers.royal');
+    const analysis = state.insights[0]!;
+    if (analysis.expert !== 'spy') throw new Error('expected a spy answer');
+    expect(analysis.parts?.map((p) => p.key)).toEqual(['city', 'bakers', 'crown', 'bakers.royal']);
+    state.perks.veteranSpy = 3;
+    consult(state, 'spy', 'mines');
+    const minesTargets = state.insights
+      .filter((i) => i.targetId.startsWith('mines'))
+      .map((i) => i.targetId);
+    expect(minesTargets).toHaveLength(4);
+  });
+
+  it('the first expert you train becomes your confidant and trains for half price', () => {
+    const state = newGame(2);
+    state.classIndex = 4;
+    state.purse = 100;
+    expect(state.confidant).toBeNull();
+    buyPerk(state, 'telescope');
+    expect(state.confidant).toBe('astrologer');
+    const before = state.purse;
+    buyPerk(state, 'telescope');
+    expect(before - state.purse).toBeCloseTo(getPerk('telescope').levels[1]!.cost / 2);
+    const spyBefore = state.purse;
+    buyPerk(state, 'veteranSpy');
+    expect(spyBefore - state.purse).toBeCloseTo(getPerk('veteranSpy').levels[0]!.cost);
   });
 
   it('the Veteran Spy perk makes the estimate sharper', () => {

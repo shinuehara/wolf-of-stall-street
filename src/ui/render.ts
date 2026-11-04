@@ -5,6 +5,12 @@ import {
   MANAGERS,
   getInvestor,
   ASTROLOGER_ACCURACY,
+  ASTRO_GUILD_REPORT_LEVEL,
+  ASTRO_VOTES,
+  ASTROS,
+  DRUNK_FILLER,
+  SPY_BREAKDOWN_LEVEL,
+  SPY_GUILD_REPORT_LEVEL,
   DRUNK_DRINKS_PER_WEEK,
   DRUNK_PLACES,
   DRUNK_RAMBLE_CHANCE,
@@ -58,6 +64,8 @@ import {
   expertCost,
   fmt,
   hedgeFee,
+  expertOfPerk,
+  perkCost,
   tradeFee,
   ascensionCost,
   expertLevel,
@@ -1163,15 +1171,26 @@ function expertBlurb(expert: ExpertId, level: number): string {
       return `Uma bebida, uma fofoca. Nunca mente, mas às vezes só fala bobagem. ${clues[Math.min(level, 4)]}`;
     }
     case 'astrologer': {
-      const acc = ASTROLOGER_ACCURACY[Math.min(level, ASTROLOGER_ACCURACY.length - 1)]!;
-      return `Diz se o trimestre termina acima ou abaixo do meio da profecia. Acerta ${pctText(acc)}${level < 2 ? ' (melhora com o Telescópio)' : ''}.`;
+      const rank = Math.min(level, ASTRO_VOTES.length - 1);
+      const n = ASTRO_VOTES[rank]!;
+      const acc = ASTROLOGER_ACCURACY[rank]!;
+      return `Lê ${n === 1 ? 'um astro' : `${n} astros`} sobre o fim do trimestre (alta ou baixa); cada um acerta ${pctText(acc)}.${level >= ASTRO_GUILD_REPORT_LEVEL ? ' Mapa da guilda: a cesta traz as 3 empresas.' : ''}`;
     }
     case 'spy': {
-      const fake = SPY_FAKE_CHANCE[Math.min(level, SPY_FAKE_CHANCE.length - 1)]!;
-      const quality = ['Erra muito', 'Erra menos', 'Erra pouco', 'Quase não erra'][
-        Math.min(level, 3)
-      ];
-      return `Estima onde o ativo termina o trimestre, faixa por faixa. ${quality}; ${pctText(fake)} das respostas são furos plantados${level < 3 ? ' (melhora com o Espião Veterano)' : ''}.`;
+      const rank = Math.min(level, SPY_FAKE_CHANCE.length - 1);
+      const fake = SPY_FAKE_CHANCE[rank]!;
+      const quality = [
+        'Erra muito',
+        'Erra menos',
+        'Erra pouco',
+        'Erra bem pouco',
+        'Quase não erra',
+      ][rank];
+      const extras = [
+        level >= SPY_BREAKDOWN_LEVEL ? 'análise completa' : '',
+        level >= SPY_GUILD_REPORT_LEVEL ? 'relatório da guilda' : '',
+      ].filter(Boolean);
+      return `Estima onde o ativo termina o trimestre, faixa por faixa. ${quality}; ${pctText(fake)} de furos plantados.${extras.length ? ` Inclui ${extras.join(' e ')}.` : ''}`;
     }
   }
 }
@@ -1180,8 +1199,22 @@ function expertBlurb(expert: ExpertId, level: number): string {
  * The Drunk's rumour as he can say it now: the more he is trained, the more clues come with
  * it (guild icon and the district; the district icon; up or down; the company itself).
  */
+/** The mumbling around a rumour: lots for the rookie, none once he is nearly sober. */
+function drunkPadding(insight: Extract<Insight, { expert: 'drunk' }>, core: string): string {
+  const before = [3, 2, 1, 0, 0][Math.min(DRUNK_LEVEL, 4)]!;
+  const after = [2, 1, 0, 0, 0][Math.min(DRUNK_LEVEL, 4)]!;
+  // A fixed shuffle per rumour, so the same mumbling comes back and never repeats itself.
+  let seed = hashString(`${insight.week}|${insight.targetId}|${insight.line}|${insight.up}`) || 1;
+  const order = DRUNK_FILLER.map((text, i) => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return { text, key: (seed >> 8) + i };
+  }).sort((x, y) => x.key - y.key);
+  const said = order.map((o) => esc(o.text));
+  return [...said.slice(0, before), core, ...said.slice(before, before + after)].join(' ');
+}
+
 function drunkLine(insight: Extract<Insight, { expert: 'drunk' }>): string {
-  if (insight.ramble) return esc(DRUNK_RAMBLES[insight.line] ?? '');
+  if (insight.ramble) return drunkPadding(insight, esc(DRUNK_RAMBLES[insight.line] ?? ''));
   const company = getCompany(insight.targetId);
   const guild = getGuild(company.guildId);
   const text = DRUNK_RUMORS[guild.sector][insight.up ? 'up' : 'down'][insight.line] ?? '';
@@ -1201,7 +1234,8 @@ function drunkLine(insight: Extract<Insight, { expert: 'drunk' }>): string {
         ? ` <span class="standing standing-${company.regionId}">${getRegion(company.regionId).name}</span>`
         : '';
   const place = lv >= 1 ? `${DRUNK_PLACES[company.regionId]}${placeChip}` : '';
-  return esc(text).replace('{S}', sectorClue).replace('{R}', place);
+  const core = esc(text).replace('{S}', sectorClue).replace('{R}', place);
+  return drunkPadding(insight, DRUNK_LEVEL >= 3 ? `<strong>${core}</strong>` : core);
 }
 
 /** A rank badge for an expert, coloured from rookie to master. */
@@ -1227,8 +1261,19 @@ function renderInsight(insight: Insight, full: boolean, week = insight.week): st
       const when = `<span class="insight-about">${insight.ramble ? 'Bobagem ' : DRUNK_LEVEL >= 4 ? `${getCompany(insight.targetId).name} ` : 'Fofoca '}<span class="muted small">${age === 0 ? 'esta semana' : `há ${age} sem.`}</span></span>`;
       return `<div class="insight insight-drunk">${drunkFace}${when}${rankBadge('drunk', DRUNK_LEVEL)}<span><em>“${drunkLine(insight)}”</em></span></div>`;
     }
-    case 'astrologer':
-      return `<div class="insight">${face}${about}${badge}<span>Os astros apontam para <strong class="${insight.leansUp ? 'up' : 'down'}">${insight.leansUp ? 'ALTA' : 'BAIXA'}</strong>.</span></div>`;
+    case 'astrologer': {
+      const ups = insight.votes.filter(Boolean).length;
+      const n = insight.votes.length;
+      const verdict = `<strong class="${insight.leansUp ? 'up' : 'down'}">${insight.leansUp ? ups : n - ups} de ${n} ${insight.leansUp ? 'alta' : 'baixa'}</strong>`;
+      if (!full) return `<div class="insight">${face}${about}<span>${verdict}</span>${badge}</div>`;
+      const stars = insight.votes
+        .map((up, k) => {
+          const astro = ASTROS[k]!;
+          return `<span class="astro-vote ${up ? 'up' : 'down'}" title="${astro.name}">${astro.symbol} ${astro.name}: ${up ? 'alta' : 'baixa'}</span>`;
+        })
+        .join('');
+      return `<div class="insight insight-astro">${face}${about}${badge}<div class="astro-votes">${stars}</div><span>→ ${verdict} até o fim do trimestre</span></div>`;
+    }
     case 'spy':
       if (!full) {
         return `<div class="insight">${face}${about}<span>Chances: ${insight.bands.map((b, i) => `<span class="band-tone band-tone-${i + 1}">${Math.round(b.p * 100)}%</span>`).join(' · ')} ${badge}</span></div>`;
@@ -1242,8 +1287,33 @@ function renderInsight(insight: Insight, full: boolean, week = insight.week): st
               <span class="band-range">${pct(b.from, 0)}…${pct(b.to, 0)}</span>
             </div>`,
           )
-          .join('')}</div></div>`;
+          .join('')}</div>${insight.parts ? spyParts(insight.parts) : ''}</div>`;
   }
+}
+
+/** The spy's full analysis: where each part of the asset ends the quarter. */
+function spyParts(parts: { key: string; value: number }[]): string {
+  const label = (key: string) =>
+    key === 'city'
+      ? `Economia de ${CITY.name}`
+      : key === 'regions'
+        ? 'Os bairros'
+        : key === 'own'
+          ? 'As empresas em si'
+          : isRegionId(key)
+            ? `Bairro ${getRegion(key).name}`
+            : isBasket(key)
+              ? `Setor ${getGuild(key).short}`
+              : 'A empresa em si';
+  const total = parts.reduce((sum, p) => sum + p.value, 0);
+  return `<ul class="spy-parts">${parts
+    .map(
+      (p) =>
+        `<li><span>${label(p.key)}</span><span class="${tone(p.value)}">${pct(p.value)}</span></li>`,
+    )
+    .join(
+      '',
+    )}<li class="spy-total"><span>Análise completa</span><span class="${tone(total)}">${pct(total)}</span></li></ul>`;
 }
 
 /**
@@ -1564,11 +1634,14 @@ function renderPerkShop(state: GameState): string {
     const level = perkLevel(state, perk.id);
     const next = nextPerkLevel(state, perk.id);
     const classOk = next ? state.classIndex >= next.minClass : false;
-    const affordable = next ? state.purse >= next.cost : false;
+    const cost = perkCost(state, perk.id);
+    const affordable = next ? state.purse >= cost : false;
+    const expert = expertOfPerk(perk.id);
+    const confidant = expert !== null && state.confidant === expert;
     return `<article class="perk px ${level > 0 ? 'owned' : ''}">
       <header class="perk-head">
         ${sprite(perk.icon as SpriteName, 32)}
-        <div><h3>${perk.name}</h3><span class="muted small">${perk.description}</span></div>
+        <div><h3>${perk.name}${confidant ? ' <span class="confidant">Confidente −50%</span>' : ''}</h3><span class="muted small">${perk.description}${expert && !state.confidant ? ' O primeiro ajudante treinado vira seu confidente: o treino dele custa a metade.' : ''}</span></div>
       </header>
       <ol class="perk-levels">${perk.levels
         .map(
@@ -1581,7 +1654,7 @@ function renderPerkShop(state: GameState): string {
         next
           ? `<div class="perk-buy">
               <span class="${classOk ? 'muted' : 'down'} small">${classOk ? '' : `🔒 a partir de ${getClass(next.minClass).name}`}</span>
-              <button class="pbtn pbtn-small" data-action="buy-perk" data-perk="${perk.id}" ${playing && classOk && affordable ? '' : 'disabled'}>Contratar · ${fmt(next.cost)} fl</button>
+              <button class="pbtn pbtn-small" data-action="buy-perk" data-perk="${perk.id}" ${playing && classOk && affordable ? '' : 'disabled'}>Contratar · ${fmtCost(cost)} fl</button>
             </div>`
           : '<div class="perk-buy"><span class="up small">Nível máximo</span></div>'
       }

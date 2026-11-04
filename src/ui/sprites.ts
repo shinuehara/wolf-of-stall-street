@@ -323,6 +323,12 @@ const RANK_SPRITES = {
     8,
     'kyyyyyyyyyyk',
   ),
+  // Master spy: black cloak lined with gold, gold mask.
+  hood4: replaceRow(
+    replaceRow(replaceRow(recolor(HOOD, { S: 'k', s: 'B' }), 5, '.kkyykkyykk.'), 7, '.kyRRRRRRyk.'),
+    8,
+    'kyyyyyyyyyyk',
+  ),
   // Astrologer: cracked dull ball → clear ball → ball on a gold stand with sparkles.
   crystal0: patch(recolor(CRYSTAL, { w: 's', P: 'S' }), [
     [2, 6, 'k'],
@@ -337,6 +343,24 @@ const RANK_SPRITES = {
     [0, 11, 'y'],
     [2, 11, 'w'],
     [6, 0, 'y'],
+  ]),
+  // Court astrologer: a violet ball on gold; the Oracle: a golden ball crowned with stars.
+  crystal3: patch(recolor(CRYSTAL, { b: 'y', B: 'o', u: 'p', U: 'P' }), [
+    [0, 0, 'w'],
+    [1, 1, 'y'],
+    [0, 11, 'y'],
+    [2, 11, 'w'],
+    [6, 0, 'y'],
+    [6, 11, 'w'],
+  ]),
+  crystal4: patch(recolor(CRYSTAL, { b: 'y', B: 'o', u: 'y', U: 'o', P: 'o', p: 'y' }), [
+    [0, 0, 'w'],
+    [1, 1, 'y'],
+    [0, 11, 'w'],
+    [1, 10, 'y'],
+    [2, 11, 'w'],
+    [6, 0, 'w'],
+    [6, 11, 'w'],
   ]),
   // Drunk: dirty mug → clean mug → a glass of milk (he is nearly sober).
   mug0: patch(recolor(MUG, { w: 's', y: 'o', o: 'b' }), [
@@ -365,7 +389,8 @@ export type SpriteName = keyof typeof SPRITES | keyof typeof RANK_SPRITES;
 
 /** Highest rank of each expert (perk levels). */
 export function maxRank(expert: 'drunk' | 'astrologer' | 'spy'): number {
-  return expert === 'drunk' ? 4 : expert === 'spy' ? 3 : 2;
+  void expert;
+  return 4;
 }
 
 /** Portrait for an expert at a given rank. */

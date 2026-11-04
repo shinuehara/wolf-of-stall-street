@@ -317,16 +317,22 @@ até o fim do trimestre; dá para **perguntar de novo** (pagando de novo) quando
 o quadro. A resposta é lida em relação à faixa pública: se a faixa andou desde então (um
 incêndio), o palpite anda junto. O Espião aprendiz erra mais e planta furos (15%).
 
-### Patentes dos especialistas
+### Patentes dos especialistas (árvores)
 
-Cada especialista tem uma patente, que sobe com a melhoria que o treina. A patente aparece
-no cartão (com estrelas) e em cada resposta, e o retrato fica mais caprichado a cada nível.
+Todos têm **5 patentes**, e cada um cresce de um jeito (pedido do dono: o jogador tende a
+focar em um só). O **primeiro ajudante que você treinar vira seu confidente**: o treino dele
+custa a metade (`CONFIDANT_DISCOUNT`).
 
-| Especialista             | Patentes                                                               | Retrato                                                                             |
-| ------------------------ | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Bêbado (Banho e Sopa)    | Bêbado da Taverna → de Meio-Dia → Remediado → Quase Sóbrio → Ex-Bêbado | caneca suja → caneca limpa → copo de leite → copo d'água → xícara de chá            |
-| Astróloga (Telescópio)   | Astróloga Aprendiz → Astróloga Formada → Grã-Astróloga                 | bola rachada → bola limpa → suporte de ouro e brilhos                               |
-| Espião (Espião Veterano) | Espião Aprendiz → Júnior → Experiente → Mestre Espião                  | capuz remendado → capa azul → capa roxa com ouro → máscara dourada e lenço vermelho |
+| Patente | 🍺 Bêbado (Banho e Sopa: 1·3·6·12)                                                               | 🔮 Astróloga (Telescópio: 3·8·15·25)                | 🕵️ Espião (Veterano: 6·15·25·40)                                              |
+| ------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------- | ----------------------------------------------------------------------------- |
+| 0       | Bêbado da Taverna: a fofoca vem enterrada em 3 frases de enrolação antes e 2 depois; bobagem 50% | Aprendiz: 1 astro (☉), 60%                          | Aprendiz: palpite do ativo, erro grande, 15% de furos                         |
+| 1       | de Meio-Dia: enrola menos (2+1); ícone da guilda e o bairro na frase; bobagem 40%                | Formada: 3 astros, 62% cada (votação "2 de 3 alta") | Júnior: erro menor, 8% de furos                                               |
+| 2       | Remediado: 1 frase de enrolação; selo do bairro; 30%                                             | da Corte: 66% cada                                  | Analista: **análise completa** (economia + setor + bairro + a empresa em si)  |
+| 3       | Quase Sóbrio: só a fofoca, em destaque; seta ▲/▼; 20%                                            | Grã-Astróloga: 5 astros                             | Experiente: **relatório da guilda** (a cesta traz as 3 empresas); 2% de furos |
+| 4       | Ex-Bêbado: o nome da empresa; 10%                                                                | Oráculo de Valdouro: 70% cada e **mapa da guilda**  | Mestre: quase não erra, 1% de furos                                           |
+
+O treino do Bêbado vale também para o que ele já disse. As frases de enrolação estão em
+`DRUNK_FILLER`, os astros em `ASTROS` (data.ts).
 
 ### Melhorias (perks)
 

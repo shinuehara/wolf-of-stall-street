@@ -2688,3 +2688,42 @@ img.sprite,
   font-family: var(--font-display);
   font-size: 0.65rem;
 }
+
+/* Astrologer's stars and the spy's full analysis */
+.astro-votes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  width: 100%;
+}
+
+.astro-vote {
+  font-size: 0.95em;
+}
+
+.spy-parts {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  width: 100%;
+  font-size: 0.9em;
+}
+
+.spy-parts li {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.12);
+}
+
+.spy-parts .spy-total {
+  font-weight: bold;
+  border-bottom: none;
+}
+
+.confidant {
+  padding: 0 5px;
+  background: var(--gold);
+  color: var(--edge);
+  font-size: 0.6rem;
+  vertical-align: middle;
+}

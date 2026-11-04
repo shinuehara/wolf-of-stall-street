@@ -28,11 +28,27 @@ export const STARTING_PURSE = 10;
 export const MAX_ACTIVE_EVENTS = 2;
 export const EVENT_CHANCE = 0.3;
 /** Astrologer accuracy by Telescope level. */
-export const ASTROLOGER_ACCURACY = [0.6, 0.68, 0.75];
+export const ASTROLOGER_ACCURACY = [0.6, 0.62, 0.66, 0.66, 0.7];
+/** How many stars (independent readings) the Astrologer consults, by rank. */
+export const ASTRO_VOTES = [1, 3, 3, 5, 5];
+/** The stars she reads, in order. */
+export const ASTROS = [
+  { symbol: '☉', name: 'Sol' },
+  { symbol: '☾', name: 'Lua' },
+  { symbol: '♂', name: 'Marte' },
+  { symbol: '♀', name: 'Vênus' },
+  { symbol: '♃', name: 'Júpiter' },
+];
+/** Ranks that unlock deeper reports. */
+export const SPY_BREAKDOWN_LEVEL = 2;
+export const SPY_GUILD_REPORT_LEVEL = 3;
+export const ASTRO_GUILD_REPORT_LEVEL = 4;
+/** The first expert you train becomes your confidant: their training costs this share. */
+export const CONFIDANT_DISCOUNT = 0.5;
 /** Drunk accuracy by Bath & Soup level. */
 /** Spy quality by Veteran Spy level: noise on his estimate and chance it is a planted lie. */
-export const SPY_NOISE = [0.8, 0.5, 0.3, 0.1];
-export const SPY_FAKE_CHANCE = [0.15, 0.08, 0.04, 0.01];
+export const SPY_NOISE = [0.8, 0.5, 0.3, 0.2, 0.1];
+export const SPY_FAKE_CHANCE = [0.15, 0.08, 0.04, 0.02, 0.01];
 /** Each expert's rank names, from rookie to master; the rank is the level of their perk. */
 export const EXPERT_RANKS = {
   drunk: [
@@ -42,8 +58,20 @@ export const EXPERT_RANKS = {
     'Quase Sóbrio',
     'Ex-Bêbado',
   ],
-  astrologer: ['Astróloga Aprendiz', 'Astróloga Formada', 'Grã-Astróloga'],
-  spy: ['Espião Aprendiz', 'Espião Júnior', 'Espião Experiente', 'Mestre Espião'],
+  astrologer: [
+    'Astróloga Aprendiz',
+    'Astróloga Formada',
+    'Astróloga da Corte',
+    'Grã-Astróloga',
+    'Oráculo de Valdouro',
+  ],
+  spy: [
+    'Espião Aprendiz',
+    'Espião Júnior',
+    'Espião Analista',
+    'Espião Experiente',
+    'Mestre Espião',
+  ],
 } as const;
 
 /** The perk that ranks up each expert. */
@@ -101,29 +129,36 @@ export const PERKS: readonly PerkDef[] = [
     id: 'telescope',
     name: 'Telescópio da Astróloga',
     icon: 'crystal',
-    description: 'Lentes melhores, profecias melhores.',
+    description: 'Lentes melhores, mais astros no céu dela.',
     levels: [
-      { cost: 3, minClass: 0, effect: 'Vira Astróloga Formada: acerta 68% (antes 60%).' },
-      { cost: 8, minClass: 1, effect: 'Vira Grã-Astróloga: acerta 75%.' },
+      { cost: 3, minClass: 0, effect: 'Astróloga Formada: consulta 3 astros (62% cada).' },
+      { cost: 8, minClass: 1, effect: 'Astróloga da Corte: cada astro acerta 66%.' },
+      { cost: 15, minClass: 2, effect: 'Grã-Astróloga: consulta 5 astros.' },
+      {
+        cost: 25,
+        minClass: 3,
+        effect: 'Oráculo de Valdouro: astros a 70% e mapa da guilda (a cesta traz as 3 empresas).',
+      },
     ],
   },
   {
     id: 'veteranSpy',
     name: 'Espião Veterano',
     icon: 'hood',
-    description: 'Um espião com mais anos de ofício erra menos e cai menos em furos plantados.',
+    description: 'Mais anos de ofício: erra menos, cai menos em furos e analisa mais fundo.',
     levels: [
+      { cost: 6, minClass: 1, effect: 'Espião Júnior: erro menor; furos plantados 15% → 8%.' },
       {
-        cost: 6,
-        minClass: 1,
-        effect: 'Espião Júnior: erro pela metade; furos plantados 25% → 12%.',
+        cost: 15,
+        minClass: 2,
+        effect: 'Espião Analista: análise completa (economia, setor, bairro e a empresa em si).',
       },
-      { cost: 15, minClass: 2, effect: 'Espião Experiente: erro bem menor; furos plantados 5%.' },
       {
-        cost: 35,
-        minClass: 4,
-        effect: 'Mestre Espião: quase sempre certeiro; furos plantados 1%.',
+        cost: 25,
+        minClass: 3,
+        effect: 'Espião Experiente: relatório da guilda (a cesta traz as 3 empresas); furos 2%.',
       },
+      { cost: 40, minClass: 4, effect: 'Mestre Espião: quase não erra; furos 1%.' },
     ],
   },
   {
@@ -1336,3 +1371,22 @@ export const DRUNK_PLACES: Record<RegionId, string> = {
   burgo: ' lá no Burgo Velho',
   ribeira: ' lá pra Ribeira',
 };
+
+/**
+ * What the untrained Drunk mumbles around the rumour. The rookie buries it in three of these
+ * before and two after; each rank of training cuts some.
+ */
+export const DRUNK_FILLER = [
+  'Hoje andei muito na praça, tinha uns doidos gritando como sempre.',
+  'Um cavalo quase pisou no meu pé, sabia? Cavalo mal-educado.',
+  'Minha mulher diz que eu falo demais. Eu falo o necessário.',
+  'O padre olhou torto pra mim de novo, deve ser inveja.',
+  'Tinha uma nuvem com cara de queijo hoje cedo.',
+  'Encontrei o ferreiro, ou o irmão dele, sei lá, são iguais.',
+  'Dormi no estábulo ontem, o burro ronca mais que eu.',
+  'Lembrei de uma música da minha infância, mas esqueci de novo.',
+  'Aí eu cheguei aqui e pedi a minha bebida de sempre.',
+  'Aí sentei nesse banco, que é o melhor banco da taverna.',
+  'Depois disso eu acho que cochilei um pouco.',
+  'E foi isso. Ou foi ontem? Não importa.',
+];

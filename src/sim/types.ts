@@ -204,7 +204,10 @@ export type Insight =
   | {
       expert: 'astrologer';
       targetId: string;
+      /** Majority of the stars' votes. */
       leansUp: boolean;
+      /** Each star's reading (true = up), in ASTROS order. */
+      votes: boolean[];
       /** The expert's rank when asked (from perks); 0 is the rookie. */
       level: number;
       /** Week asked, and the middle of the public quarter range then. */
@@ -216,6 +219,12 @@ export type Insight =
       targetId: string;
       /** The spy's estimate, which may be off or even planted. */
       bands: Band[];
+      /**
+       * Full analysis (Analyst rank): where each part of the asset ends the quarter, as its
+       * weighted contribution in %. Keys: 'city', a guild id, a region id, a company id, or
+       * for a basket 'regions' and 'own'.
+       */
+      parts?: { key: string; value: number }[];
       /** The spy's rank when asked (Veteran Spy perk); says how good he is, not if he is right. */
       level: number;
       /** Week asked, and the middle of the public quarter range then. */
@@ -442,7 +451,7 @@ export interface RiskyDeposit {
 }
 
 export interface GameState {
-  version: 15;
+  version: 16;
   seed: number;
   rngState: number;
   /** Weeks elapsed. A season is SEASON_LENGTH weeks. */
@@ -508,6 +517,8 @@ export interface GameState {
   riskyDeposits: RiskyDeposit[];
   /** Excess return over the Crown bond of the last months (%, newest last, up to 3). */
   monthlyExcess: number[];
+  /** The first expert you trained: their training costs less. */
+  confidant: ExpertId | null;
   /** Managers hired; their money is a position with id `mgr.<id>`. */
   managers: ManagerId[];
   /** Titles on offer after a season review (0 = none); one per ceiling the fund passed. */

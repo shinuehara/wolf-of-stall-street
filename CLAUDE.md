@@ -66,6 +66,10 @@ Key model facts (details in `docs/design.md`):
   everything. `assetProphecy` combines factors for a basket/company. Experts answer about
   the asset's quarter (`targetForecast`), answers last the quarter, can be re-asked, and
   carry `week` + `publicMid`. A broker's fee (`TRADE_FEE`) is charged on stock trades.
+- **Experts** have 5 ranks each (`maxRank` = 4). Drunk: true rumours (`listenToDrunk`), filler
+  and clues rendered by his _current_ rank (`drunkLine`/`drunkPadding`). Astrologer: votes
+  (`ASTRO_VOTES`). Spy: `parts` breakdown and guild report (`answer`, `spyBreakdown`). The
+  first trained expert is the `confidant` (`perkCost`).
 - **Time.** Quarter (`SEASON_LENGTH`) = 12 weeks = 3 months (`MONTH_LENGTH` = 4). Class
   review + party at week 12; visitors (merchant/smuggler) at weeks 4 and 8.
 - **Story / gradual unlock.** `state.story.chapter`: 0 = bonds only (quarter 1, no experts,

@@ -11,6 +11,7 @@ import {
   isGuildUnlocked,
   newGame,
   nextPerkLevel,
+  perkCost,
   perkLevel,
   sell,
   wealth,
@@ -65,8 +66,10 @@ function believedTarget(state: GameState, assetId: string): number {
     return said + (middle - spy.publicMid);
   }
   const astro = state.insights.find((i) => i.targetId === assetId && i.expert === 'astrologer');
-  if (astro?.expert === 'astrologer')
-    return middle + (astro.leansUp ? 1 : -1) * (p.high - p.low) * 0.15;
+  if (astro?.expert === 'astrologer') {
+    const share = astro.votes.filter(Boolean).length / astro.votes.length;
+    return middle + (share * 2 - 1) * (p.high - p.low) * 0.15;
+  }
   return middle;
 }
 
@@ -94,7 +97,11 @@ export function playBot(seed: number, strategy: BotStrategy): BotResult {
         const reserve =
           getClass(state.classIndex).livingCost * 8 + getClass(state.classIndex).ascensionFee;
         void floor;
-        if (next && state.classIndex >= next.minClass && state.purse - next.cost > reserve) {
+        if (
+          next &&
+          state.classIndex >= next.minClass &&
+          state.purse - perkCost(state, id) > reserve
+        ) {
           buyPerk(state, id);
         }
       }
@@ -130,7 +137,7 @@ export function playBot(seed: number, strategy: BotStrategy): BotResult {
       // An informed bot only bets on what it asked about (once it asked about anything).
       const known = all.filter((id) => state.insights.some((i) => i.targetId === id));
       const candidates =
-        strategy === 'naive' || strategy === 'oracle' || known.length === 0 ? all : known;
+        (strategy === 'spy' || strategy === 'perks') && known.length > 0 ? known : all;
       const risky = (id: string) =>
         perkLevel(state, 'informants') > 0 && (state.shockRisk[id] ?? 0) > 0.05;
       // Holding costs nothing; switching pays the broker twice. Keep what still looks good.

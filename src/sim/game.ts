@@ -1,5 +1,10 @@
 import {
   ASTROLOGER_ACCURACY,
+  ASTRO_GUILD_REPORT_LEVEL,
+  ASTRO_VOTES,
+  CONFIDANT_DISCOUNT,
+  SPY_BREAKDOWN_LEVEL,
+  SPY_GUILD_REPORT_LEVEL,
   BOND_LOCK_WEEKS,
   INSURERS_DISCOUNT,
   ITEMS,
@@ -70,6 +75,8 @@ import {
 import {
   ASSET_IDS,
   assetProphecy,
+  companyExposures,
+  componentsOf,
   assetExpectedReturn,
   isBasket,
   isManager,
@@ -251,7 +258,7 @@ function cityProfile(state: GameState): { drift: number; width: number } {
 
 export function newGame(seed: number = Date.now() >>> 0): GameState {
   const state: GameState = {
-    version: 15,
+    version: 16,
     seed,
     rngState: seed,
     week: 0,
@@ -289,6 +296,7 @@ export function newGame(seed: number = Date.now() >>> 0): GameState {
     riskyDeposits: [],
     monthlyExcess: [],
     managers: [],
+    confidant: null,
     ascensionOffer: 0,
     status: 'playing',
     log: [],
@@ -381,6 +389,21 @@ export function nextPerkLevel(state: GameState, id: PerkId) {
   return getPerk(id).levels[perkLevel(state, id)] ?? null;
 }
 
+/** The expert a perk trains, if any. */
+export function expertOfPerk(id: PerkId): ExpertId | null {
+  const entry = Object.entries(EXPERT_PERK).find(([, perk]) => perk === id);
+  return entry ? (entry[0] as ExpertId) : null;
+}
+
+/** Price of the next level of a perk; the confidant's training is cheaper. */
+export function perkCost(state: GameState, id: PerkId): number {
+  const level = nextPerkLevel(state, id);
+  if (!level) return 0;
+  const expert = expertOfPerk(id);
+  const discount = expert && expert === state.confidant ? CONFIDANT_DISCOUNT : 1;
+  return Math.round(level.cost * discount * 100) / 100;
+}
+
 export function buyPerk(state: GameState, id: PerkId): ActionResult {
   if (state.status !== 'playing') return fail('O jogo terminou.');
   const perk = getPerk(id);
@@ -389,9 +412,19 @@ export function buyPerk(state: GameState, id: PerkId): ActionResult {
   if (state.classIndex < level.minClass) {
     return fail(`Só a partir de ${getClass(level.minClass).name}.`);
   }
-  if (state.purse < level.cost) return fail('Seu bolso não tem florins para pagar.');
-  state.purse -= level.cost;
+  const cost = perkCost(state, id);
+  if (state.purse < cost) return fail('Seu bolso não tem florins para pagar.');
+  state.purse -= cost;
   state.perks[id] = perkLevel(state, id) + 1;
+  const expert = expertOfPerk(id);
+  if (expert && !state.confidant) {
+    state.confidant = expert;
+    log(
+      state,
+      `${getExpert(expert).name} agora é seu confidente: o treino dele custa a metade.`,
+      'good',
+    );
+  }
   log(
     state,
     `Você contratou: ${perk.name}${perk.levels.length > 1 ? ` (nível ${state.perks[id]})` : ''}.`,
@@ -555,35 +588,94 @@ export function consult(state: GameState, expertId: ExpertId, targetId: string):
   if (!isTargetUnlocked(state, targetId)) return fail('Você ainda não tem acesso a esta guilda.');
   const cost = expertCost(state, expertId);
   if (cost > state.purse) return fail('Seu bolso não tem florins para pagar a consulta.');
-  const forecast = targetForecast(state, targetId);
-
   state.purse -= cost;
   const level = expertLevel(state, expertId);
+  answer(state, expertId, targetId, level);
+  // Guild report: asking about a basket also reads its three companies, for free.
+  const report =
+    (expertId === 'spy' && level >= SPY_GUILD_REPORT_LEVEL) ||
+    (expertId === 'astrologer' && level >= ASTRO_GUILD_REPORT_LEVEL);
+  if (report && isBasket(targetId)) {
+    for (const company of companiesOf(targetId)) answer(state, expertId, company.id, level);
+  }
+  return ok;
+}
+
+/** Records an expert's answer about a target (replacing an older one). */
+function answer(state: GameState, expertId: ExpertId, targetId: string, level: number): void {
+  const forecast = targetForecast(state, targetId);
   // Asking again replaces the old answer (news may have changed the picture).
   state.insights = state.insights.filter(
     (i) => !(i.expert === expertId && i.targetId === targetId),
   );
   const asked = { week: state.week, publicMid: (forecast.low + forecast.high) / 2 };
   if (expertId === 'spy') {
-    const estimate = hasEffect(state, 'stolenLedger')
-      ? bands(forecast)
-      : spyEstimate(state, forecast);
-    state.insights.push({ expert: 'spy', targetId, bands: estimate, level, ...asked });
-  } else {
-    const lenses = hasEffect(state, 'brassLenses') ? LENS_BONUS : 0;
-    const table = ASTROLOGER_ACCURACY;
-    const accuracy = Math.min(0.95, table[Math.min(level, table.length - 1)]! + lenses);
-    const truth = leansUp(forecast);
-    const honest = nextRandom(state) < accuracy;
-    state.insights.push({
-      expert: 'astrologer',
-      targetId,
-      leansUp: honest ? truth : !truth,
-      level,
-      ...asked,
-    });
+    const exact = hasEffect(state, 'stolenLedger');
+    const estimate = exact ? bands(forecast) : spyEstimate(state, forecast);
+    const parts =
+      level >= SPY_BREAKDOWN_LEVEL && targetId !== 'city' && !isRegionId(targetId)
+        ? spyBreakdown(state, targetId, exact)
+        : undefined;
+    state.insights.push({ expert: 'spy', targetId, bands: estimate, level, ...asked, parts });
+    return;
   }
-  return ok;
+  // The Astrologer reads several stars; each one is right with her accuracy.
+  const lenses = hasEffect(state, 'brassLenses') ? LENS_BONUS : 0;
+  const rank = Math.min(level, ASTRO_VOTES.length - 1);
+  const accuracy = Math.min(0.95, ASTROLOGER_ACCURACY[rank]! + lenses);
+  const truth = leansUp(forecast);
+  const votes = Array.from({ length: ASTRO_VOTES[rank]! }, () =>
+    nextRandom(state) < accuracy ? truth : !truth,
+  );
+  const ups = votes.filter(Boolean).length;
+  state.insights.push({
+    expert: 'astrologer',
+    targetId,
+    leansUp: ups * 2 > votes.length,
+    votes,
+    level,
+    ...asked,
+  });
+}
+
+/**
+ * The spy's full analysis of an asset: where each of its parts (the city, the sector, the
+ * district, the company itself) ends the quarter, as its weighted contribution in %.
+ */
+function spyBreakdown(
+  state: GameState,
+  assetId: string,
+  exact: boolean,
+): { key: string; value: number }[] {
+  const read = new Map<string, number>();
+  const estimate = (factorId: string) => {
+    const known = read.get(factorId);
+    if (known !== undefined) return known;
+    const p = state.prophecies[factorId]!;
+    const truth = { low: p.low, high: p.high, weights: weightsAround(p.low, p.high, p.target, 2) };
+    const said = (exact ? bands(truth) : spyEstimate(state, truth)).reduce(
+      (sum, b) => sum + b.p * ((b.from + b.to) / 2),
+      0,
+    );
+    read.set(factorId, said);
+    return said;
+  };
+  const basket = isBasket(assetId);
+  const totals = new Map<string, number>();
+  const companies = componentsOf(assetId);
+  for (const company of companies) {
+    for (const { factorId, weight } of companyExposures(company)) {
+      const key = !basket
+        ? factorId
+        : isRegionId(factorId)
+          ? 'regions'
+          : factorId === company.id
+            ? 'own'
+            : factorId;
+      totals.set(key, (totals.get(key) ?? 0) + (weight * estimate(factorId)) / companies.length);
+    }
+  }
+  return [...totals].map(([key, value]) => ({ key, value }));
 }
 
 /**
