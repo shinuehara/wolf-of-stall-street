@@ -68,6 +68,7 @@ import type {
   Band,
   LogEntry,
   PerkId,
+  SeasonReview,
   Shock,
   SocialClass,
 } from './types';
@@ -95,6 +96,8 @@ export interface WeekReport {
   classChange: 'down' | 'stay' | 'up-offer' | null;
   /** Surprises outside the announced ranges this week. */
   shocks: Shock[];
+  /** Set on the last week of a season. */
+  seasonReview: SeasonReview | null;
 }
 
 const MAX_LOG = 60;
@@ -180,7 +183,7 @@ function cityProfile(state: GameState): { drift: number; width: number } {
 
 export function newGame(seed: number = Date.now() >>> 0): GameState {
   const state: GameState = {
-    version: 7,
+    version: 8,
     seed,
     rngState: seed,
     week: 0,
@@ -206,6 +209,7 @@ export function newGame(seed: number = Date.now() >>> 0): GameState {
     shockRisk: {},
     ledger: [],
     assetPnl: {},
+    seasonStart: { wealth: STARTING_GOLD, purse: STARTING_PURSE, assetPnl: {}, classIndex: 0 },
     ascensionOffer: false,
     status: 'playing',
     log: [],
@@ -498,6 +502,7 @@ export function endWeek(state: GameState): WeekReport {
     seasonEnded: false,
     classChange: null,
     shocks: [],
+    seasonReview: null,
   };
 
   // An unanswered title offer expires when the week ends.
@@ -598,7 +603,15 @@ export function endWeek(state: GameState): WeekReport {
   // 4. Season review.
   if (state.week % SEASON_LENGTH === 0) {
     report.seasonEnded = true;
+    const classBefore = state.classIndex;
     report.classChange = reviewSeason(state);
+    report.seasonReview = buildSeasonReview(state, classBefore, report.classChange);
+    state.seasonStart = {
+      wealth: wealth(state),
+      purse: state.purse,
+      assetPnl: { ...state.assetPnl },
+      classIndex: state.classIndex,
+    };
     if (state.status !== 'playing') return report;
   }
 
@@ -609,6 +622,31 @@ export function endWeek(state: GameState): WeekReport {
   state.insights = [];
   rollForecasts(state);
   return report;
+}
+
+function buildSeasonReview(
+  state: GameState,
+  classBefore: number,
+  change: WeekReport['classChange'],
+): SeasonReview {
+  const start = state.seasonStart;
+  const assetPnl: Record<string, number> = {};
+  for (const [id, total] of Object.entries(state.assetPnl)) {
+    const delta = total - (start.assetPnl[id] ?? 0);
+    if (Math.abs(delta) >= 0.005) assetPnl[id] = delta;
+  }
+  return {
+    season: state.week / SEASON_LENGTH,
+    classBefore,
+    classAfter: state.classIndex,
+    outcome: state.status === 'lost' ? 'lost' : (change ?? 'stay'),
+    startWealth: start.wealth,
+    endWealth: wealth(state),
+    startPurse: start.purse,
+    endPurse: state.purse,
+    weeks: state.ledger.slice(-SEASON_LENGTH),
+    assetPnl,
+  };
 }
 
 function reviewSeason(state: GameState): WeekReport['classChange'] {

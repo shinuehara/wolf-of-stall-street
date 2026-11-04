@@ -131,6 +131,20 @@ faz essa conta antes dos outros.
 **Almanaque** (na Praça): descrição da cidade, dos bairros e das guildas, gráficos do PIB
 e da demanda de cada bairro, empresas de cada bairro e notícias ativas.
 
+### Avaliação da estação (cerimônia)
+
+No fim de cada estação, no lugar do relatório semanal, abre a **Avaliação da Estação**:
+rentabilidade do fundo na estação, quanto entrou no seu bolso, as 4 semanas, o destaque e a
+decepção, e o veredito (cai, fica ou pode subir, com o título à venda ali mesmo).
+
+Quem lê o veredito muda com a sua classe, e o tom muda com o resultado (triste, neutro, feliz):
+
+| Classe              | Quem fala              | Tom                                                             |
+| ------------------- | ---------------------- | --------------------------------------------------------------- |
+| Servo, Camponês     | o Meirinho             | arrogante, olhando o plebeu de cima, mesmo quando você vai bem  |
+| Artesão a Burguês   | o Escrivão da Guilda   | formal                                                          |
+| Cavaleiro em diante | o Camareiro do Castelo | bajulador: mesmo na derrota, deseja "que os bons tempos voltem" |
+
 ### Carteira (Casa de Contas)
 
 Um local próprio com duas visões:

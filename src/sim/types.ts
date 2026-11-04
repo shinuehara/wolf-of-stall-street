@@ -202,6 +202,29 @@ export interface LockedBond {
   maturesWeek: number;
 }
 
+export interface SeasonSnapshot {
+  wealth: number;
+  purse: number;
+  assetPnl: Record<string, number>;
+  classIndex: number;
+}
+
+/** What happened in a season that just ended, for the review ceremony. */
+export interface SeasonReview {
+  season: number;
+  classBefore: number;
+  classAfter: number;
+  outcome: 'down' | 'stay' | 'up-offer' | 'lost';
+  startWealth: number;
+  endWealth: number;
+  startPurse: number;
+  endPurse: number;
+  /** The season's weeks, oldest first. */
+  weeks: WeekRecord[];
+  /** Gain or loss per asset during the season. */
+  assetPnl: Record<string, number>;
+}
+
 /** One line of the weekly ledger: how wealth changed in a finished week. */
 export interface WeekRecord {
   /** Week number that just ended (1 = first week). */
@@ -246,7 +269,7 @@ export interface LogEntry {
 export type GameStatus = 'playing' | 'won' | 'lost';
 
 export interface GameState {
-  version: 7;
+  version: 8;
   seed: number;
   rngState: number;
   /** Weeks elapsed. A season is SEASON_LENGTH weeks. */
@@ -290,6 +313,8 @@ export interface GameState {
   ledger: WeekRecord[];
   /** Lifetime gains and losses per asset, in gold. */
   assetPnl: Record<string, number>;
+  /** Snapshot taken when the current season started, for the season review. */
+  seasonStart: SeasonSnapshot;
   /** Set at a season's end when wealth reached the class ceiling. */
   ascensionOffer: boolean;
   status: GameStatus;

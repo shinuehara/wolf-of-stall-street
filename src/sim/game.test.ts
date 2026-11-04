@@ -382,6 +382,22 @@ describe('endWeek', () => {
     }
   });
 
+  it('builds a season review at the end of each season', () => {
+    const state = newGame(4);
+    buy(state, 'bakers', 50);
+    let review = null;
+    for (let i = 0; i < SEASON_LENGTH; i++) review = endWeek(state).seasonReview;
+    expect(review).not.toBeNull();
+    expect(review!.season).toBe(1);
+    expect(review!.weeks).toHaveLength(SEASON_LENGTH);
+    expect(review!.startWealth).toBe(100);
+    expect(review!.endWealth).toBeCloseTo(wealth(state));
+    expect(Object.keys(review!.assetPnl)).toContain('bakers');
+    // The next season starts from a fresh snapshot.
+    expect(state.seasonStart.wealth).toBeCloseTo(wealth(state));
+    expect(endWeek(state).seasonReview).toBeNull();
+  });
+
   it('drops you a class when a season ends below the floor', () => {
     const state = newGame(3);
     state.classIndex = 2;

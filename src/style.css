@@ -2075,3 +2075,76 @@ img.sprite,
     display: none;
   }
 }
+
+/* Season review ceremony */
+.modal-wide {
+  width: min(560px, 100%);
+}
+
+.speech {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  text-align: left;
+  padding: 10px;
+  background: var(--panel-lo);
+  border: var(--px) solid var(--blue);
+}
+
+.speech p {
+  margin-top: 4px;
+  font-style: italic;
+  font-size: 1.05em;
+}
+
+.speech.mood-sad {
+  border-color: var(--red);
+}
+
+.speech.mood-happy {
+  border-color: var(--green);
+}
+
+.season-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  text-align: left;
+}
+
+.season-tiles > div {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 8px;
+  background: var(--panel-lo);
+  border: 2px solid var(--edge);
+}
+
+.season-tiles strong {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+}
+
+.season-weeks {
+  text-align: left;
+}
+
+.season-best {
+  text-align: left;
+}
+
+.verdict {
+  text-align: left;
+  padding: 6px 8px;
+  border-left: var(--px) solid var(--blue);
+}
+
+.verdict.down {
+  border-color: var(--red);
+}
+
+@media (max-width: 480px) {
+  .season-tiles {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

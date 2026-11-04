@@ -49,7 +49,17 @@ import {
   weeksUntilSeasonEnd,
   type WeekReport,
 } from '../sim/game';
-import type { ExpertId, GameState, GuildDef, Insight, LogEntry, Sector } from '../sim/types';
+import type {
+  ExpertId,
+  GameState,
+  GuildDef,
+  Insight,
+  LogEntry,
+  SeasonReview,
+  Sector,
+  WeekRecord,
+} from '../sim/types';
+import { seasonReturn, seasonSpeech } from './ceremony';
 import { sceneUrl, type SceneName } from './scenes';
 import { sprite, type SpriteName } from './sprites';
 
@@ -1450,6 +1460,9 @@ function renderModal(state: GameState, ui: UiState): string {
       <p>Você saiu de Servo a Conde em <strong class="gold">${state.week} semanas</strong>, com ${fmt(wealth(state))} florins.</p>
       <button class="pbtn" data-action="new-game">Nova partida</button>`);
   }
+  if (state.status === 'lost' && ui.lastReport?.seasonReview) {
+    return renderSeasonModal(state, ui, ui.lastReport.seasonReview);
+  }
   if (state.status === 'lost') {
     return modal(`
       ${sprite('hourglass', 64)}
@@ -1458,6 +1471,7 @@ function renderModal(state: GameState, ui: UiState): string {
       <button class="pbtn" data-action="new-game">Tentar de novo</button>`);
   }
   if (!ui.showReport || !ui.lastReport) return '';
+  if (ui.lastReport.seasonReview) return renderSeasonModal(state, ui, ui.lastReport.seasonReview);
 
   const report = ui.lastReport;
   const net = reportNet(report);
@@ -1504,8 +1518,85 @@ function renderModal(state: GameState, ui: UiState): string {
     }`);
 }
 
-function modal(content: string): string {
-  return `<div class="modal-backdrop"><div class="modal px" role="dialog" aria-modal="true">${content}</div></div>`;
+function renderSeasonModal(state: GameState, ui: UiState, review: SeasonReview): string {
+  const { speaker, mood, line } = seasonSpeech(review);
+  const ret = seasonReturn(review);
+  const before = getClass(review.classBefore);
+  const after = getClass(review.classAfter);
+  const weekNet = ui.lastReport ? reportNet(ui.lastReport) : 0;
+  const ranked = Object.entries(review.assetPnl).sort((a, b) => b[1] - a[1]);
+  const best = ranked[0];
+  const worst = ranked[ranked.length - 1];
+  const weekPct = (r: WeekRecord) => (r.endWealth / r.startWealth - 1) * 100;
+
+  let verdict: string;
+  switch (review.outcome) {
+    case 'lost':
+      verdict = `<p class="verdict down">O fundo fechou abaixo do piso de ${before.name}. Os investidores levaram o que sobrou, e você vai para a masmorra.</p>
+        <button class="pbtn" data-action="new-game">Tentar de novo</button>`;
+      break;
+    case 'down':
+      verdict = `<p class="verdict down">O fundo ficou abaixo do piso de ${whole(before.floor)} fl. Você caiu de <strong>${before.name}</strong> para <strong>${after.name}</strong>.</p>
+        <button class="pbtn" data-action="close-report">Seguir em frente</button>`;
+      break;
+    case 'stay':
+      verdict = `<p class="verdict">Você segue <strong>${after.name}</strong>. Para subir, o fundo precisa passar de ${whole(after.ceiling)} fl no fim da próxima estação.</p>
+        <button class="pbtn" data-action="close-report">Continuar</button>`;
+      break;
+    case 'up-offer': {
+      const next = getClass(review.classAfter + 1);
+      verdict = `<div class="offer">
+          <p>${sprite('scroll', 20)} O fundo passou do teto de ${whole(before.ceiling)} fl. O título de <strong>${next.name}</strong> está à venda por <strong class="gold">${fmt(before.ascensionFee)} fl</strong>, pagos do seu bolso (${fmt(state.purse)} fl).</p>
+          <div class="actions">
+            <button class="pbtn" data-action="accept-title" ${state.purse >= before.ascensionFee ? '' : 'disabled'}>Comprar título</button>
+            <button class="pbtn pbtn-ghost" data-action="close-report">Depois</button>
+          </div>
+        </div>`;
+      break;
+    }
+  }
+
+  return modal(
+    `
+    <h2>Avaliação da Estação ${review.season}</h2>
+    <div class="speech mood-${mood}">
+      ${sprite(speaker.sprite, 40)}
+      <div>
+        <strong>${speaker.name}</strong> <span class="muted small">${speaker.title}</span>
+        <p>“${line}”</p>
+      </div>
+    </div>
+    <div class="season-tiles">
+      <div><span class="hud-label">Fundo na estação</span><strong class="${tone(ret)}">${pct(ret)}</strong><span class="muted small">${fmt(review.startWealth)} → ${fmt(review.endWealth)} fl</span></div>
+      <div><span class="hud-label">Seu bolso</span><strong class="${tone(review.endPurse - review.startPurse)}">${signed(review.endPurse - review.startPurse)} fl</strong><span class="muted small">agora ${fmt(review.endPurse)} fl</span></div>
+      <div><span class="hud-label">Última semana</span><strong class="${tone(weekNet)}">${signed(weekNet)} fl</strong><span class="muted small">no fundo</span></div>
+    </div>
+    <table class="ptable season-weeks">
+      <thead><tr><th>Semana</th><th class="num">Fundo</th><th class="num">Resultado</th><th class="num">%</th></tr></thead>
+      <tbody>${review.weeks
+        .map(
+          (r) => `<tr><td>${r.week}</td><td class="num">${fmt(r.endWealth)}</td>
+            <td class="num ${tone(r.endWealth - r.startWealth)}">${signed(r.endWealth - r.startWealth)}</td>
+            <td class="num ${tone(weekPct(r))}">${pct(weekPct(r))}</td></tr>`,
+        )
+        .join('')}</tbody>
+    </table>
+    ${
+      best && worst
+        ? `<p class="small season-best">Destaque: <strong>${assetName(best[0])}</strong> <span class="${tone(best[1])}">${signed(best[1])} fl</span>${
+            worst[0] !== best[0]
+              ? ` · Decepção: <strong>${assetName(worst[0])}</strong> <span class="${tone(worst[1])}">${signed(worst[1])} fl</span>`
+              : ''
+          }</p>`
+        : '<p class="small muted">Nenhuma aposta nesta estação.</p>'
+    }
+    ${verdict}`,
+    'modal-wide',
+  );
+}
+
+function modal(content: string, extraClass = ''): string {
+  return `<div class="modal-backdrop"><div class="modal px ${extraClass}" role="dialog" aria-modal="true">${content}</div></div>`;
 }
 
 // ---------------------------------------------------------------------------
