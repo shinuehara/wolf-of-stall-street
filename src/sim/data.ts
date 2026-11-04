@@ -4,6 +4,7 @@ import type {
   EventDef,
   ExpertDef,
   GuildDef,
+  ItemDef,
   LocalNewsTemplate,
   PerkDef,
   RegionDef,
@@ -12,7 +13,10 @@ import type {
   SocialClass,
 } from './types';
 
-export const SEASON_LENGTH = 4;
+/** A quarter: the social class is reviewed every SEASON_LENGTH weeks. */
+export const SEASON_LENGTH = 12;
+/** A month: a visitor comes to the square every MONTH_LENGTH weeks. */
+export const MONTH_LENGTH = 4;
 /** The investors' money the fund starts with. */
 export const STARTING_GOLD = 100;
 /** The manager's own money at the start. */
@@ -159,6 +163,100 @@ export function getPerk(id: string): PerkDef {
   if (!perk) throw new Error(`Unknown perk: ${id}`);
   return perk;
 }
+
+/** Goods sold by the monthly visitors. */
+export const ITEMS: readonly ItemDef[] = [
+  {
+    id: 'brassLenses',
+    name: 'Lunetas de Bronze',
+    icon: 'crystal',
+    seller: 'merchant',
+    cost: 2,
+    weeks: 4,
+    effect: 'Por 4 semanas, a Astróloga acerta 10 pontos a mais.',
+  },
+  {
+    id: 'routeMap',
+    name: 'Mapa dos Atalhos',
+    icon: 'scroll',
+    seller: 'merchant',
+    cost: 3,
+    weeks: 4,
+    effect: 'Por 4 semanas, você vê (⚠) as empresas com risco alto de choque.',
+  },
+  {
+    id: 'guildSeal',
+    name: 'Selo dos Seguradores',
+    icon: 'shield',
+    seller: 'merchant',
+    cost: 3,
+    weeks: 4,
+    effect: 'Por 4 semanas, o seguro do fundo sai de graça.',
+  },
+  {
+    id: 'sharpQuill',
+    name: 'Pena Afiada',
+    icon: 'scroll',
+    seller: 'merchant',
+    cost: 1.5,
+    weeks: 4,
+    effect: 'Por 4 semanas, perguntas aos especialistas custam metade.',
+  },
+  {
+    id: 'luckyCharm',
+    name: 'Amuleto da Sorte',
+    icon: 'coin',
+    seller: 'merchant',
+    cost: 3,
+    weeks: 4,
+    effect: 'Por 4 semanas, choques ruins nas suas posições doem pela metade.',
+  },
+  {
+    id: 'stolenLedger',
+    name: 'Livro-Caixa Roubado',
+    icon: 'hood',
+    seller: 'smuggler',
+    cost: 6,
+    weeks: 4,
+    effect: 'Por 4 semanas, o Espião acerta tudo: nem erro, nem furo.',
+    catchChance: 0.3,
+    penalty: 'Multa: metade do seu bolso.',
+  },
+  {
+    id: 'courtWhisper',
+    name: 'Sussurro da Corte',
+    icon: 'crown',
+    seller: 'smuggler',
+    cost: 5,
+    weeks: 0,
+    until: 'quarter',
+    effect: 'Até o fim do trimestre, sua taxa de performance dobra.',
+    catchChance: 0.35,
+    penalty: 'Investidores furiosos: o fundo perde 8%.',
+  },
+  {
+    id: 'crookedScales',
+    name: 'Balança Viciada',
+    icon: 'coin',
+    seller: 'smuggler',
+    cost: 4,
+    weeks: 1,
+    effect: 'Agora: o fundo ganha 3% "a mais" nas contas.',
+    catchChance: 0.4,
+    penalty: 'Multa: 6% do fundo e metade do seu bolso.',
+  },
+];
+
+export function getItem(id: string): ItemDef {
+  const item = ITEMS.find((i) => i.id === id);
+  if (!item) throw new Error(`Unknown item: ${id}`);
+  return item;
+}
+
+export const VISITOR_OFFERS = { merchant: 3, smuggler: 2 } as const;
+export const SMUGGLER_CHANCE = 0.45;
+export const LENS_BONUS = 0.1;
+export const SCALES_GAIN = 0.03;
 
 export const INSURERS_DISCOUNT = 0.4;
 export const TREASURER_BONUS = 0.5;

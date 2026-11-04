@@ -2,6 +2,13 @@ import {
   ASTROLOGER_ACCURACY,
   BOND_LOCK_WEEKS,
   INSURERS_DISCOUNT,
+  ITEMS,
+  LENS_BONUS,
+  MONTH_LENGTH,
+  SCALES_GAIN,
+  SMUGGLER_CHANCE,
+  VISITOR_OFFERS,
+  getItem,
   PERKS,
   SHOCK_BAD_NEWS,
   SHOCK_BAD_RANGE,
@@ -67,6 +74,8 @@ import type {
   GameState,
   GuildDef,
   Band,
+  ItemId,
+  VisitorKind,
   LogEntry,
   PerkId,
   SeasonReview,
@@ -99,6 +108,10 @@ export interface WeekReport {
   shocks: Shock[];
   /** Set on the last week of a season. */
   seasonReview: SeasonReview | null;
+  /** Smuggled goods whose effect ended this week, and whether you got caught. */
+  smuggling: { item: ItemId; caught: boolean }[];
+  /** Set when a visitor arrives at the square this week. */
+  visitorArrived: VisitorKind | null;
 }
 
 const MAX_LOG = 60;
@@ -184,7 +197,7 @@ function cityProfile(state: GameState): { drift: number; width: number } {
 
 export function newGame(seed: number = Date.now() >>> 0): GameState {
   const state: GameState = {
-    version: 8,
+    version: 9,
     seed,
     rngState: seed,
     week: 0,
@@ -211,6 +224,8 @@ export function newGame(seed: number = Date.now() >>> 0): GameState {
     ledger: [],
     assetPnl: {},
     seasonStart: { wealth: STARTING_GOLD, purse: STARTING_PURSE, assetPnl: {}, classIndex: 0 },
+    visitor: null,
+    effects: [],
     ascensionOffer: false,
     status: 'playing',
     log: [],
@@ -266,12 +281,14 @@ export function expertCost(state: GameState, expertId: ExpertId): number {
   const expert = getExpert(expertId);
   if (expert.baseCost === 0 && expert.wealthCost === 0) return 0;
   const raw = expert.baseCost + expert.wealthCost * Math.max(0, wealth(state));
-  return Math.round(raw * 100) / 100;
+  const quill = hasEffect(state, 'sharpQuill') ? 0.5 : 1;
+  return Math.round(raw * quill * 100) / 100;
 }
 
 export function hedgeFee(state: GameState, assetId: string): number {
   const position = state.positions[assetId];
   if (!position?.hedged) return 0;
+  if (hasEffect(state, 'guildSeal')) return 0;
   const discount = state.perks.insurers ? 1 - INSURERS_DISCOUNT : 1;
   return position.value * currentClass(state).hedgeFeeRate * discount;
 }
@@ -448,10 +465,14 @@ export function consult(state: GameState, expertId: ExpertId, targetId: string):
   state.purse -= cost;
   const level = expertLevel(state, expertId);
   if (expertId === 'spy') {
-    state.insights.push({ expert: 'spy', targetId, bands: spyEstimate(state, forecast), level });
+    const estimate = hasEffect(state, 'stolenLedger')
+      ? bands(forecast)
+      : spyEstimate(state, forecast);
+    state.insights.push({ expert: 'spy', targetId, bands: estimate, level });
   } else {
     const table = expertId === 'astrologer' ? ASTROLOGER_ACCURACY : DRUNK_ACCURACY;
-    const accuracy = table[Math.min(level, table.length - 1)]!;
+    const lenses = expertId === 'astrologer' && hasEffect(state, 'brassLenses') ? LENS_BONUS : 0;
+    const accuracy = Math.min(0.95, table[Math.min(level, table.length - 1)]! + lenses);
     const truth = leansUp(forecast);
     const honest = nextRandom(state) < accuracy;
     state.insights.push({ expert: expertId, targetId, leansUp: honest ? truth : !truth, level });
@@ -505,6 +526,8 @@ export function endWeek(state: GameState): WeekReport {
     classChange: null,
     shocks: [],
     seasonReview: null,
+    smuggling: [],
+    visitorArrived: null,
   };
 
   // An unanswered title offer expires when the week ends.
@@ -524,6 +547,7 @@ export function endWeek(state: GameState): WeekReport {
   report.factorMoves = sampled.factors;
 
   // Surprises nobody announced: fires, scandals, windfalls.
+  const shockShare: Record<string, number> = {};
   for (const company of COMPANIES) {
     if (nextRandom(state) >= (state.shockRisk[company.id] ?? SHOCK_BASE_CHANCE)) continue;
     const good = nextRandom(state) < SHOCK_GOOD_SHARE;
@@ -534,12 +558,17 @@ export function endWeek(state: GameState): WeekReport {
     moves[company.guildId] =
       (moves[company.guildId] ?? 0) + move / companiesOf(company.guildId).length;
     report.shocks.push({ companyId: company.id, move, headline });
+    shockShare[company.id] = (shockShare[company.id] ?? 0) + move;
+    const basketShare = move / companiesOf(company.guildId).length;
+    shockShare[company.guildId] = (shockShare[company.guildId] ?? 0) + basketShare;
     if (isAssetUnlocked(state, company.id)) log(state, headline, good ? 'good' : 'bad');
   }
 
   for (const [assetId, position] of Object.entries(state.positions)) {
     if (isBond(assetId)) continue;
-    const raw = moves[assetId] ?? 0;
+    let raw = moves[assetId] ?? 0;
+    const shock = shockShare[assetId] ?? 0;
+    if (shock < 0 && hasEffect(state, 'luckyCharm')) raw -= shock / 2;
     const applied = position.hedged ? applyHedge(assetRange(state, assetId), raw) : raw;
     const pnl = position.value * (applied / 100);
     position.value += pnl;
@@ -586,7 +615,8 @@ export function endWeek(state: GameState): WeekReport {
   // 4. The manager takes the fees from the fund, then pays the bills from the purse.
   const profit = wealth(state) - fundAtStart;
   report.managementFee = wealth(state) * cls.managementFeeRate;
-  report.performanceFee = Math.max(0, profit) * cls.performanceFeeRate;
+  const whisper = hasEffect(state, 'courtWhisper') ? 2 : 1;
+  report.performanceFee = Math.max(0, profit) * cls.performanceFeeRate * whisper;
   const fees = report.managementFee + report.performanceFee;
   raiseCash(state, fees);
   state.cash -= fees;
@@ -621,6 +651,8 @@ export function endWeek(state: GameState): WeekReport {
   tickEvents(state);
   tickCompanyEvents(state);
   tickLocalNews(state);
+  tickEffects(state, report);
+  updateVisitor(state, report);
   state.insights = [];
   rollForecasts(state);
   return report;
@@ -741,6 +773,90 @@ export function companyShift(state: GameState, companyId: string): number {
   return state.companyEvents
     .filter((e) => e.companyId === companyId)
     .reduce((s, e) => s + e.shift, 0);
+}
+
+// ---------------------------------------------------------------------------
+// Monthly visitors and their goods
+// ---------------------------------------------------------------------------
+
+export function hasEffect(state: GameState, id: ItemId): boolean {
+  return state.effects.some((e) => e.id === id);
+}
+
+/** Shock warnings come from the Informants perk or from the merchant's map. */
+export function hasShockWarnings(state: GameState): boolean {
+  return Boolean(state.perks.informants) || hasEffect(state, 'routeMap');
+}
+
+export function buyItem(state: GameState, id: ItemId): ActionResult {
+  if (state.status !== 'playing') return fail('O jogo terminou.');
+  const visitor = state.visitor;
+  if (!visitor || !visitor.offers.includes(id)) return fail('Ninguém está vendendo isso agora.');
+  if (visitor.sold.includes(id)) return fail('Você já comprou este item.');
+  const item = getItem(id);
+  if (state.purse < item.cost) return fail('Seu bolso não tem florins para isso.');
+  state.purse -= item.cost;
+  visitor.sold.push(id);
+  if (id === 'crookedScales') state.cash += wealth(state) * SCALES_GAIN;
+  const weeks = item.until === 'quarter' ? weeksUntilSeasonEnd(state) : item.weeks;
+  if (weeks > 0) {
+    state.effects = state.effects.filter((e) => e.id !== id);
+    state.effects.push({ id, weeksLeft: weeks });
+  }
+  log(state, `Você comprou: ${item.name}.`, item.seller === 'smuggler' ? 'bad' : 'good');
+  return ok;
+}
+
+/** Takes a share of the whole fund (cash, positions and locked bonds) as a fine. */
+function fineFund(state: GameState, share: number): number {
+  const before = wealth(state);
+  state.cash *= 1 - share;
+  for (const p of Object.values(state.positions)) p.value *= 1 - share;
+  for (const b of state.lockedBonds) b.value *= 1 - share;
+  return before - wealth(state);
+}
+
+function tickEffects(state: GameState, report: WeekReport): void {
+  for (const effect of state.effects) effect.weeksLeft -= 1;
+  for (const effect of state.effects.filter((e) => e.weeksLeft <= 0)) {
+    const item = getItem(effect.id);
+    if (!item.catchChance) continue;
+    const caught = nextRandom(state) < item.catchChance;
+    report.smuggling.push({ item: item.id, caught });
+    if (!caught) {
+      log(state, `Ninguém desconfiou de ${item.name}. Desta vez.`, 'good');
+      continue;
+    }
+    if (item.id === 'stolenLedger') state.purse /= 2;
+    if (item.id === 'courtWhisper') fineFund(state, 0.08);
+    if (item.id === 'crookedScales') {
+      fineFund(state, 0.06);
+      state.purse /= 2;
+    }
+    log(state, `O Meirinho descobriu ${item.name}! ${item.penalty ?? ''}`, 'bad');
+  }
+  state.effects = state.effects.filter((e) => e.weeksLeft > 0);
+}
+
+function updateVisitor(state: GameState, report: WeekReport): void {
+  state.visitor = null;
+  if (state.week % MONTH_LENGTH !== 0 || state.week % SEASON_LENGTH === 0) return;
+  const kind: VisitorKind = nextRandom(state) < SMUGGLER_CHANCE ? 'smuggler' : 'merchant';
+  const pool = ITEMS.filter((i) => i.seller === kind).map((i) => i.id);
+  const offers: ItemId[] = [];
+  while (offers.length < Math.min(VISITOR_OFFERS[kind], pool.length)) {
+    const id = pick(state, pool);
+    if (!offers.includes(id)) offers.push(id);
+  }
+  state.visitor = { kind, offers, sold: [] };
+  report.visitorArrived = kind;
+  log(
+    state,
+    kind === 'merchant'
+      ? 'Um Mercador Viajante armou a tenda na praça.'
+      : 'Um Contrabandista sussurra na esquina da praça…',
+    'neutral',
+  );
 }
 
 function tickLocalNews(state: GameState): void {

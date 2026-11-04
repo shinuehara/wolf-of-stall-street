@@ -349,3 +349,265 @@ function paintCountingHouse(ctx: Ctx): void {
   ctx.fillStyle = 'rgba(255, 204, 51, 0.12)';
   ctx.fillRect(56, 18, 40, 26);
 }
+
+// --- quarter-close party -----------------------------------------------------
+
+export const GALA_W = 192;
+export const GALA_H = 80;
+
+export const GALA_NAMES = [
+  'Jantar Modesto',
+  'Ceia na Taverna',
+  'Banquete da Guilda',
+  'Festim dos Mercadores',
+  'Sarau do Burgo',
+  'Festa no Castelo',
+  'Grande Banquete do Barão',
+  'Baile de Gala do Conde',
+];
+
+const galaCache = new Map<string, string>();
+
+/**
+ * The party at the end of a quarter. `tier` is the class index (0 Servo … 7 Conde): the room,
+ * the table, the lights and the guests grow with it. `mood` dims the room or throws confetti.
+ */
+export function galaUrl(tier: number, mood: 'sad' | 'neutral' | 'happy'): string {
+  const key = `${tier}-${mood}`;
+  const hit = galaCache.get(key);
+  if (hit) return hit;
+  const canvas = document.createElement('canvas');
+  canvas.width = GALA_W;
+  canvas.height = GALA_H;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return '';
+  paintGala(ctx, Math.max(0, Math.min(7, tier)), mood);
+  const url = canvas.toDataURL();
+  galaCache.set(key, url);
+  return url;
+}
+
+const WALLS = [
+  '#3a1c10',
+  '#5a2e1a',
+  '#5b6390',
+  '#6a35c9',
+  '#4a2a85',
+  '#6b73a3',
+  '#7a3fa8',
+  '#2b1d5e',
+];
+const FLOORS = [
+  '#5a2e1a',
+  '#a8602f',
+  '#9aa3c7',
+  '#a8602f',
+  '#c98a4b',
+  '#c3c9e8',
+  '#c3c9e8',
+  '#fff4d6',
+];
+const GUEST_COLORS = ['#ff4f5e', '#4fb4ff', '#4fe08a', '#ffcc33', '#b56cff', '#ff8a3d', '#fff4d6'];
+
+const HAIR = ['#5a2e1a', '#1a1033', '#ffcc33', '#a8602f', '#c3c9e8'];
+
+/** A small guest, 7 px wide and 13 px tall, with hair, arms and clothes. */
+function person(ctx: Ctx, x: number, y: number, color: string, hat?: string, hair = 0): void {
+  const hairColor = HAIR[hair % HAIR.length]!;
+  rect(ctx, x + 2, y, 3, 1, hairColor);
+  rect(ctx, x + 1, y + 1, 5, 4, '#ffc59e');
+  rect(ctx, x + 1, y + 1, 1, 2, hairColor);
+  rect(ctx, x + 5, y + 1, 1, 2, hairColor);
+  rect(ctx, x + 2, y + 2, 1, 1, '#1a1033');
+  rect(ctx, x + 4, y + 2, 1, 1, '#1a1033');
+  rect(ctx, x + 3, y + 4, 1, 1, '#b0243a');
+  rect(ctx, x + 1, y + 5, 5, 5, color);
+  rect(ctx, x + 3, y + 5, 1, 4, '#fff4d6');
+  rect(ctx, x, y + 6, 1, 3, color);
+  rect(ctx, x + 6, y + 6, 1, 3, color);
+  rect(ctx, x, y + 9, 1, 1, '#ffc59e');
+  rect(ctx, x + 6, y + 9, 1, 1, '#ffc59e');
+  rect(ctx, x + 1, y + 10, 2, 3, '#1a1033');
+  rect(ctx, x + 4, y + 10, 2, 3, '#1a1033');
+  if (hat) {
+    rect(ctx, x + 1, y - 1, 5, 1, hat);
+    rect(ctx, x + 2, y - 2, 1, 1, hat);
+    rect(ctx, x + 4, y - 2, 1, 1, hat);
+  }
+}
+
+function paintGala(ctx: Ctx, tier: number, mood: 'sad' | 'neutral' | 'happy'): void {
+  const rnd = seeded(97 + tier);
+  const floorY = 56;
+  // walls
+  rect(ctx, 0, 0, GALA_W, floorY, WALLS[tier]!);
+  if (tier <= 1) {
+    for (let y = 0; y < floorY; y += 7) rect(ctx, 0, y, GALA_W, 1, '#1a1033');
+  } else {
+    for (let y = 0; y < floorY; y += 8) {
+      rect(ctx, 0, y, GALA_W, 1, 'rgba(0,0,0,0.25)');
+      for (let x = (y / 8) % 2 ? 0 : 10; x < GALA_W; x += 20)
+        rect(ctx, x, y, 1, 8, 'rgba(0,0,0,0.25)');
+    }
+  }
+  // windows (night sky; fireworks at the top tier)
+  const windows = tier >= 5 ? [20, 84, 148] : tier >= 2 ? [30, 140] : [150];
+  for (const wx of windows) {
+    const w = tier >= 5 ? 24 : 16;
+    rect(ctx, wx, 8, w, 22, '#1a1033');
+    rect(ctx, wx + 2, 10, w - 4, 18, mood === 'sad' ? '#2c3a5e' : '#2c5fd1');
+    if (mood === 'sad') {
+      for (let i = 0; i < 8; i++)
+        rect(
+          ctx,
+          wx + 3 + Math.floor(rnd() * (w - 6)),
+          11 + Math.floor(rnd() * 14),
+          1,
+          2,
+          '#9aa3c7',
+        );
+    } else if (tier === 7) {
+      const cx = wx + w / 2;
+      for (const [dx, dy, c] of [
+        [0, -4, '#ffcc33'],
+        [4, 0, '#ff4f5e'],
+        [-4, 0, '#4fe08a'],
+        [0, 4, '#b56cff'],
+        [3, -3, '#fff4d6'],
+        [-3, 3, '#fff4d6'],
+      ] as const) {
+        rect(ctx, cx + dx, 18 + dy, 1, 1, c);
+      }
+    } else {
+      rect(ctx, wx + 5, 13, 1, 1, '#fff4d6');
+    }
+  }
+  // banners and tapestries
+  if (tier >= 2) {
+    const count = tier >= 6 ? 6 : tier >= 4 ? 4 : 2;
+    for (let i = 0; i < count; i++) {
+      const bx = 8 + Math.floor(((i + 0.5) * (GALA_W - 16)) / count) - 4;
+      const color = tier >= 5 ? '#b0243a' : GUEST_COLORS[i % GUEST_COLORS.length]!;
+      rect(ctx, bx, 4, 8, 18, color);
+      rect(ctx, bx, 4, 8, 1, '#ffcc33');
+      rect(ctx, bx + 3, 10, 2, 4, '#ffcc33');
+      rect(ctx, bx, 22, 2, 2, color);
+      rect(ctx, bx + 6, 22, 2, 2, color);
+    }
+  }
+  // gold pillars for the nobility
+  if (tier >= 6) {
+    for (const px of [2, GALA_W - 8]) {
+      rect(ctx, px, 0, 6, floorY, '#ffcc33');
+      rect(ctx, px + 1, 0, 1, floorY, '#fff4d6');
+      rect(ctx, px + 5, 0, 1, floorY, '#ff8a3d');
+    }
+  }
+  // floor
+  rect(ctx, 0, floorY, GALA_W, GALA_H - floorY, FLOORS[tier]!);
+  if (tier >= 5) {
+    for (let y = floorY; y < GALA_H; y += 4) {
+      for (let x = ((y - floorY) / 4) % 2 ? 0 : 4; x < GALA_W; x += 8)
+        rect(ctx, x, y, 4, 4, tier === 7 ? '#c3c9e8' : '#6b73a3');
+    }
+  } else {
+    for (let x = 0; x < GALA_W; x += 12)
+      rect(ctx, x, floorY, 1, GALA_H - floorY, 'rgba(0,0,0,0.3)');
+  }
+  rect(ctx, 0, floorY, GALA_W, 1, '#1a1033');
+  if (tier >= 6) rect(ctx, GALA_W / 2 - 12, floorY, 24, GALA_H - floorY, '#b0243a');
+  // table
+  const tableW = [26, 44, 70, 90, 110, 130, 150, 120][tier]!;
+  const tableX = Math.round((GALA_W - tableW) / 2);
+  const tableY = floorY - 8;
+  // guests seated behind the table
+  const seated = Math.min(Math.floor(tableW / 10), 2 + tier * 2);
+  for (let i = 0; i < seated; i++) {
+    const gx = tableX + 3 + Math.floor((i * (tableW - 8)) / Math.max(1, seated - 1 || 1));
+    person(
+      ctx,
+      Math.min(gx, tableX + tableW - 6),
+      tableY - 10,
+      GUEST_COLORS[(i + tier) % GUEST_COLORS.length]!,
+      tier >= 5 && i % 3 === 0 ? '#ffcc33' : undefined,
+    );
+  }
+  rect(ctx, tableX, tableY, tableW, 4, tier >= 4 ? '#fff4d6' : '#a8602f');
+  rect(ctx, tableX, tableY + 4, tableW, 1, '#1a1033');
+  rect(ctx, tableX + 2, tableY + 5, 2, 8, '#5a2e1a');
+  rect(ctx, tableX + tableW - 4, tableY + 5, 2, 8, '#5a2e1a');
+  // food on the table
+  const dishes = Math.max(1, Math.floor(tableW / 14));
+  for (let i = 0; i < dishes; i++) {
+    const dx = tableX + 6 + i * 14;
+    if (dx > tableX + tableW - 8) break;
+    const kind = (i + tier) % (tier >= 4 ? 4 : tier >= 2 ? 3 : 2);
+    if (kind === 0) {
+      rect(ctx, dx, tableY - 3, 5, 3, '#ff8a3d'); // bread
+      rect(ctx, dx + 1, tableY - 4, 3, 1, '#ffcc33');
+    } else if (kind === 1) {
+      rect(ctx, dx, tableY - 4, 3, 4, '#ffcc33'); // mug
+      rect(ctx, dx, tableY - 4, 3, 1, '#fff4d6');
+    } else if (kind === 2) {
+      rect(ctx, dx - 1, tableY - 3, 7, 3, '#a8602f'); // roast
+      rect(ctx, dx, tableY - 4, 5, 1, '#ff8a3d');
+    } else {
+      rect(ctx, dx, tableY - 6, 5, 6, '#ff9aa5'); // cake
+      rect(ctx, dx, tableY - 6, 5, 1, '#fff4d6');
+      rect(ctx, dx + 2, tableY - 8, 1, 2, '#ffcc33');
+    }
+  }
+  // lights: a candle, lamps, candelabra, chandeliers
+  if (tier === 0) {
+    rect(ctx, tableX + tableW / 2, tableY - 6, 1, 6, '#fff4d6');
+    rect(ctx, tableX + tableW / 2, tableY - 8, 1, 2, '#ffcc33');
+  } else if (tier <= 3) {
+    for (let i = 0; i < tier + 1; i++) {
+      const lx = 20 + Math.floor((i * (GALA_W - 40)) / Math.max(1, tier));
+      rect(ctx, lx, 0, 1, 8, '#1a1033');
+      rect(ctx, lx - 2, 8, 5, 4, '#ffcc33');
+    }
+  } else {
+    const count = tier - 3;
+    for (let i = 0; i < count; i++) {
+      const cx = Math.floor(((i + 1) * GALA_W) / (count + 1));
+      rect(ctx, cx, 0, 1, 6, '#ffcc33');
+      rect(ctx, cx - 8, 6, 17, 2, '#ffcc33');
+      for (let k = -8; k <= 8; k += 4) {
+        rect(ctx, cx + k, 3, 1, 3, '#fff4d6');
+        rect(ctx, cx + k, 2, 1, 1, '#ff8a3d');
+      }
+    }
+  }
+  // dancers and musicians at the top
+  if (tier >= 6) {
+    const pairs = tier === 7 ? 4 : 2;
+    for (let i = 0; i < pairs; i++) {
+      const dx = 14 + i * 22 + (i >= pairs / 2 ? 90 : 0);
+      person(ctx, dx, floorY + 6, '#b56cff', '#ffcc33', 1);
+      person(ctx, dx + 7, floorY + 6, '#ff4f5e', undefined, 2);
+    }
+  }
+  if (tier === 7) {
+    for (const mx of [GALA_W / 2 - 30, GALA_W / 2 + 25]) {
+      person(ctx, mx, floorY + 7, '#2c5fd1', undefined, 3);
+      rect(ctx, mx + 6, floorY + 13, 3, 5, '#a8602f'); // lute
+    }
+  }
+  // mood
+  if (mood === 'sad') {
+    ctx.fillStyle = 'rgba(20, 12, 43, 0.45)';
+    ctx.fillRect(0, 0, GALA_W, GALA_H);
+  } else if (mood === 'happy') {
+    for (let i = 0; i < 70; i++) {
+      rect(
+        ctx,
+        Math.floor(rnd() * GALA_W),
+        Math.floor(rnd() * floorY),
+        1,
+        2,
+        GUEST_COLORS[i % GUEST_COLORS.length]!,
+      );
+    }
+  }
+}

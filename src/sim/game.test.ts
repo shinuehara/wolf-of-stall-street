@@ -8,6 +8,8 @@ import {
   STARTING_GOLD,
   STARTING_PURSE,
   TOP_CLASS,
+  MONTH_LENGTH,
+  getItem,
   getPerk,
 } from './data';
 import {
@@ -17,6 +19,9 @@ import {
   endWeek,
   expertCost,
   newGame,
+  buyItem,
+  hasShockWarnings,
+  hedgeFee,
   expertLevel,
   expertRankName,
   buyPerk,
@@ -447,5 +452,73 @@ describe('endWeek', () => {
     for (let i = 0; i < SEASON_LENGTH; i++) endWeek(state);
     acceptAscension(state);
     expect(state.status).toBe('won');
+  });
+});
+
+describe('monthly visitors', () => {
+  it('a visitor comes every 4 weeks, but not on the quarter close, and leaves after a week', () => {
+    const state = newGame(12);
+    const arrivals: number[] = [];
+    for (let i = 0; i < SEASON_LENGTH * 2; i++) {
+      const report = endWeek(state);
+      if (report.visitorArrived) arrivals.push(state.week);
+      if (state.visitor) expect(state.week % MONTH_LENGTH).toBe(0);
+    }
+    expect(arrivals).toEqual([4, 8, 16, 20]);
+  });
+
+  it('merchant goods are paid from the purse and take effect', () => {
+    const state = newGame(3);
+    state.purse = 20;
+    state.visitor = { kind: 'merchant', offers: ['guildSeal', 'sharpQuill', 'routeMap'], sold: [] };
+    buy(state, 'mines', 50);
+    setHedge(state, 'mines', true);
+    expect(hedgeFee(state, 'mines')).toBeGreaterThan(0);
+    const fullCost = expertCost(state, 'spy');
+    expect(buyItem(state, 'guildSeal').ok).toBe(true);
+    expect(buyItem(state, 'sharpQuill').ok).toBe(true);
+    expect(buyItem(state, 'sharpQuill').ok).toBe(false);
+    expect(buyItem(state, 'stolenLedger').ok).toBe(false); // not on offer
+    expect(hedgeFee(state, 'mines')).toBe(0);
+    expect(expertCost(state, 'spy')).toBeCloseTo(fullCost / 2, 1);
+    expect(state.purse).toBeCloseTo(20 - getItem('guildSeal').cost - getItem('sharpQuill').cost);
+    expect(hasShockWarnings(state)).toBe(false);
+    buyItem(state, 'routeMap');
+    expect(hasShockWarnings(state)).toBe(true);
+  });
+
+  it('the stolen ledger makes the spy exact', () => {
+    const state = newGame(5);
+    state.purse = 20;
+    state.visitor = { kind: 'smuggler', offers: ['stolenLedger', 'crookedScales'], sold: [] };
+    buyItem(state, 'stolenLedger');
+    consult(state, 'spy', 'bakers');
+    const insight = state.insights[0];
+    if (insight?.expert !== 'spy') throw new Error('expected a spy insight');
+    expect(insight.bands).toEqual(bands(state.sectorForecasts.bakers!));
+  });
+
+  it('smuggled goods can get you caught when they wear off', () => {
+    let caught = 0;
+    let escaped = 0;
+    for (let seed = 0; seed < 60; seed++) {
+      const state = newGame(seed);
+      state.purse = 20;
+      state.visitor = { kind: 'smuggler', offers: ['crookedScales', 'stolenLedger'], sold: [] };
+      const before = wealth(state);
+      buyItem(state, 'crookedScales');
+      expect(wealth(state)).toBeCloseTo(before * 1.03);
+      const purseBefore = state.purse;
+      const report = endWeek(state);
+      const outcome = report.smuggling.find((s) => s.item === 'crookedScales');
+      expect(outcome).toBeDefined();
+      if (outcome!.caught) {
+        caught++;
+        expect(state.purse).toBeLessThan(purseBefore / 2 + 1);
+      } else escaped++;
+      expect(state.effects).toHaveLength(0);
+    }
+    expect(caught).toBeGreaterThan(10);
+    expect(escaped).toBeGreaterThan(10);
   });
 });

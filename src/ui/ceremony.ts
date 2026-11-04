@@ -41,15 +41,15 @@ const SPEAKERS: { minClass: number; speaker: Speaker; lines: Record<Mood, string
     },
     lines: {
       sad: [
-        'Os números não mentem, mestre. Foi uma estação fraca. A guilda espera mais na próxima.',
+        'Os números não mentem, mestre. Foi um trimestre fraco. A guilda espera mais na próxima.',
         'Lamento registrar perdas, mestre. Os investidores perguntaram por você. Duas vezes.',
       ],
       neutral: [
         'Resultado dentro do esperado. A guilda registra sua permanência. Siga firme.',
-        'Uma estação honesta, mestre. Nem festa, nem luto. O livro está em ordem.',
+        'Um trimestre honesto, mestre. Nem festa, nem luto. O livro está em ordem.',
       ],
       happy: [
-        'Excelente estação! A guilda reconhece seu mérito e recomenda seu nome ao castelo.',
+        'Excelente trimestre! A guilda reconhece seu mérito e recomenda seu nome ao castelo.',
         'Que colheita, mestre! Os investidores já brindam ao seu nome na taverna.',
       ],
     },
@@ -63,12 +63,12 @@ const SPEAKERS: { minClass: number; speaker: Speaker; lines: Record<Mood, string
     },
     lines: {
       sad: [
-        'Vossa Senhoria, que estação ingrata… certamente culpa dos ventos e dos astros, jamais de vossa sabedoria. Que os bons tempos voltem logo!',
+        'Vossa Senhoria, que trimestre ingrato… certamente culpa dos ventos e dos astros, jamais de vossa sabedoria. Que os bons tempos voltem logo!',
         'Ah, meu senhor, até os maiores enfrentam invernos. O castelo aguarda ansioso vosso retorno triunfal. Mais vinho?',
       ],
       neutral: [
         'Vossa Senhoria mantém o brilho de sempre. Permita-me ajeitar vossa almofada.',
-        'Uma estação serena, digna de vossa nobreza. Os bardos já ensaiam canções sobre vossa prudência.',
+        'Um trimestre sereno, digno de vossa nobreza. Os bardos já ensaiam canções sobre vossa prudência.',
       ],
       happy: [
         'Magnífico! Esplêndido! O castelo inteiro brinda ao vosso nome, meu senhor!',
@@ -84,8 +84,8 @@ export function seasonReturn(review: SeasonReview): number {
 
 export function seasonMood(review: SeasonReview): Mood {
   const ret = seasonReturn(review);
-  if (review.outcome === 'down' || review.outcome === 'lost' || ret < -3) return 'sad';
-  if (review.outcome === 'up-offer' || ret > 6) return 'happy';
+  if (review.outcome === 'down' || review.outcome === 'lost' || ret < -6) return 'sad';
+  if (review.outcome === 'up-offer' || ret > 15) return 'happy';
   return 'neutral';
 }
 

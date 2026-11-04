@@ -215,6 +215,46 @@ export interface LockedBond {
   maturesWeek: number;
 }
 
+export type VisitorKind = 'merchant' | 'smuggler';
+
+export type ItemId =
+  | 'brassLenses'
+  | 'routeMap'
+  | 'guildSeal'
+  | 'sharpQuill'
+  | 'luckyCharm'
+  | 'stolenLedger'
+  | 'courtWhisper'
+  | 'crookedScales';
+
+export interface ItemDef {
+  id: ItemId;
+  name: string;
+  icon: string;
+  seller: VisitorKind;
+  cost: number;
+  /** Weeks it lasts; 0 for one-off effects. */
+  weeks: number;
+  /** 'quarter' lasts until the end of the current quarter. */
+  until?: 'quarter';
+  effect: string;
+  /** Chance of being caught when the effect ends (smuggled goods only). */
+  catchChance?: number;
+  /** What happens if caught. */
+  penalty?: string;
+}
+
+export interface Visitor {
+  kind: VisitorKind;
+  offers: ItemId[];
+  sold: ItemId[];
+}
+
+export interface ActiveEffect {
+  id: ItemId;
+  weeksLeft: number;
+}
+
 export interface SeasonSnapshot {
   wealth: number;
   purse: number;
@@ -282,7 +322,7 @@ export interface LogEntry {
 export type GameStatus = 'playing' | 'won' | 'lost';
 
 export interface GameState {
-  version: 8;
+  version: 9;
   seed: number;
   rngState: number;
   /** Weeks elapsed. A season is SEASON_LENGTH weeks. */
@@ -328,6 +368,10 @@ export interface GameState {
   assetPnl: Record<string, number>;
   /** Snapshot taken when the current season started, for the season review. */
   seasonStart: SeasonSnapshot;
+  /** Who is visiting the square this month, if anyone (offers valid until the week ends). */
+  visitor: Visitor | null;
+  /** Items bought from visitors that are still in effect. */
+  effects: ActiveEffect[];
   /** Set at a season's end when wealth reached the class ceiling. */
   ascensionOffer: boolean;
   status: GameStatus;

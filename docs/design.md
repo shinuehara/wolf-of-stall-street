@@ -131,9 +131,33 @@ faz essa conta antes dos outros.
 **Almanaque** (na Praça): descrição da cidade, dos bairros e das guildas, gráficos do PIB
 e da demanda de cada bairro, empresas de cada bairro e notícias ativas.
 
-### Avaliação da estação (cerimônia)
+### Trimestres, meses e visitantes
 
-No fim de cada estação, no lugar do relatório semanal, abre a **Avaliação da Estação**:
+O jogo anda em **trimestres de 12 semanas**, divididos em **3 meses de 4 semanas**.
+
+- **Fim de cada mês (semanas 4 e 8):** um visitante arma a tenda na praça até o fim da semana.
+  - **Mercador Viajante** (3 ofertas, legais, efeito de 4 semanas): Lunetas de Bronze
+    (Astróloga +10 pontos), Mapa dos Atalhos (avisa choques), Selo dos Seguradores (seguro
+    grátis), Pena Afiada (perguntas pela metade) e Amuleto da Sorte (choques ruins pela metade).
+  - **Contrabandista** (2 ofertas, fortes e ilegais): Livro-Caixa Roubado (Espião exato por
+    4 semanas; 30% de ser pego: metade do bolso), Sussurro da Corte (taxa de performance em
+    dobro até o fim do trimestre; 35%: o fundo perde 8%) e Balança Viciada (+3% no fundo na
+    hora; 40%: multa de 6% do fundo e metade do bolso). A chance de ser pego é sorteada quando
+    o efeito acaba.
+- **Fim do trimestre (semana 12):** avaliação de classe e a festa de fechamento.
+
+### Avaliação do trimestre (festa de fechamento)
+
+Uma tela cheia com a festa do fechamento em pixel art, que cresce com a classe: Jantar
+Modesto (Servo), Ceia na Taverna, Banquete da Guilda, Festim dos Mercadores, Sarau do Burgo,
+Festa no Castelo, Grande Banquete do Barão e Baile de Gala do Conde (lustres, dançarinos,
+músicos e fogos). Trimestre ruim deixa a sala escura e chuvosa; trimestre bom joga confete.
+Primeiro o oficial discursa (caixa de diálogo); depois vêm os números do trimestre: fundo,
+bolso, semanas no azul, gráfico, destaque e decepção, e o veredito.
+
+### Avaliação do oficial
+
+Quem discursa na festa:
 rentabilidade do fundo na estação, quanto entrou no seu bolso, as 4 semanas, o destaque e a
 decepção, e o veredito (cai, fica ou pode subir, com o título à venda ali mesmo).
 
@@ -245,15 +269,17 @@ e respostas dos especialistas, com erro). `src/sim/balance.test.ts` garante que:
 - com melhorias há menos quedas de classe, mas ainda há semanas de -10% ou pior;
 - chutar não é um caminho confiável para a nobreza.
 
-Referência (60 partidas, limite de 300 semanas):
+Referência (60 partidas, limite de 300 semanas, trimestres de 12 semanas):
 
-| Bot                  | Vence | Perde | Semanas até Conde | Quedas de classe |
-| -------------------- | ----- | ----- | ----------------- | ---------------- |
-| Só títulos           | 0     | 0     | —                 | —                |
-| Sem informação       | 35    | 0     | ~210              | 2,8              |
-| Astróloga            | 51    | 0     | ~175              | 2,3              |
-| Espião sem melhorias | 58    | 0     | ~135              | 0,9              |
-| Espião com melhorias | 60    | 0     | ~91               | 0,1              |
+| Bot                  | Vence    | Semanas até Conde | Quedas de classe | Pior semana |
+| -------------------- | -------- | ----------------- | ---------------- | ----------- |
+| Só títulos           | 0        | —                 | —                | —           |
+| Sem informação       | 25 de 40 | ~221              | 1,7              | -18%        |
+| Espião sem melhorias | 40 de 40 | ~146              | 0,15             | -16%        |
+| Espião com melhorias | 40 de 40 | ~112              | 0                | -12%        |
+
+Os bots ainda não compram itens dos visitantes. O mínimo possível hoje é 84 semanas
+(7 promoções, uma por trimestre).
 
 Alavancas principais: `DRIFT_SCALE`, `CENTER_NOISE`, `NEWS_VISIBILITY`, `NEWS_LEAN` e
 `LEAN_SHARPNESS` em `forecast.ts`; ruído do Espião, choques e preços das melhorias em `data.ts`.

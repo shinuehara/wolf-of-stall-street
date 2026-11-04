@@ -3,6 +3,7 @@ import {
   acceptAscension,
   buy,
   buyPerk,
+  buyItem,
   consult,
   declineAscension,
   endWeek,
@@ -14,7 +15,7 @@ import {
   fmt,
 } from './sim/game';
 import { assetName, guildOfAsset, isBasket, isBond } from './sim/assets';
-import type { ExpertId, GameState, PerkId } from './sim/types';
+import type { ExpertId, GameState, ItemId, PerkId } from './sim/types';
 import { SCREENS, initialUi, render, type Screen } from './ui/render';
 import { clearGame, loadGame, saveGame } from './ui/storage';
 
@@ -58,6 +59,8 @@ function finishWeek(): void {
   }
   ui.weekNews = fresh.reverse();
   ui.showReport = true;
+  ui.galaStep = 0;
+  if (ui.lastReport.visitorArrived) ui.visitorDismissed = false;
 }
 
 root.addEventListener('click', (event) => {
@@ -76,6 +79,18 @@ root.addEventListener('click', (event) => {
     case 'open-asset':
       selectAsset(assetId);
       go('market');
+      break;
+    case 'gala-next':
+      ui.galaStep = 1;
+      break;
+    case 'buy-item':
+      report(buyItem(state, target.dataset.item as ItemId));
+      break;
+    case 'dismiss-visitor':
+      ui.visitorDismissed = true;
+      break;
+    case 'open-visitor':
+      ui.visitorDismissed = false;
       break;
     case 'tavern-tab':
       ui.tavernTab = target.dataset.tab === 'hire' ? 'hire' : 'ask';

@@ -1,4 +1,6 @@
 import {
+  MONTH_LENGTH,
+  getItem,
   ASTROLOGER_ACCURACY,
   DRUNK_ACCURACY,
   SPY_FAKE_CHANCE,
@@ -46,6 +48,7 @@ import {
   hedgeFee,
   expertLevel,
   expertRankName,
+  hasShockWarnings,
   isGuildUnlocked,
   nextPerkLevel,
   perkLevel,
@@ -65,7 +68,7 @@ import type {
   WeekRecord,
 } from '../sim/types';
 import { seasonReturn, seasonSpeech } from './ceremony';
-import { sceneUrl, type SceneName } from './scenes';
+import { GALA_NAMES, galaUrl, sceneUrl, type SceneName } from './scenes';
 import { expertSprite, sprite, type SpriteName } from './sprites';
 
 export type Screen = SceneName;
@@ -78,6 +81,10 @@ export interface UiState {
   squareTab: 'news' | 'almanac';
   /** Almanac entry: 'city', a region id or a guild id. */
   almanacEntry: string;
+  /** Quarter-close party: 0 = the scene and the speech, 1 = the numbers. */
+  galaStep: 0 | 1;
+  /** The visitor of the month was sent away (or not yet). */
+  visitorDismissed: boolean;
   /** Which view the portfolio shows: today's holdings or past returns. */
   portfolioTab: 'position' | 'returns';
   /** Guilds whose companies are listed under the basket in the market. */
@@ -101,6 +108,8 @@ export function initialUi(): UiState {
     selectedAsset: 'bakers',
     squareTab: 'news',
     portfolioTab: 'position',
+    galaStep: 0,
+    visitorDismissed: false,
     almanacEntry: 'city',
     expandedGuilds: { bakers: true },
     marketDetailOpen: false,
@@ -292,7 +301,7 @@ function renderHud(state: GameState): string {
       <strong class="hud-value gold">${fmt(state.purse)} fl</strong>
     </div>
     <div class="hud-stat hud-week">
-      <span class="hud-label">Estação ${season(state)}</span>
+      <span class="hud-label">${season(state)}º trimestre · mês ${monthOfQuarter(state)}</span>
       <strong class="hud-value">Semana ${state.week + 1}</strong>
     </div>
     ${
@@ -349,7 +358,7 @@ function renderSquare(state: GameState, ui: UiState): string {
   const net = report ? reportNet(report) : null;
   const total = wealth(state);
   const weeks = weeksUntilSeasonEnd(state);
-  let verdict = `Faltam ${weeks} semana(s) para a avaliação. Você está entre o piso e o teto: se a estação acabasse hoje, seguiria ${cls.name}.`;
+  let verdict = `Faltam ${weeks} semana(s) para a avaliação. Você está entre o piso e o teto: se o trimestre acabasse hoje, seguiria ${cls.name}.`;
   if (state.classIndex >= TOP_CLASS) verdict = 'Você é Conde. O reino é seu.';
   else if (total < cls.floor)
     verdict = `Cuidado! Faltam ${weeks} semana(s) e você está abaixo do piso de ${whole(cls.floor)} fl. Se nada mudar, vai cair de classe.`;
@@ -370,6 +379,11 @@ function renderSquare(state: GameState, ui: UiState): string {
     <article class="card px">
       <h2>${sprite('scroll', 20)} O Arauto anuncia</h2>
       ${noNews ? '<p class="muted">Tempos calmos no reino. Por enquanto.</p>' : ''}
+      ${
+        state.visitor
+          ? `<button class="visitor-call px" data-action="open-visitor">${sprite(state.visitor.kind === 'merchant' ? 'tent' : 'hood0', 28)}<span><strong>${state.visitor.kind === 'merchant' ? 'Um Mercador Viajante está na praça' : 'Um Contrabandista sussurra na esquina'}</strong><span class="small muted">Só até o fim da semana. Ver ofertas ▶</span></span></button>`
+          : ''
+      }
       <ul class="news">
         ${state.localNews
           .map(
@@ -426,8 +440,18 @@ function renderSquare(state: GameState, ui: UiState): string {
       }
     </article>
     <article class="card px">
-      <h2>${sprite('castle', 20)} A estação</h2>
+      <h2>${sprite('castle', 20)} O trimestre</h2>
       <p>${verdict}</p>
+      ${
+        state.effects.length
+          ? `<div class="chips">${state.effects
+              .map((e) => {
+                const item = getItem(e.id);
+                return `<span class="chip ${item.seller === 'smuggler' ? 'down' : 'up'}" title="${esc(item.effect)}">${item.name} · ${e.weeksLeft} sem.</span>`;
+              })
+              .join('')}</div>`
+          : ''
+      }
       <p class="muted small">Ouro parado não rende. No Mercado, os Títulos da Coroa pagam ${pct(cls.bondRate * 100, 2)} por semana (livre) ou ${pct(cls.bondRate * BOND_LOCK_MULTIPLIER * 100, 2)} (preso ${BOND_LOCK_WEEKS} semanas). Suas taxas: ${pct(cls.managementFeeRate * 100, 2)} do fundo por semana + ${whole(cls.performanceFeeRate * 100)}% do lucro. Seu custo de vida: ${fmtCost(cls.livingCost)} fl por semana.</p>
     </article>
   </div>
@@ -622,7 +646,7 @@ function renderGuildGroup(state: GameState, ui: UiState, guild: GuildDef): strin
       ${toggle}
       <button class="guild-row ${isCompany ? 'company-row' : ''}" data-action="select-asset" data-asset="${assetId}">
         ${isCompany ? '<span class="tree">└</span>' : sprite(GUILD_SPRITE[guild.id]!, 28)}
-        <span class="row-name">${label}${state.perks.informants && (state.shockRisk[assetId] ?? 0) > 0.05 ? ' <span class="warn" title="Informantes: risco alto de choque">⚠</span>' : ''}</span>
+        <span class="row-name">${label}${hasShockWarnings(state) && (state.shockRisk[assetId] ?? 0) > 0.05 ? ' <span class="warn" title="Informantes: risco alto de choque">⚠</span>' : ''}</span>
         <span class="row-range">${pct(r.low, 0)} a ${pct(r.high, 0)}</span>
         <span class="row-pos ${position ? 'gold' : 'muted'}">${position ? `${fmt(position.value)} fl${position.hedged ? ' 🛡' : ''}` : '—'}${extra}</span>
       </button>
@@ -789,7 +813,7 @@ function renderAssetDetail(state: GameState, ui: UiState, assetId: string): stri
   const localNews = state.localNews
     .filter((n) => n.targetId === 'city' || components.some((c) => c.regionId === n.targetId))
     .map((n) => ({ label: `${localTag(n.targetId)}: ${n.headline}`, shift: 0 }));
-  const warned = state.perks.informants
+  const warned = hasShockWarnings(state)
     ? components.filter((c) => (state.shockRisk[c.id] ?? 0) > 0.05)
     : [];
   const shockNews = warned.map((c) => ({
@@ -957,9 +981,14 @@ function hashString(text: string): number {
   return h >>> 0;
 }
 
-function renderChart(series: Series[], rescale: boolean, title = 'Preço nas últimas'): string {
+function renderChart(
+  series: Series[],
+  rescale: boolean,
+  title = 'Preço nas últimas',
+  maxWeeks = CHART_WEEKS,
+): string {
   const main = series.find((s) => s.main)!;
-  const n = Math.min(CHART_WEEKS + 1, main.values.length);
+  const n = Math.min(maxWeeks + 1, main.values.length);
   if (n < 2) {
     return `<div class="chart chart-empty px"><span class="muted">O gráfico aparece depois da primeira semana.</span></div>`;
   }
@@ -1510,6 +1539,9 @@ function renderModal(state: GameState, ui: UiState): string {
       <p>Os credores venceram na semana ${state.week}. O Lobo vai uivar atrás das grades.</p>
       <button class="pbtn" data-action="new-game">Tentar de novo</button>`);
   }
+  if ((!ui.showReport || !ui.lastReport) && state.visitor && !ui.visitorDismissed) {
+    return renderVisitorModal(state);
+  }
   if (!ui.showReport || !ui.lastReport) return '';
   if (ui.lastReport.seasonReview) return renderSeasonModal(state, ui, ui.lastReport.seasonReview);
 
@@ -1558,16 +1590,86 @@ function renderModal(state: GameState, ui: UiState): string {
     }`);
 }
 
+const VISITOR_TEXT = {
+  merchant: {
+    name: 'O Mercador Viajante',
+    title: 'mercadorias honestas da capital',
+    sprite: 'tent' as SpriteName,
+    line: 'Bons dias, gestor! Tudo com selo da guilda, preço justo e nota fiscal. Bem, quase tudo.',
+  },
+  smuggler: {
+    name: 'O Contrabandista',
+    title: 'ninguém sabe o nome dele',
+    sprite: 'hood0' as SpriteName,
+    line: 'Psiu… gestor. Tenho coisas que o Meirinho não precisa saber. Funciona que é uma beleza. Até alguém descobrir.',
+  },
+};
+
+function renderVisitorModal(state: GameState): string {
+  const visitor = state.visitor!;
+  const who = VISITOR_TEXT[visitor.kind];
+  const playing = state.status === 'playing';
+  return `<div class="modal-backdrop"><div class="modal px modal-wide visitor visitor-${visitor.kind}" role="dialog" aria-modal="true" aria-label="${who.name}">
+    <div class="dialog ${visitor.kind === 'smuggler' ? 'mood-sad' : 'mood-happy'}">
+      ${sprite(who.sprite, 48)}
+      <div>
+        <strong>${who.name}</strong> <span class="muted small">${who.title}</span>
+        <p>“${who.line}”</p>
+      </div>
+    </div>
+    <div class="item-grid">${visitor.offers
+      .map((id) => {
+        const item = getItem(id);
+        const sold = visitor.sold.includes(id);
+        return `<article class="item px ${sold ? 'sold' : ''}">
+          <header>${sprite(item.icon as SpriteName, 28)}<strong>${item.name}</strong></header>
+          <p class="small">${item.effect}</p>
+          ${
+            item.catchChance
+              ? `<p class="small down">Risco: ${whole(item.catchChance * 100)}% de o Meirinho descobrir no fim. ${item.penalty ?? ''}</p>`
+              : ''
+          }
+          <button class="pbtn pbtn-small" data-action="buy-item" data-item="${id}" ${!sold && playing && state.purse >= item.cost ? '' : 'disabled'}>
+            ${sold ? 'Comprado ✔' : `Comprar · ${fmtCost(item.cost)} fl`}
+          </button>
+        </article>`;
+      })
+      .join('')}</div>
+    <p class="small muted">Pago do seu bolso: <strong class="gold">${fmt(state.purse)} fl</strong>. A oferta vale só até o fim desta semana.</p>
+    <button class="pbtn pbtn-ghost" data-action="dismiss-visitor">Ir embora</button>
+  </div></div>`;
+}
+
 function renderSeasonModal(state: GameState, ui: UiState, review: SeasonReview): string {
   const { speaker, mood, line } = seasonSpeech(review);
+  const tier = review.classBefore;
+  const party = GALA_NAMES[Math.min(tier, GALA_NAMES.length - 1)]!;
+  const scene = `<div class="gala-scene" style="background-image:url(${galaUrl(tier, mood)})">
+      <div class="gala-title"><span>Fechamento do ${review.season}º trimestre</span><strong>${party}</strong></div>
+    </div>`;
+
+  if (ui.galaStep === 0) {
+    return `<div class="modal-backdrop gala-backdrop"><div class="gala px" role="dialog" aria-modal="true" aria-label="${party}">
+      ${scene}
+      <div class="dialog mood-${mood}">
+        ${sprite(speaker.sprite, 48)}
+        <div>
+          <strong>${speaker.name}</strong> <span class="muted small">${speaker.title}</span>
+          <p class="typewriter">“${line}”</p>
+        </div>
+      </div>
+      <div class="gala-actions"><button class="pbtn" data-action="gala-next">Ver os números ▶</button></div>
+    </div></div>`;
+  }
+
   const ret = seasonReturn(review);
   const before = getClass(review.classBefore);
   const after = getClass(review.classAfter);
-  const weekNet = ui.lastReport ? reportNet(ui.lastReport) : 0;
   const ranked = Object.entries(review.assetPnl).sort((a, b) => b[1] - a[1]);
   const best = ranked[0];
   const worst = ranked[ranked.length - 1];
-  const weekPct = (r: WeekRecord) => (r.endWealth / r.startWealth - 1) * 100;
+  const fundSeries = [review.startWealth, ...review.weeks.map((r: WeekRecord) => r.endWealth)];
+  const winWeeks = review.weeks.filter((r: WeekRecord) => r.endWealth >= r.startWealth).length;
 
   let verdict: string;
   switch (review.outcome) {
@@ -1580,10 +1682,10 @@ function renderSeasonModal(state: GameState, ui: UiState, review: SeasonReview):
         <button class="pbtn" data-action="close-report">Seguir em frente</button>`;
       break;
     case 'stay':
-      verdict = `<p class="verdict">Você segue <strong>${after.name}</strong>. Para subir, o fundo precisa passar de ${whole(after.ceiling)} fl no fim da próxima estação.</p>
+      verdict = `<p class="verdict">Você segue <strong>${after.name}</strong>. Para subir, o fundo precisa passar de ${whole(after.ceiling)} fl no fim do próximo trimestre.</p>
         <button class="pbtn" data-action="close-report">Continuar</button>`;
       break;
-    case 'up-offer': {
+    default: {
       const next = getClass(review.classAfter + 1);
       verdict = `<div class="offer">
           <p>${sprite('scroll', 20)} O fundo passou do teto de ${whole(before.ceiling)} fl. O título de <strong>${next.name}</strong> está à venda por <strong class="gold">${fmt(before.ascensionFee)} fl</strong>, pagos do seu bolso (${fmt(state.purse)} fl).</p>
@@ -1592,47 +1694,32 @@ function renderSeasonModal(state: GameState, ui: UiState, review: SeasonReview):
             <button class="pbtn pbtn-ghost" data-action="close-report">Depois</button>
           </div>
         </div>`;
-      break;
     }
   }
 
-  return modal(
-    `
-    <h2>Avaliação da Estação ${review.season}</h2>
-    <div class="speech mood-${mood}">
-      ${sprite(speaker.sprite, 40)}
-      <div>
-        <strong>${speaker.name}</strong> <span class="muted small">${speaker.title}</span>
-        <p>“${line}”</p>
+  return `<div class="modal-backdrop gala-backdrop"><div class="gala px" role="dialog" aria-modal="true" aria-label="Números do trimestre">
+    <div class="gala-scene gala-scene-small" style="background-image:url(${galaUrl(tier, mood)})">
+      <div class="gala-title"><span>${party}</span><strong>Os números do ${review.season}º trimestre</strong></div>
+    </div>
+    <div class="gala-body">
+      <div class="season-tiles">
+        <div><span class="hud-label">Fundo no trimestre</span><strong class="${tone(ret)}">${pct(ret)}</strong><span class="muted small">${fmt(review.startWealth)} → ${fmt(review.endWealth)} fl</span></div>
+        <div><span class="hud-label">Seu bolso</span><strong class="${tone(review.endPurse - review.startPurse)}">${signed(review.endPurse - review.startPurse)} fl</strong><span class="muted small">agora ${fmt(review.endPurse)} fl</span></div>
+        <div><span class="hud-label">Semanas no azul</span><strong>${winWeeks} de ${review.weeks.length}</strong><span class="muted small">${mood === 'happy' ? 'que trimestre!' : mood === 'sad' ? 'trimestre para esquecer' : 'trimestre honesto'}</span></div>
       </div>
+      ${renderChart([{ values: fundSeries, color: 'var(--gold)', main: true, label: 'Fundo' }], false, 'Fundo nas últimas', SEASON_LENGTH)}
+      ${
+        best && worst
+          ? `<p class="small season-best">Destaque: <strong>${assetName(best[0])}</strong> <span class="${tone(best[1])}">${signed(best[1])} fl</span>${
+              worst[0] !== best[0]
+                ? ` · Decepção: <strong>${assetName(worst[0])}</strong> <span class="${tone(worst[1])}">${signed(worst[1])} fl</span>`
+                : ''
+            }</p>`
+          : '<p class="small muted">Nenhuma aposta neste trimestre.</p>'
+      }
+      ${verdict}
     </div>
-    <div class="season-tiles">
-      <div><span class="hud-label">Fundo na estação</span><strong class="${tone(ret)}">${pct(ret)}</strong><span class="muted small">${fmt(review.startWealth)} → ${fmt(review.endWealth)} fl</span></div>
-      <div><span class="hud-label">Seu bolso</span><strong class="${tone(review.endPurse - review.startPurse)}">${signed(review.endPurse - review.startPurse)} fl</strong><span class="muted small">agora ${fmt(review.endPurse)} fl</span></div>
-      <div><span class="hud-label">Última semana</span><strong class="${tone(weekNet)}">${signed(weekNet)} fl</strong><span class="muted small">no fundo</span></div>
-    </div>
-    <table class="ptable season-weeks">
-      <thead><tr><th>Semana</th><th class="num">Fundo</th><th class="num">Resultado</th><th class="num">%</th></tr></thead>
-      <tbody>${review.weeks
-        .map(
-          (r) => `<tr><td>${r.week}</td><td class="num">${fmt(r.endWealth)}</td>
-            <td class="num ${tone(r.endWealth - r.startWealth)}">${signed(r.endWealth - r.startWealth)}</td>
-            <td class="num ${tone(weekPct(r))}">${pct(weekPct(r))}</td></tr>`,
-        )
-        .join('')}</tbody>
-    </table>
-    ${
-      best && worst
-        ? `<p class="small season-best">Destaque: <strong>${assetName(best[0])}</strong> <span class="${tone(best[1])}">${signed(best[1])} fl</span>${
-            worst[0] !== best[0]
-              ? ` · Decepção: <strong>${assetName(worst[0])}</strong> <span class="${tone(worst[1])}">${signed(worst[1])} fl</span>`
-              : ''
-          }</p>`
-        : '<p class="small muted">Nenhuma aposta nesta estação.</p>'
-    }
-    ${verdict}`,
-    'modal-wide',
-  );
+  </div></div>`;
 }
 
 function modal(content: string, extraClass = ''): string {
@@ -1660,6 +1747,10 @@ function reportNet(report: WeekReport): number {
 /** Small amounts (expert fees, premiums) with two decimals. */
 function fmtCost(value: number): string {
   return value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function monthOfQuarter(state: GameState): number {
+  return Math.floor((state.week % SEASON_LENGTH) / MONTH_LENGTH) + 1;
 }
 
 function fmtBeta(beta: number): string {

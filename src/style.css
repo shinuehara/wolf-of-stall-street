@@ -2209,3 +2209,172 @@ img.sprite,
   font-size: 0.85em;
   letter-spacing: 1px;
 }
+
+/* Quarter-close party */
+.gala-backdrop {
+  padding: 10px;
+}
+
+.gala {
+  width: min(880px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  animation: pop 0.3s steps(5);
+}
+
+.gala-scene {
+  position: relative;
+  height: min(46vh, 420px);
+  min-height: 160px;
+  background-size: cover;
+  background-position: center bottom;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  border-bottom: var(--px) solid var(--edge);
+}
+
+.gala-scene-small {
+  height: min(22vh, 180px);
+  min-height: 90px;
+}
+
+.gala-title {
+  position: absolute;
+  top: 10px;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-shadow:
+    3px 3px 0 var(--edge),
+    -1px -1px 0 var(--edge);
+}
+
+.gala-title span {
+  font-size: 0.95rem;
+}
+
+.gala-title strong {
+  font-family: var(--font-display);
+  font-size: clamp(1.2rem, 3.5vw, 2rem);
+  color: var(--gold);
+}
+
+.dialog {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  background: var(--panel-lo);
+  border-top: var(--px) solid var(--blue);
+  text-align: left;
+}
+
+.dialog.mood-sad {
+  border-top-color: var(--red);
+}
+
+.dialog.mood-happy {
+  border-top-color: var(--green);
+}
+
+.dialog p {
+  margin-top: 6px;
+  font-size: 1.1em;
+  font-style: italic;
+}
+
+.typewriter {
+  animation: typewriter 2.2s steps(40) both;
+}
+
+@keyframes typewriter {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+.gala-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 14px;
+}
+
+.gala-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+/* Monthly visitors */
+.visitor .dialog {
+  border: var(--px) solid var(--green);
+}
+
+.visitor-smuggler .dialog {
+  border-color: var(--red);
+}
+
+.item-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  text-align: left;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+}
+
+.item header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  color: var(--gold);
+}
+
+.item button {
+  margin-top: auto;
+}
+
+.item.sold {
+  opacity: 0.6;
+}
+
+.visitor-call {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-color: var(--gold);
+  animation: blink 1.2s steps(2) infinite;
+}
+
+.visitor-call span {
+  display: flex;
+  flex-direction: column;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .typewriter,
+  .visitor-call,
+  .gala {
+    animation: none;
+  }
+}

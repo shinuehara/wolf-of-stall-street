@@ -21,9 +21,9 @@ function review(over: Partial<SeasonReview>): SeasonReview {
 describe('season ceremony', () => {
   it('grades the mood by outcome and season return', () => {
     expect(seasonMood(review({ outcome: 'down' }))).toBe('sad');
-    expect(seasonMood(review({ endWealth: 95 }))).toBe('sad');
+    expect(seasonMood(review({ endWealth: 90 }))).toBe('sad');
     expect(seasonMood(review({}))).toBe('neutral');
-    expect(seasonMood(review({ endWealth: 110 }))).toBe('happy');
+    expect(seasonMood(review({ endWealth: 120 }))).toBe('happy');
     expect(seasonMood(review({ outcome: 'up-offer' }))).toBe('happy');
   });
 
