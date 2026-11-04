@@ -39,8 +39,8 @@ O jogo é jogável do começo ao fim e passa em 54 testes. Visão geral do que e
   Contrabandista (itens fortes com risco de flagrante quando o efeito acaba).
 
 Balanceamento atual (bots, 60 partidas, até 300 semanas): só títulos nunca vence; sem
-informação vence 30% e vai para a masmorra em 1 de cada 3 partidas; Espião sem melhorias
-~149 semanas; com melhorias ~100 semanas, quase sem quedas. Os bots ainda não compram itens de visitantes.
+informação vence 67% e vai para a masmorra em 10% das partidas; Espião sem melhorias ~130
+semanas; com melhorias ~101 semanas; quem usa o Espião nunca vai para a masmorra. Os bots ainda não compram itens de visitantes.
 
 ## Decisões do dono (não desfazer sem perguntar)
 
@@ -68,6 +68,9 @@ informação vence 30% e vai para a masmorra em 1 de cada 3 partidas; Espião se
 - Investidores julgam o histórico (3 meses), não um mês isolado; resgates mais rápidos.
 - Idles = **sub-gestores** que cuidam de parte do fundo (opção b).
 - Promoções múltiplas se o fundo bate a meta de várias classes; quedas múltiplas também.
+- O dono **delegou a dificuldade** a Claude ("não tenho essa sensibilidade"). Regra adotada:
+  perder exige erros repetidos (queda de classe alta para em Servo com último aviso; saques
+  param 15% acima do piso). Metas: ~10% de masmorra para quem chuta, 0 para quem se informa.
 - Ideias aceitas para depois: relatórios por setor e panorama macro do Espião (pacotes),
   assinatura semanal.
 
@@ -77,8 +80,6 @@ informação vence 30% e vai para a masmorra em 1 de cada 3 partidas; Espião se
    achatar as estimativas para o meio quanto pior a patente.
 2. **Ritmo geral:** ~100 semanas no melhor bot. Está bom ou encurtar a escada?
 3. **Próximas etapas da história:** o que libera a Astróloga/Espião, seguro, visitantes, etc.
-4. **Masmorra para quem chuta:** 1 em 3 partidas sem informação acaba na masmorra. Duro
-   demais para um iniciante?
 
 ## Próximos passos sugeridos (prioridade sugerida por Claude)
 
@@ -114,3 +115,4 @@ informação vence 30% e vai para a masmorra em 1 de cada 3 partidas; Espião se
 | `2882f27`                       | Abertura em história: só títulos, Meirinho, influencer libera Padarias   |
 | `222ce6e`                       | Aportes/resgates, propostas de aporte, influencer por guilda, time-lapse |
 | `cea8ed2`                       | Investidores por 3 meses, promoções/quedas múltiplas, gestores           |
+| `7c64891`                       | Último aviso antes da masmorra, saques param acima do piso               |

@@ -66,8 +66,8 @@ O patrimônio é **dinheiro de investidores**: o **fundo**. Você, o gestor, tem
 - Do bolso saem: **especialistas**, **melhorias**, **títulos de nobreza** e o **custo de vida**.
 - Seguros são custo do fundo.
 - A **classe** é medida pelo tamanho do fundo (a fama do gestor).
-- **Derrota:** fundo abaixo do piso de Servo no fim do trimestre (fundo fechado), ou bolso sem
-  dinheiro para o custo de vida (masmorra por dívidas).
+- **Derrota (masmorra):** já sendo Servo, fechar o trimestre com o fundo abaixo do piso de
+  Servo (fundo fechado); ou o bolso sem dinheiro para o custo de vida (dívidas).
 
 Isso impede gastar o patrimônio todo em melhorias no dia 0: elas são compradas com as taxas
 que você acumula, e performar bem rende mais taxa de performance.
@@ -167,6 +167,9 @@ O fundo é dinheiro dos investidores, e eles reagem ao seu desempenho:
   - **Resgate** (medo é rápido): basta o mês **ou** a média ficar abaixo de -2 pontos:
     `1,0 × o pior dos dois` % do fundo, no máximo **-15%**.
   - Humor aleatório de ±25% sobre o valor. Resgates vendem posições se faltar ouro livre.
+  - **Resgates param 15% acima do piso da classe** (`FLOW_FLOOR_MARGIN`): sem isso, uma
+    espiral de saques mandava 1 em 3 jogadores sem informação para a masmorra. A masmorra
+    tem de vir do mercado, não dos saques.
 - Aportes e resgates **não contam como lucro**: ficam fora da taxa de performance, do
   retorno do trimestre (cerimônia) e da pior semana dos bots. O livro-caixa registra `flows`.
 - **Propostas de aporte** (10% de chance por semana, fora das semanas de visitante). Valem até
@@ -330,7 +333,9 @@ cobrado toda semana, de 1,0% (Servo) a 0,4% (Barão) do valor segurado.
 Cada classe tem **piso** e **teto** do fundo. A cada **12 semanas** o fundo é comparado com eles:
 
 - **L1 (abaixo do piso):** cai **quantas classes forem precisas** até o fundo caber no piso.
-  Abaixo do piso do Servo é a **masmorra** (game over), venha de onde vier.
+  Quem **já era Servo** e fecha abaixo do piso vai para a **masmorra** (game over). Quem cai de
+  uma classe mais alta para em Servo mesmo abaixo do piso, com um **último aviso**: mais um
+  trimestre assim e é masmorra. Perder exige erros repetidos, não um trimestre ruim.
 - **L2 (entre os dois):** mantém a classe.
 - **L3 (acima do teto):** o camareiro oferece **um título por teto ultrapassado** (fundo acima
   dos tetos de Servo e Camponês = 2 títulos). Você escolhe até onde subir, pagando a soma dos
@@ -358,16 +363,16 @@ e respostas dos especialistas, com erro). `src/sim/balance.test.ts` garante que:
 Referência (60 partidas, limite de 300 semanas, trimestres de 12 semanas, com a abertura
 gradual):
 
-| Bot                  | Vence    | Semanas até Conde | Quedas de classe   | Pior semana |
-| -------------------- | -------- | ----------------- | ------------------ | ----------- |
-| Só títulos           | 0        | —                 | —                  | —           |
-| Sem informação       | 18 de 60 | ~178              | 1,9 (20 masmorras) | -15%        |
-| Espião sem melhorias | 55 de 60 | ~149              | 1,1 (2 masmorras)  | -15%        |
-| Espião com melhorias | 58 de 60 | ~100              | 0,03 (2 masmorras) | -12%        |
+| Bot                  | Vence    | Semanas até Conde | Quedas de classe  | Pior semana |
+| -------------------- | -------- | ----------------- | ----------------- | ----------- |
+| Só títulos           | 0        | —                 | —                 | —           |
+| Sem informação       | 40 de 60 | ~182              | 1,1 (6 masmorras) | -15%        |
+| Espião sem melhorias | 59 de 60 | ~130              | 0,33 (nenhuma)    | -15%        |
+| Espião com melhorias | 60 de 60 | ~101              | 0,03 (nenhuma)    | -12%        |
 
-Com investidores julgando 3 meses, promoções e quedas múltiplas: quem joga bem chega em ~100
-semanas (sobe várias classes num trimestre bom); quem chuta perde de verdade (1 em 3 vai para
-a masmorra). Versões anteriores: ~135 (abertura) e ~121 (aportes por mês). Antes da
+Metas escolhidas por Claude (o dono delegou a dificuldade): quem chuta vai para a masmorra em
+~10% das partidas; quem se informa, nunca; o melhor jogador chega em ~100 semanas (sobe
+várias classes num trimestre bom). Versões anteriores: ~135 (abertura) e ~121 (aportes por mês). Antes da
 abertura gradual o melhor bot levava ~118 semanas. Os bots ainda não compram itens
 dos visitantes. O mínimo possível hoje é 96 semanas (1 trimestre só de títulos + 7
 promoções).
