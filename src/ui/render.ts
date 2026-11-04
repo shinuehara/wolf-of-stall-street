@@ -1033,14 +1033,14 @@ function renderInsight(insight: Insight, full: boolean): string {
       return `<div class="insight">${sprite('crystal', 20)}${about}<span>Os astros apontam para <strong class="${insight.leansUp ? 'up' : 'down'}">${insight.leansUp ? 'ALTA' : 'BAIXA'}</strong>.</span></div>`;
     case 'spy':
       if (!full) {
-        return `<div class="insight">${sprite('hood', 20)}${about}<span>Chances: ${insight.bands.map((b) => `${Math.round(b.p * 100)}%`).join(' · ')} <span class="confidence conf-${insight.confidence}">confiança ${insight.confidence}</span></span></div>`;
+        return `<div class="insight">${sprite('hood', 20)}${about}<span>Chances: ${insight.bands.map((b, i) => `<span class="band-tone band-tone-${i + 1}">${Math.round(b.p * 100)}%</span>`).join(' · ')} <span class="confidence conf-${insight.confidence}">confiança ${insight.confidence}</span></span></div>`;
       }
       return `<div class="insight insight-spy">${sprite('hood', 20)}${about}<span class="confidence conf-${insight.confidence}">confiança ${insight.confidence}</span>
         <div class="bands">${insight.bands
           .map(
-            (b) => `<div class="band" title="${pct(b.from)} a ${pct(b.to)}">
-              <span class="band-p">${Math.round(b.p * 100)}%</span>
-              <div class="band-bar" style="height:${Math.max(2, Math.round(b.p * 36))}px"></div>
+            (b, i) => `<div class="band" title="${pct(b.from)} a ${pct(b.to)}">
+              <span class="band-p band-tone-${i + 1}">${Math.round(b.p * 100)}%</span>
+              <div class="band-bar band-bg-${i + 1}" style="height:${Math.max(2, Math.round(b.p * 36))}px"></div>
               <span class="band-range">${pct(b.from, 0)}…${pct(b.to, 0)}</span>
             </div>`,
           )

@@ -15,6 +15,11 @@
   --green: #4fe08a;
   --blue: #4fb4ff;
   --purple: #b56cff;
+  /* Spy bands, from the worst quarter of the range to the best. */
+  --band-1: #ff3b4e;
+  --band-2: #ff9aa5;
+  --band-3: #9ff0bf;
+  --band-4: #2fd873;
   --font-display: 'Pixelify Sans', 'Courier New', monospace;
   --font-body: 'VT323', 'Courier New', monospace;
   --px: 3px;
@@ -2147,4 +2152,33 @@ img.sprite,
   .season-tiles {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* Spy bands coloured from strong red (worst quarter) to strong green (best quarter) */
+.band-tone {
+  font-family: var(--font-display);
+}
+.band-tone-1 {
+  color: var(--band-1);
+}
+.band-tone-2 {
+  color: var(--band-2);
+}
+.band-tone-3 {
+  color: var(--band-3);
+}
+.band-tone-4 {
+  color: var(--band-4);
+}
+.band-bar.band-bg-1 {
+  background: var(--band-1);
+}
+.band-bar.band-bg-2 {
+  background: var(--band-2);
+}
+.band-bar.band-bg-3 {
+  background: var(--band-3);
+}
+.band-bar.band-bg-4 {
+  background: var(--band-4);
 }
