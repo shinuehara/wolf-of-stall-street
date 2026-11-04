@@ -111,4 +111,4 @@ informação vence ~75%, em ~186 semanas, com ~1,9 quedas de classe; Espião sem
 | `a3c3a0d`                       | Patentes dos especialistas e retratos por nível                          |
 | `46f8700`                       | Trimestres de 12 semanas, festa de fechamento, visitantes mensais        |
 | `2882f27`                       | Abertura em história: só títulos, Meirinho, influencer libera Padarias   |
-| (este)                          | Aportes/resgates, propostas de aporte, influencer por guilda, time-lapse |
+| `222ce6e`                       | Aportes/resgates, propostas de aporte, influencer por guilda, time-lapse |
