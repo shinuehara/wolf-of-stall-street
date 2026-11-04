@@ -28,6 +28,9 @@ O jogo é jogável do começo ao fim e passa em 54 testes. Visão geral do que e
 - **Abertura em história:** decreto do Rei → 1º trimestre só com Títulos da Coroa → Meirinho
   humilha → cena do influencer Lucrécio Lucrativo libera as Padarias → no 3º trimestre abrem
   Minas e Boticários → depois, por classe.
+- **Profecia do trimestre:** cada ativo tem um destino oculto para o trimestre e é puxado para
+  ele; especialistas respondem sobre o trimestre (vale o trimestre todo, dá para perguntar de
+  novo); **corretagem** de 0,5% por compra/venda.
 - **Gestores contratados** (Carteira → Gestores): Frei Prudêncio, Dona Ambrosina, Rodrigo
   Rompe-Bolsa investem parte do fundo sozinhos, com estilo e taxa próprios.
 - **Promoções e quedas múltiplas** no fim do trimestre (um título por teto ultrapassado).
@@ -39,8 +42,8 @@ O jogo é jogável do começo ao fim e passa em 54 testes. Visão geral do que e
   Contrabandista (itens fortes com risco de flagrante quando o efeito acaba).
 
 Balanceamento atual (bots, 60 partidas, até 300 semanas): só títulos nunca vence; sem
-informação vence 67% e vai para a masmorra em 10% das partidas; Espião sem melhorias ~130
-semanas; com melhorias ~101 semanas; quem usa o Espião nunca vai para a masmorra. Os bots ainda não compram itens de visitantes.
+informação vence 55% e vai para a masmorra em 12%; Espião sem melhorias ~155 semanas; com
+melhorias ~128 semanas; oráculo (teto) ~88. Quem usa o Espião não vai para a masmorra.
 
 ## Decisões do dono (não desfazer sem perguntar)
 
@@ -71,6 +74,10 @@ semanas; com melhorias ~101 semanas; quem usa o Espião nunca vai para a masmorr
 - O dono **delegou a dificuldade** a Claude ("não tenho essa sensibilidade"). Regra adotada:
   perder exige erros repetidos (queda de classe alta para em Servo com último aviso; saques
   param 15% acima do piso). Metas: ~10% de masmorra para quem chuta, 0 para quem se informa.
+- O jogo induzia a comprar/vender tudo toda semana. Ideia do dono: informação dos agentes
+  vale o trimestre; o jogador segura ou realiza conforme o que já aconteceu frente à
+  profecia. Implementado junto com a corretagem. O Arauto passou a anunciar a faixa do
+  trimestre e a semana virou só o "humor da semana" (decisão de Claude, dono não opinou).
 - Ideias aceitas para depois: relatórios por setor e panorama macro do Espião (pacotes),
   assinatura semanal.
 
@@ -83,7 +90,8 @@ semanas; com melhorias ~101 semanas; quem usa o Espião nunca vai para a masmorr
 
 ## Próximos passos sugeridos (prioridade sugerida por Claude)
 
-1. **Relatórios por setor e panorama macro** (pedido do dono).
+1. **Relatórios por setor e panorama macro** (pedido do dono): combinam muito com a
+   profecia (comprar a guilda inteira de uma vez por trimestre).
 2. **Reputação do gestor:** muda o tamanho e o tipo das propostas de aporte (nobres só
    aparecem para quem tem boa fama; a Milícia procura quem está desesperado).
 3. **Continuar a abertura guiada:** próximas etapas da história (especialistas, seguro, visitantes).
@@ -116,3 +124,4 @@ semanas; com melhorias ~101 semanas; quem usa o Espião nunca vai para a masmorr
 | `222ce6e`                       | Aportes/resgates, propostas de aporte, influencer por guilda, time-lapse |
 | `cea8ed2`                       | Investidores por 3 meses, promoções/quedas múltiplas, gestores           |
 | `7c64891`                       | Último aviso antes da masmorra, saques param acima do piso               |
+| (este)                          | Profecia do trimestre, corretagem, perguntas valem o trimestre           |

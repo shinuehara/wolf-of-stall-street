@@ -14,6 +14,14 @@ import {
 import { expectedReturn, type Range } from './forecast';
 import type { CompanyDef, Forecast, GameState, GuildDef, ManagerId } from './types';
 
+/** An asset's quarter: public range of where it ends, the hidden destiny and the way so far (%). */
+export interface AssetProphecy {
+  low: number;
+  high: number;
+  target: number;
+  progress: number;
+}
+
 /**
  * Tradeable assets: every guild's basket (id = guild id) and every company (id = company id).
  *
@@ -135,6 +143,34 @@ export function assetRange(state: GameState, assetId: string): Range {
   return {
     low: parts.reduce((s, p) => s + p.low, 0) / parts.length,
     high: parts.reduce((s, p) => s + p.high, 0) / parts.length,
+  };
+}
+
+/**
+ * The quarter prophecy of a basket or a company: its factors' prophecies combined with the
+ * same weights that combine their moves. The progress includes shocks.
+ */
+export function assetProphecy(state: GameState, assetId: string): AssetProphecy {
+  const parts = componentsOf(assetId).map((c) =>
+    companyExposures(c).reduce(
+      (acc, { factorId, weight }) => {
+        const p = state.prophecies[factorId]!;
+        return {
+          low: acc.low + weight * p.low,
+          high: acc.high + weight * p.high,
+          target: acc.target + weight * p.target,
+          progress: acc.progress + weight * p.progress,
+        };
+      },
+      { low: 0, high: 0, target: 0, progress: 0 },
+    ),
+  );
+  const n = parts.length;
+  return {
+    low: parts.reduce((s, p) => s + p.low, 0) / n,
+    high: parts.reduce((s, p) => s + p.high, 0) / n,
+    target: parts.reduce((s, p) => s + p.target, 0) / n,
+    progress: parts.reduce((s, p) => s + p.progress, 0) / n,
   };
 }
 

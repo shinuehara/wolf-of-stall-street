@@ -21,6 +21,7 @@ import {
   LOCAL_DEMAND,
   REGIONS,
   SEASON_LENGTH,
+  TRADE_FEE,
   TOP_CLASS,
   companiesOf,
   getClass,
@@ -35,6 +36,7 @@ import {
   BOND_LOCKED,
   assetName,
   assetRange,
+  assetProphecy,
   bondRate,
   isBond,
   isManager,
@@ -52,6 +54,7 @@ import {
   expertCost,
   fmt,
   hedgeFee,
+  tradeFee,
   ascensionCost,
   expertLevel,
   expertRankName,
@@ -257,7 +260,7 @@ function assetSprite(assetId: string): SpriteName {
 function targetName(targetId: string): string {
   if (targetId === 'city') return `PIB de ${CITY.name}`;
   if (isRegionId(targetId)) return getRegion(targetId).name;
-  return isBasket(targetId) ? `Setor ${getGuild(targetId).short}` : getCompany(targetId).name;
+  return isBasket(targetId) ? `Cesta ${getGuild(targetId).short}` : getCompany(targetId).name;
 }
 
 /** "Cidade" or the district name, for news tags. */
@@ -564,8 +567,8 @@ function indicatorChart(state: GameState, id: string, label: string): string {
 }
 
 function factorRangeLine(state: GameState, factorId: string, what: string): string {
-  const f = factorForecast(state, factorId);
-  return `<p>O arauto prevê que ${what} varie <strong>${pct(f.low, 0)} a ${pct(f.high, 0)}</strong> nesta semana.</p>`;
+  const p = state.prophecies[factorId]!;
+  return `<p>A profecia diz que ${what} termina o trimestre entre <strong>${pct(p.low, 0)} e ${pct(p.high, 0)}</strong>; até agora andou <strong class="${tone(p.progress)}">${pct(p.progress)}</strong>.</p>`;
 }
 
 function localNewsList(state: GameState, targetId: string): string {
@@ -704,7 +707,7 @@ function renderGuildGroup(state: GameState, ui: UiState, guild: GuildDef): strin
   const inCompanies = companies.reduce((s, c) => s + (state.positions[c.id]?.value ?? 0), 0);
 
   const row = (assetId: string, label: string, isCompany: boolean) => {
-    const r = assetRange(state, assetId);
+    const q = assetProphecy(state, assetId);
     const position = state.positions[assetId];
     const toggle = isCompany
       ? '<span class="toggle-spacer"></span>'
@@ -719,7 +722,7 @@ function renderGuildGroup(state: GameState, ui: UiState, guild: GuildDef): strin
       <button class="guild-row ${isCompany ? 'company-row' : ''}" data-action="select-asset" data-asset="${assetId}">
         ${isCompany ? '<span class="tree">└</span>' : sprite(GUILD_SPRITE[guild.id]!, 28)}
         <span class="row-name">${label}${hasShockWarnings(state) && (state.shockRisk[assetId] ?? 0) > 0.05 ? ' <span class="warn" title="Informantes: risco alto de choque">⚠</span>' : ''}</span>
-        <span class="row-range">${pct(r.low, 0)} a ${pct(r.high, 0)}</span>
+        <span class="row-range" title="Profecia do trimestre e quanto já andou">${pct(q.low, 0)} a ${pct(q.high, 0)} <span class="${tone(q.progress)}">· já ${pct(q.progress)}</span></span>
         <span class="row-pos ${position ? 'gold' : 'muted'}">${position ? `${fmt(position.value)} fl${position.hedged ? ' 🛡' : ''}` : '—'}${extra}</span>
       </button>
       ${quickBar(state, assetId)}
@@ -958,8 +961,9 @@ function renderAssetDetail(state: GameState, ui: UiState, assetId: string): stri
         ${company ? `<p class="trait">${company.trait}</p>` : ''}
         ${renderChart(chartSeries, basket)}
         ${members}
-        <div class="forecast">
-          <div class="forecast-label">O arauto prevê <strong>${pct(range.low, 0)} a ${pct(range.high, 0)}</strong> nesta semana</div>
+        ${prophecyBlock(state, assetId)}
+        <div class="forecast forecast-week">
+          <div class="forecast-label small">Humor da semana: o arauto espera <strong>${pct(range.low, 0)} a ${pct(range.high, 0)}</strong>, contando só com a faixa pública</div>
           ${rangeBar(range, position?.hedged ? hedgeRange : null)}
           ${breakdown}
         </div>
@@ -968,8 +972,8 @@ function renderAssetDetail(state: GameState, ui: UiState, assetId: string): stri
         ${news.length ? `<div class="chips">${news.map((n) => `<span class="chip ${tone(n.shift)}">${esc(n.label)}${n.shift > 0 ? ' ▲' : n.shift < 0 ? ' ▼' : ''}</span>`).join('')}</div>` : ''}
         ${
           insights.length
-            ? `<div class="insights">${insights.map((i) => renderInsight(i, true)).join('')}</div>`
-            : `<p class="muted small">Quer saber para que lado pende? <button class="linkish" data-action="go" data-screen="tavern">Pergunte na Taverna ▶</button></p>`
+            ? `<div class="insights">${insights.map((i) => renderInsight(i, true, state.week)).join('')}</div>`
+            : `<p class="muted small">Onde isto termina o trimestre? <button class="linkish" data-action="go" data-screen="tavern">Pergunte na Taverna ▶</button></p>`
         }
         <div class="trade-box">
           <div class="holding">
@@ -997,6 +1001,11 @@ function renderAssetDetail(state: GameState, ui: UiState, assetId: string): stri
                   <span>Seguro: limita a <strong>${pct(hedgeRange.floor)} a ${pct(hedgeRange.cap)}</strong>, inclusive contra choques, por ${fmtCost(fee)} fl/sem</span>
                 </label>`
               : '<p class="muted small">Vender sem valor vende tudo.</p>'
+          }
+          ${
+            isBasket(assetId) || !isBond(assetId)
+              ? `<p class="muted small">Corretagem da guilda: ${(TRADE_FEE * 100).toLocaleString('pt-BR')}% em cada compra e venda (${fmtCost(tradeFee(assetId, 10))} fl a cada 10 fl).</p>`
+              : ''
           }
         </div>
       </div>
@@ -1144,14 +1153,14 @@ function expertBlurb(expert: ExpertId, level: number): string {
     }
     case 'astrologer': {
       const acc = ASTROLOGER_ACCURACY[Math.min(level, ASTROLOGER_ACCURACY.length - 1)]!;
-      return `Diz se algo pende para alta ou baixa. Acerta ${pctText(acc)}${level < 2 ? ' (melhora com o Telescópio)' : ''}.`;
+      return `Diz se o trimestre termina acima ou abaixo do meio da profecia. Acerta ${pctText(acc)}${level < 2 ? ' (melhora com o Telescópio)' : ''}.`;
     }
     case 'spy': {
       const fake = SPY_FAKE_CHANCE[Math.min(level, SPY_FAKE_CHANCE.length - 1)]!;
       const quality = ['Erra muito', 'Erra menos', 'Erra pouco', 'Quase não erra'][
         Math.min(level, 3)
       ];
-      return `Estima a chance de cada faixa. ${quality}; ${pctText(fake)} das respostas são furos plantados${level < 3 ? ' (melhora com o Espião Veterano)' : ''}.`;
+      return `Estima onde o ativo termina o trimestre, faixa por faixa. ${quality}; ${pctText(fake)} das respostas são furos plantados${level < 3 ? ' (melhora com o Espião Veterano)' : ''}.`;
     }
   }
 }
@@ -1168,8 +1177,9 @@ function rankStars(expert: ExpertId, level: number): string {
   return `<span class="stars" aria-label="nível ${level} de ${max}">${'★'.repeat(level)}${'☆'.repeat(max - level)}</span>`;
 }
 
-function renderInsight(insight: Insight, full: boolean): string {
-  const about = `<span class="insight-about">${targetName(insight.targetId)}</span>`;
+function renderInsight(insight: Insight, full: boolean, week = insight.week): string {
+  const age = week - insight.week;
+  const about = `<span class="insight-about">${targetName(insight.targetId)} <span class="muted small">${age === 0 ? 'esta semana' : `há ${age} sem.`}</span></span>`;
   const face = sprite(expertSprite(insight.expert, insight.level), 20);
   const badge = rankBadge(insight.expert, insight.level);
   switch (insight.expert) {
@@ -1184,7 +1194,7 @@ function renderInsight(insight: Insight, full: boolean): string {
       return `<div class="insight insight-spy">${face}${about}${badge}
         <div class="bands">${insight.bands
           .map(
-            (b, i) => `<div class="band" title="${pct(b.from)} a ${pct(b.to)}">
+            (b, i) => `<div class="band" title="Fim do trimestre: ${pct(b.from)} a ${pct(b.to)}">
               <span class="band-p band-tone-${i + 1}">${Math.round(b.p * 100)}%</span>
               <div class="band-bar band-bg-${i + 1}" style="height:${Math.max(2, Math.round(b.p * 36))}px"></div>
               <span class="band-range">${pct(b.from, 0)}…${pct(b.to, 0)}</span>
@@ -1192,6 +1202,33 @@ function renderInsight(insight: Insight, full: boolean): string {
           )
           .join('')}</div></div>`;
   }
+}
+
+/**
+ * The quarter prophecy of an asset: the public range of where it ends the quarter, how far it
+ * went already (marker) and the weeks left. A spy's answer shows as a gold mark.
+ */
+function prophecyBlock(state: GameState, assetId: string): string {
+  const q = assetProphecy(state, assetId);
+  const left = weeksUntilSeasonEnd(state);
+  const spy = state.insights.find((i) => i.targetId === assetId && i.expert === 'spy');
+  const spyMid =
+    spy?.expert === 'spy'
+      ? spy.bands.reduce((sum, b) => sum + b.p * ((b.from + b.to) / 2), 0) +
+        ((q.low + q.high) / 2 - spy.publicMid)
+      : null;
+  const scale = Math.max(30, Math.abs(q.low) + 4, Math.abs(q.high) + 4, Math.abs(q.progress) + 4);
+  const x = (v: number) => clampPct(((v + scale) / (2 * scale)) * 100);
+  return `<div class="forecast prophecy">
+    <div class="forecast-label">Profecia do trimestre: termina entre <strong>${pct(q.low, 0)} e ${pct(q.high, 0)}</strong> · já andou <strong class="${tone(q.progress)}">${pct(q.progress)}</strong> · faltam ${left} sem.</div>
+    <div class="range prophecy-range" aria-hidden="true">
+      <div class="range-band" style="left:${x(q.low)}%;width:${x(q.high) - x(q.low)}%"></div>
+      <div class="range-zero" style="left:${x(0)}%"></div>
+      ${spyMid !== null ? `<div class="prophecy-spy" style="left:${x(spyMid)}%" title="Espião: ${pct(spyMid)}"></div>` : ''}
+      <div class="prophecy-now ${tone(q.progress)}" style="left:${x(q.progress)}%" title="Agora: ${pct(q.progress)}"></div>
+    </div>
+    <p class="muted small">▼ onde está agora${spyMid !== null ? ` · <span class="gold">◆ onde o Espião acha que termina (${pct(spyMid)})</span>` : ''}. O preço é puxado para o destino; se correu na frente, tende a devolver.</p>
+  </div>`;
 }
 
 function rangeBar(r: Range, hedge: { floor: number; cap: number } | null): string {
@@ -1303,7 +1340,9 @@ function holdings(state: GameState): Holding[] {
           : '<span class="muted small">cesta</span>',
       value: p.value,
       cost: p.cost,
-      range: isBond(id) ? `${pct(r.low, 2)} fixo` : `${pct(r.low, 0)} a ${pct(r.high, 0)}`,
+      range: isBond(id)
+        ? `${pct(r.low, 2)} fixo`
+        : `${pct(assetProphecy(state, id).low, 0)} a ${pct(assetProphecy(state, id).high, 0)}`,
       hedged: p.hedged,
     };
   });
@@ -1373,7 +1412,7 @@ function renderPositions(state: GameState): string {
   return `${tiles}${bar}
     <div class="table-wrap px">
       <table class="ptable">
-        <thead><tr><th>Ativo</th><th>Onde</th><th class="num">Valor</th><th class="num">Custo</th><th class="num">Ganho</th><th class="num">%</th><th class="num">Peso</th><th class="num">Faixa da semana</th><th>Seguro</th></tr></thead>
+        <thead><tr><th>Ativo</th><th>Onde</th><th class="num">Valor</th><th class="num">Custo</th><th class="num">Ganho</th><th class="num">%</th><th class="num">Peso</th><th class="num">Profecia do trimestre</th><th>Seguro</th></tr></thead>
         <tbody>${rows}</tbody>
         <tfoot><tr><td>Total aplicado</td><td></td><td class="num">${fmt(investedTotal)}</td><td class="num muted">${fmt(costTotal)}</td><td class="num ${tone(openGain)}">${signed(openGain)}</td><td class="num ${tone(openGain)}">${costTotal > 0 ? pct((openGain / costTotal) * 100) : '—'}</td><td class="num">${whole(share(investedTotal))}%</td><td></td><td></td></tr></tfoot>
       </table>
@@ -1522,9 +1561,10 @@ function renderAsk(state: GameState, ui: UiState): string {
   const expert = EXPERTS.find((e) => e.id === ui.tavernExpert)!;
   const expertLocked = state.classIndex < expert.minClass;
   const askButton = (targetId: string, label: string, icon: string) => {
-    const asked = state.insights.some((i) => i.expert === expert.id && i.targetId === targetId);
-    return `<button class="ask-btn ${asked ? 'done' : ''}" data-action="consult" data-expert="${expert.id}" data-asset="${targetId}" ${asked || !playing ? 'disabled' : ''}>
-      ${icon}<span>${label}</span>${asked ? '<span class="tick">✔</span>' : ''}
+    const answer = state.insights.find((i) => i.expert === expert.id && i.targetId === targetId);
+    const age = answer ? state.week - answer.week : 0;
+    return `<button class="ask-btn ${answer ? 'done' : ''}" data-action="consult" data-expert="${expert.id}" data-asset="${targetId}" ${playing ? '' : 'disabled'} title="${answer ? 'Perguntar de novo (paga de novo e atualiza a resposta)' : 'Perguntar'}">
+      ${icon}<span>${label}</span>${answer ? `<span class="tick">✔${age > 0 ? ` ${age}s` : ''}</span>` : ''}
     </button>`;
   };
   return `<div class="cols tavern">
@@ -1548,7 +1588,7 @@ function renderAsk(state: GameState, ui: UiState): string {
       ${
         expertLocked
           ? `<p class="locked-note">🔒 O ${expert.name} não atende quem está abaixo de ${getClass(expert.minClass).name}.</p>`
-          : `<p class="muted small">O PIB e os bairros mexem com muitas empresas de uma vez; "Setor" responde pela guilda inteira; uma empresa responde só pelos negócios dela.</p>
+          : `<p class="muted small">As respostas falam de <strong>onde o ativo termina o trimestre</strong> e valem até o fim dele. Notícias novas podem mudar o destino: pergunte de novo (pagando de novo) para atualizar. O PIB e os bairros ajudam a entender muitas empresas de uma vez.</p>
              <div class="ask-groups">
                <div class="ask-group">
                  ${askButton('city', `PIB de ${CITY.name}`, sprite('castle', 20))}
@@ -1557,7 +1597,7 @@ function renderAsk(state: GameState, ui: UiState): string {
                ${GUILDS.filter((g) => isGuildUnlocked(state, g))
                  .map(
                    (g) => `<div class="ask-group">
-                   ${askButton(g.id, `Setor ${g.short}`, sprite(GUILD_SPRITE[g.id]!, 20))}
+                   ${askButton(g.id, `Cesta ${g.short}`, sprite(GUILD_SPRITE[g.id]!, 20))}
                    ${companiesOf(g.id)
                      .map((c) => askButton(c.id, c.name, ''))
                      .join('')}
@@ -1565,11 +1605,11 @@ function renderAsk(state: GameState, ui: UiState): string {
                  )
                  .join('')}</div>`
       }
-      <h3>Rumores desta semana</h3>
+      <h3>Rumores deste trimestre</h3>
       ${
         state.insights.length === 0
           ? '<p class="muted">Ninguém te contou nada ainda.</p>'
-          : `<ul class="rumors">${state.insights.map((i) => `<li>${renderInsight(i, false)}</li>`).join('')}</ul>`
+          : `<ul class="rumors">${state.insights.map((i) => `<li>${renderInsight(i, false, state.week)}</li>`).join('')}</ul>`
       }
     </article>
   </div>`;
@@ -1707,6 +1747,7 @@ function renderModal(state: GameState, ui: UiState): string {
     <ul class="ledger">
       <li><span>Títulos da Coroa</span><span class="up">${signed(report.bondIncome)}</span></li>
       ${report.hedgeFees > 0 ? `<li><span>Seguros</span><span class="down">${signed(-report.hedgeFees)}</span></li>` : ''}
+      ${(state.ledger.at(-1)?.tradeFees ?? 0) > 0.005 ? `<li><span>Corretagem</span><span class="down">${signed(-(state.ledger.at(-1)?.tradeFees ?? 0))}</span></li>` : ''}
       ${report.investorFlow ? `<li><span>${report.investorFlow > 0 ? 'Aportes de investidores' : 'Resgates de investidores'}</span><span class="${tone(report.investorFlow)}">${signed(report.investorFlow)}</span></li>` : ''}
       ${report.confiscations.map((c) => `<li><span>Confisco: ${c.kind === 'militia' ? 'dinheiro da Milícia' : 'dinheiro do Abade'}</span><span class="down">${signed(-c.amount)}</span></li>`).join('')}
       <li><span>Taxas pagas a você</span><span class="down">${signed(-(report.managementFee + report.performanceFee))}</span></li>

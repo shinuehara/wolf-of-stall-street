@@ -2613,3 +2613,46 @@ img.sprite,
     grid-template-columns: 1fr;
   }
 }
+
+/* Quarter prophecy */
+.prophecy {
+  border-left: var(--px) solid var(--gold);
+  padding-left: 8px;
+}
+
+.prophecy-range {
+  position: relative;
+}
+
+.prophecy-now {
+  position: absolute;
+  top: -6px;
+  width: 0;
+  height: 0;
+  transform: translateX(-6px);
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 10px solid var(--ink);
+}
+
+.prophecy-now.up {
+  border-top-color: var(--green);
+}
+
+.prophecy-now.down {
+  border-top-color: var(--red);
+}
+
+.prophecy-spy {
+  position: absolute;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  background: var(--gold);
+  border: 2px solid var(--edge);
+  transform: translate(-5px, -5px) rotate(45deg);
+}
+
+.forecast-week {
+  opacity: 0.85;
+}

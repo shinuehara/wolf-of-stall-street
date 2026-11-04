@@ -32,8 +32,8 @@ export const ASTROLOGER_ACCURACY = [0.6, 0.68, 0.75];
 /** Drunk accuracy by Bath & Soup level. */
 export const DRUNK_ACCURACY = [0.5, 0.55, 0.6];
 /** Spy quality by Veteran Spy level: noise on his estimate and chance it is a planted lie. */
-export const SPY_NOISE = [1.2, 0.6, 0.3, 0.1];
-export const SPY_FAKE_CHANCE = [0.25, 0.12, 0.05, 0.01];
+export const SPY_NOISE = [0.8, 0.5, 0.3, 0.1];
+export const SPY_FAKE_CHANCE = [0.15, 0.08, 0.04, 0.01];
 /** Each expert's rank names, from rookie to master; the rank is the level of their perk. */
 export const EXPERT_RANKS = {
   drunk: ['Bêbado da Taverna', 'Bêbado Remediado', 'Ex-Bêbado'],
@@ -1093,7 +1093,13 @@ export const FLOW_DEAD_ZONE = 2;
 export const FLOW_MAX_IN = 0.12;
 export const FLOW_MAX_OUT = 0.15;
 /** Withdrawals stop when the fund is this close to the class floor (1.15 = 15% above it). */
-export const FLOW_FLOOR_MARGIN = 1.15;
+export const FLOW_FLOOR_MARGIN = 1.3;
+/**
+ * Guild broker's fee on every purchase and sale of baskets and companies (not on Crown bonds,
+ * not on money handed to managers). Makes churning the whole portfolio every week costly.
+ */
+export const TRADE_FEE = 0.005;
+
 /** Chance per week (outside visitor weeks) that someone offers to invest in the fund. */
 export const OFFER_CHANCE = 0.1;
 

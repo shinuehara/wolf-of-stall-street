@@ -1,5 +1,6 @@
-import { COMPANIES, GUILDS, companiesOf, getClass } from './data';
-import { BOND_LIQUID, companyExposures, factorForecast } from './assets';
+import { GUILDS, SEASON_LENGTH, companiesOf, getClass } from './data';
+import { BOND_LIQUID, assetProphecy, isBond } from './assets';
+import { PULL } from './forecast';
 import {
   acceptAscension,
   buy,
@@ -12,6 +13,7 @@ import {
   nextPerkLevel,
   perkLevel,
   sell,
+  wealth,
 } from './game';
 import type { ExpertId, GameState, PerkId } from './types';
 
@@ -24,8 +26,12 @@ import type { ExpertId, GameState, PerkId } from './types';
  * - astrologer: also asks the Astrologer, never buys perks.
  * - spy: asks the Spy when allowed (Astrologer before that), never buys perks.
  * - perks: like spy, but buys perks as soon as it can afford them, hedges risky picks.
+ * - oracle: knows every true destiny; an upper bound for diagnostics, not a player.
  */
-export type BotStrategy = 'bonds' | 'naive' | 'astrologer' | 'spy' | 'perks';
+export type BotStrategy = 'bonds' | 'naive' | 'astrologer' | 'spy' | 'perks' | 'oracle';
+
+/** Diagnostics only: the oracle knows every true destiny (an upper bound, not a player). */
+let ORACLE = false;
 
 export interface BotResult {
   status: GameState['status'];
@@ -46,39 +52,40 @@ const MAX_WEEKS = 300;
 
 const PERK_PRIORITY: PerkId[] = ['veteranSpy', 'informants', 'treasurer'];
 
-function center(state: GameState, factorId: string): number {
-  const f = factorForecast(state, factorId);
-  return (f.low + f.high) / 2;
-}
-
-/** What the bot believes a factor will do, from public ranges and expert insights. */
-function believedMove(state: GameState, factorId: string): number {
-  const f = factorForecast(state, factorId);
-  const spy = state.insights.find((i) => i.targetId === factorId && i.expert === 'spy');
-  if (spy?.expert === 'spy') return spy.bands.reduce((s, b) => s + b.p * ((b.from + b.to) / 2), 0);
-  const astro = state.insights.find((i) => i.targetId === factorId && i.expert === 'astrologer');
-  if (astro?.expert === 'astrologer') {
-    return center(state, factorId) + (astro.leansUp ? 1 : -1) * (f.high - f.low) * 0.06;
+/** Where the bot believes an asset ends the quarter: the spy's estimate, a hint, or the public middle. */
+function believedTarget(state: GameState, assetId: string): number {
+  const p = assetProphecy(state, assetId);
+  if (ORACLE) return p.target;
+  const middle = (p.low + p.high) / 2;
+  // Answers are read against the public range: if it moved since (a fire everyone saw),
+  // the estimate moves with it.
+  const spy = state.insights.find((i) => i.targetId === assetId && i.expert === 'spy');
+  if (spy?.expert === 'spy') {
+    const said = spy.bands.reduce((s, b) => s + b.p * ((b.from + b.to) / 2), 0);
+    return said + (middle - spy.publicMid);
   }
-  return center(state, factorId);
+  const astro = state.insights.find((i) => i.targetId === assetId && i.expert === 'astrologer');
+  if (astro?.expert === 'astrologer')
+    return middle + (astro.leansUp ? 1 : -1) * (p.high - p.low) * 0.15;
+  return middle;
 }
 
+/** What the bot believes an asset does next week: close PULL of the gap to its path. */
 function believedAsset(state: GameState, assetId: string): number {
-  const companies = GUILDS.some((g) => g.id === assetId)
-    ? companiesOf(assetId)
-    : COMPANIES.filter((c) => c.id === assetId);
-  const moves = companies.map((c) =>
-    companyExposures(c).reduce((s, e) => s + e.weight * believedMove(state, e.factorId), 0),
-  );
-  return moves.reduce((a, b) => a + b, 0) / moves.length;
+  const p = assetProphecy(state, assetId);
+  const done = ((state.week % SEASON_LENGTH) + 1) / SEASON_LENGTH;
+  return PULL * (believedTarget(state, assetId) * done - p.progress);
 }
 
 export function playBot(seed: number, strategy: BotStrategy): BotResult {
+  ORACLE = strategy === 'oracle';
   const state = newGame(seed);
   let classDrops = 0;
   let worstWeek = 0;
   while (state.status === 'playing' && state.week < MAX_WEEKS) {
-    for (const id of Object.keys(state.positions)) sell(state, id, Infinity);
+    // Free the parked gold; stock positions are kept unless the bot changes its mind
+    // (the broker charges every trade).
+    if (state.positions[BOND_LIQUID]) sell(state, BOND_LIQUID, Infinity);
 
     if (strategy === 'perks') {
       for (const id of PERK_PRIORITY) {
@@ -99,13 +106,18 @@ export function playBot(seed: number, strategy: BotStrategy): BotResult {
       );
       if (strategy !== 'naive') {
         const expert: ExpertId = strategy === 'spy' || strategy === 'perks' ? 'spy' : 'astrologer';
-        // Five questions a week (eight with perks): the most promising sectors and the best
-        // guilds' companies.
-        const deep = 1;
+        // Answers last the quarter: a few new questions a week, sectors first, then companies.
+        // An answer older than 4 weeks is stale (news moved things): ask again.
+        const asked = (id: string) =>
+          state.insights.some(
+            (i) => i.expert === expert && i.targetId === id && state.week - i.week < 4,
+          );
         const targets = [
-          ...guilds.slice(0, 2).map((g) => g.id),
-          ...guilds.slice(0, deep).flatMap((g) => companiesOf(g.id).map((c) => c.id)),
-        ];
+          ...guilds.map((g) => g.id),
+          ...guilds.flatMap((g) => companiesOf(g.id).map((c) => c.id)),
+        ]
+          .filter((id) => !asked(id))
+          .slice(0, 4);
         // Questions are paid from the manager's purse: keep a few weeks of living costs.
         const reserve = getClass(state.classIndex).livingCost * 4;
         for (const id of targets) {
@@ -114,16 +126,32 @@ export function playBot(seed: number, strategy: BotStrategy): BotResult {
         }
       }
 
-      const candidates = guilds.flatMap((g) => [g.id, ...companiesOf(g.id).map((c) => c.id)]);
+      const all = guilds.flatMap((g) => [g.id, ...companiesOf(g.id).map((c) => c.id)]);
+      // An informed bot only bets on what it asked about (once it asked about anything).
+      const known = all.filter((id) => state.insights.some((i) => i.targetId === id));
+      const candidates =
+        strategy === 'naive' || strategy === 'oracle' || known.length === 0 ? all : known;
       const risky = (id: string) =>
         perkLevel(state, 'informants') > 0 && (state.shockRisk[id] ?? 0) > 0.05;
+      // Holding costs nothing; switching pays the broker twice. Keep what still looks good.
+      const held = (id: string) => Boolean(state.positions[id]);
+      const entry = strategy === 'naive' ? 0.6 : 1;
       const picks = candidates
         .map((id) => [id, believedAsset(state, id)] as const)
-        .filter(([id, ev]) => ev > (strategy === 'naive' ? 0.3 : 0.8) && !risky(id))
-        .sort((a, b) => b[1] - a[1])
+        .filter(([id, ev]) => ev > (held(id) ? 0.2 : entry) && !risky(id))
+        .sort((a, b) => b[1] - a[1] + (held(b[0]) ? 0.5 : 0) - (held(a[0]) ? 0.5 : 0))
         .slice(0, strategy === 'naive' ? 3 : 2);
-      const budget = state.cash * 0.85;
-      for (const [id] of picks) buy(state, id, budget / picks.length);
+      const chosen = new Set(picks.map(([id]) => id));
+      for (const id of Object.keys(state.positions)) {
+        if (!isBond(id) && !chosen.has(id)) sell(state, id, Infinity);
+      }
+      // Target: 85% of the fund split among the picks; only trade gaps worth the fee.
+      const target = (wealth(state) * 0.85) / Math.max(1, picks.length);
+      for (const [id] of picks) {
+        const gap = target - (state.positions[id]?.value ?? 0);
+        if (gap > target * 0.15) buy(state, id, Math.min(gap, state.cash));
+        else if (gap < -target * 0.15) sell(state, id, -gap);
+      }
     }
     // Idle gold earns nothing: park the rest in the liquid Crown bond.
     if (state.cash > 2) buy(state, BOND_LIQUID, state.cash - 2);

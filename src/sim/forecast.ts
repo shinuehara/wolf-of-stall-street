@@ -16,10 +16,51 @@ const LEAN_SHARPNESS = 2.2;
  * Scales every drift (average weekly move). Without information, shares should earn only a
  * little more than Crown bonds, with far more risk; the edge must come from information.
  */
-export const DRIFT_SCALE = 0.3;
+export const DRIFT_SCALE = 1;
 
 /** How much the public range centre wanders from week to week, as a share of its width. */
 export const CENTER_NOISE = 0.06;
+
+/**
+ * Quarter prophecy. At the start of each quarter every factor gets a hidden destiny: where its
+ * cumulative move tends to end the quarter. Each week the move is pulled towards the straight
+ * path to that destiny, closing PULL of the gap, plus noise. Knowing the destiny tells you
+ * when a price ran ahead of itself (sell) or fell behind (buy).
+ */
+export const PULL = 0.5;
+
+/** The quarter's public range is this many times wider than a week's. */
+export const QUARTER_WIDTH = 1.8;
+
+/** Weekly noise around the true pull, as a share of the herald's weekly range width. */
+export const WEEKLY_NOISE = 0.22;
+
+/** How tightly a week's hidden weights follow the true pull (higher = more informative). */
+export const WEEKLY_SHARPNESS = 2.5;
+
+/** Share of a weekly news shift that moves the hidden destiny. */
+export const NEWS_TARGET = 0.4;
+
+/**
+ * Band weights for a distribution centred on `center` over [low, high]: what someone who knows
+ * the truth would say. `sharpness` > 1 concentrates it (experts), 1 is a soft spread.
+ */
+export function weightsAround(
+  low: number,
+  high: number,
+  center: number,
+  sharpness = 1,
+  count = BAND_COUNT,
+): number[] {
+  const step = (high - low) / count;
+  const spread = Math.max(0.5, (high - low) / (3 * sharpness));
+  const raw = Array.from({ length: count }, (_, i) => {
+    const mid = low + step * (i + 0.5);
+    return Math.exp(-0.5 * ((mid - center) / spread) ** 2);
+  });
+  const total = raw.reduce((a, b) => a + b, 0) || 1;
+  return raw.map((w) => w / total);
+}
 
 /** The public range split into equal bands, each with its hidden probability. */
 export function bands(f: Forecast): Band[] {

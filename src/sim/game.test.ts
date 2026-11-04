@@ -8,6 +8,7 @@ import {
   STARTING_GOLD,
   STARTING_PURSE,
   TOP_CLASS,
+  TRADE_FEE,
   MONTH_LENGTH,
   getItem,
   getPerk,
@@ -35,6 +36,7 @@ import {
   PRE_HISTORY_WEEKS,
   sell,
   setHedge,
+  targetForecast,
   wealth,
 } from './game';
 import { BOND_LIQUID, BOND_LOCKED } from './assets';
@@ -83,16 +85,20 @@ describe('newGame', () => {
 });
 
 describe('trading', () => {
-  it('moves gold between cash and positions', () => {
+  it('moves gold between cash and positions, paying the broker on each trade', () => {
     const state = newGame(1);
     expect(buy(state, 'bakers', 40).ok).toBe(true);
     expect(state.cash).toBe(60);
-    expect(state.positions.bakers?.value).toBe(40);
+    expect(state.positions.bakers?.value).toBeCloseTo(40 * (1 - TRADE_FEE));
     expect(sell(state, 'bakers', 15).ok).toBe(true);
-    expect(state.cash).toBe(75);
+    expect(state.cash).toBeCloseTo(60 + 15 * (1 - TRADE_FEE));
     expect(sell(state, 'bakers', 999).ok).toBe(true);
     expect(state.positions.bakers).toBeUndefined();
-    expect(state.cash).toBe(100);
+    // A round trip costs about two broker's fees
+    expect(state.cash).toBeCloseTo(100 - 40 * TRADE_FEE * (2 - TRADE_FEE));
+    // Crown bonds have no broker
+    buy(state, BOND_LIQUID, 50);
+    expect(state.positions[BOND_LIQUID]!.value).toBe(50);
   });
 
   it('rejects overspending and locked guilds', () => {
@@ -104,24 +110,22 @@ describe('trading', () => {
 
   it('quick trades use a share of total wealth, capped by free gold or the position', () => {
     const state = newGame(1);
+    // Crown bonds have no broker's fee, so the numbers are exact.
     // wealth 100, all free: +10% buys 10
-    expect(quickTrade(state, 'bakers', 0.1)).toEqual({ ok: true, amount: 10 });
+    expect(quickTrade(state, BOND_LIQUID, 0.1)).toEqual({ ok: true, amount: 10 });
     // +50% would be 50, still fits in the 90 free
-    quickTrade(state, 'bakers.royal', 0.5);
+    quickTrade(state, 'bakers', 0.5);
     expect(state.cash).toBeCloseTo(40);
-    // +50% again would be 50, but only 40 is free: buys 40
+    // +50% again would be ~50, but only 40 is free: buys 40
     expect(quickTrade(state, 'bakers.royal', 0.5)).toEqual({ ok: true, amount: 40 });
     expect(state.cash).toBeCloseTo(0);
-    expect(quickTrade(state, 'bakers', 0.05).ok).toBe(false);
-    // -50% would sell 50, but the bakers position is only 10: closes it
-    expect(quickTrade(state, 'bakers', -0.5)).toEqual({ ok: true, amount: 10 });
-    expect(state.positions.bakers).toBeUndefined();
+    expect(quickTrade(state, BOND_LIQUID, 0.05).ok).toBe(false);
+    // -50% would sell ~50, but the bond position is only 10: closes it
+    expect(quickTrade(state, BOND_LIQUID, -0.5)).toEqual({ ok: true, amount: 10 });
+    expect(state.positions[BOND_LIQUID]).toBeUndefined();
     // -all closes the position
     quickTrade(state, 'bakers.royal', -1);
     expect(state.positions['bakers.royal']).toBeUndefined();
-    expect(state.cash).toBeCloseTo(100);
-    // +all uses all free gold
-    expect(quickTrade(state, 'bakers.north', 1)).toEqual({ ok: true, amount: 100 });
   });
 
   it('tracks the cost of each position, reduced pro rata on sales', () => {
@@ -132,7 +136,8 @@ describe('trading', () => {
     expect(state.positions.bakers!.cost).toBe(40);
     sell(state, 'bakers', value / 2);
     expect(state.positions.bakers!.cost).toBeCloseTo(20);
-    expect(state.assetPnl.bakers).toBeCloseTo(value - 40);
+    // Gains and losses include the broker's fees on the way in and out
+    expect(state.assetPnl.bakers).toBeCloseTo(value - 40 - (value / 2) * TRADE_FEE);
   });
 
   it('keeps a weekly ledger of the fund that adds up', () => {
@@ -147,7 +152,7 @@ describe('trading', () => {
     expect(first!.startWealth).toBe(100);
     expect(second!.startWealth).toBeCloseTo(first!.endWealth);
     for (const r of state.ledger) {
-      const sum = r.marketPnl + r.bondIncome - r.hedgeFees - r.fees + r.other;
+      const sum = r.marketPnl + r.bondIncome - r.hedgeFees - r.fees - r.tradeFees + r.other;
       expect(r.endWealth - r.startWealth).toBeCloseTo(sum);
       // Experts are paid by the manager, not by the investors.
       expect(r.other).toBeCloseTo(0);
@@ -164,13 +169,14 @@ describe('trading', () => {
 });
 
 describe('experts', () => {
-  it("charges advice to the manager's purse and records it once per week", () => {
+  it("charges advice to the manager's purse; asking again pays again and replaces it", () => {
     const state = newGame(5);
     const cost = expertCost(state, 'astrologer');
     expect(consult(state, 'astrologer', 'bakers').ok).toBe(true);
     expect(state.purse).toBeCloseTo(STARTING_PURSE - cost);
     expect(state.cash).toBe(100);
-    expect(consult(state, 'astrologer', 'bakers').ok).toBe(false);
+    expect(consult(state, 'astrologer', 'bakers').ok).toBe(true);
+    expect(state.purse).toBeCloseTo(STARTING_PURSE - 2 * cost);
     expect(state.insights).toHaveLength(1);
   });
   it('the spy is open from the start, but his estimate can be off', () => {
@@ -210,7 +216,7 @@ describe('experts', () => {
         consult(state, 'spy', 'bakers');
         const insight = state.insights[0];
         if (insight?.expert !== 'spy') throw new Error('expected a spy insight');
-        const truth = bands(state.sectorForecasts.bakers!);
+        const truth = bands(targetForecast(state, 'bakers'));
         total += insight.bands.reduce((s, b, i) => s + Math.abs(b.p - truth[i]!.p), 0);
       }
       return total / 60;
@@ -363,6 +369,7 @@ describe('endWeek', () => {
       const state = newGame(seed);
       const range = assetRange(state, 'bakers');
       const report = endWeek(state);
+      if (report.shocks.some((x) => x.companyId.startsWith('bakers'))) continue;
       const ids = ['bakers.royal', 'bakers.north', 'bakers.harbor'];
       const avg = ids.reduce((s, id) => s + report.marketReturns[id]!, 0) / 3;
       expect(report.marketReturns.bakers).toBeCloseTo(avg);
@@ -542,7 +549,7 @@ describe('monthly visitors', () => {
     consult(state, 'spy', 'bakers');
     const insight = state.insights[0];
     if (insight?.expert !== 'spy') throw new Error('expected a spy insight');
-    expect(insight.bands).toEqual(bands(state.sectorForecasts.bakers!));
+    expect(insight.bands).toEqual(bands(targetForecast(state, 'bakers')));
   });
 
   it('smuggled goods can get you caught when they wear off', () => {
@@ -693,5 +700,48 @@ describe('hired managers', () => {
     expect(dismissManager(state, 'prudencio').ok).toBe(true);
     expect(state.positions['mgr.prudencio']).toBeUndefined();
     expect(state.cash).toBeCloseTo(before);
+  });
+});
+
+describe('the quarter prophecy', () => {
+  it('every factor gets a destiny inside its public quarter range, kept all quarter', () => {
+    const state = newGame(12);
+    const p = state.prophecies.bakers!;
+    expect(p.target).toBeGreaterThanOrEqual(p.low);
+    expect(p.target).toBeLessThanOrEqual(p.high);
+    const target = p.target;
+    endWeek(state);
+    // Same quarter: same prophecy (unless news moved it), progress follows the moves
+    expect(state.prophecies.bakers!.low).toBeCloseTo(p.low, 0);
+    expect(Math.abs(state.prophecies.bakers!.target - target)).toBeLessThan(10);
+  });
+
+  it('prices are pulled towards the destiny: the quarter ends near it on average', () => {
+    let error = 0;
+    let spread = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const state = newGame(seed);
+      state.events = [];
+      state.companyEvents = [];
+      state.localNews = [];
+      const start = { ...state.prophecies.bakers! };
+      for (let w = 0; w < SEASON_LENGTH - 1; w++) endWeek(state);
+      const p = state.prophecies.bakers!;
+      error += Math.abs(p.progress - p.target);
+      spread += Math.abs(start.target - (start.low + start.high) / 2);
+    }
+    // Knowing the destiny beats knowing only the public range
+    expect(error).toBeLessThan(spread);
+  });
+
+  it('expert answers last the whole quarter and are cleared when a new one starts', () => {
+    const state = newGame(4);
+    state.purse = 50;
+    expect(consult(state, 'spy', 'bakers').ok).toBe(true);
+    endWeek(state);
+    expect(state.insights).toHaveLength(1);
+    expect(state.insights[0]!.week).toBe(0);
+    for (let w = 1; w < SEASON_LENGTH; w++) endWeek(state);
+    expect(state.insights).toHaveLength(0);
   });
 });

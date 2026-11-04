@@ -61,10 +61,12 @@ import {
   getManager,
   INVESTORS,
   OFFER_CHANCE,
+  TRADE_FEE,
   getInvestor,
 } from './data';
 import {
   ASSET_IDS,
+  assetProphecy,
   assetExpectedReturn,
   isBasket,
   isManager,
@@ -81,7 +83,22 @@ import {
   guildOfAsset,
   type FactorId,
 } from './assets';
-import { applyHedge, bands, eventShift, generateForecast, leansUp, sampleReturn } from './forecast';
+import {
+  CENTER_NOISE,
+  NEWS_TARGET,
+  NEWS_VISIBILITY,
+  PULL,
+  QUARTER_WIDTH,
+  WEEKLY_NOISE,
+  WEEKLY_SHARPNESS,
+  applyHedge,
+  bands,
+  eventShift,
+  generateForecast,
+  leansUp,
+  sampleReturn,
+  weightsAround,
+} from './forecast';
 import { nextRandom, pick, randomInt } from './rng';
 import type {
   CompanyDef,
@@ -99,6 +116,8 @@ import type {
   SocialClass,
   InvestorKind,
   ManagerId,
+  EventDef,
+  Prophecy,
 } from './types';
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
@@ -160,10 +179,16 @@ export const INDICATOR_IDS: readonly string[] = ['city', ...REGIONS.map((r) => r
 function sampleMoves(
   state: GameState,
   forecastOf: (factorId: FactorId) => Forecast,
+  prophecyOf?: (factorId: FactorId) => Prophecy | undefined,
 ): { factors: Record<FactorId, number>; assets: Record<string, number> } {
   const factors: Record<FactorId, number> = {};
   for (const id of FACTOR_IDS) {
-    factors[id] = sampleReturn(forecastOf(id), nextRandom(state), nextRandom(state));
+    const p = prophecyOf?.(id);
+    // In the game a factor follows its destiny plus noise; the herald's range is only a guess.
+    factors[id] = p
+      ? p.weekCenter +
+        p.weekNoise * (nextRandom(state) + nextRandom(state) + nextRandom(state) - 1.5) * 2
+      : sampleReturn(forecastOf(id), nextRandom(state), nextRandom(state));
   }
   const assets: Record<string, number> = {};
   for (const guild of GUILDS) {
@@ -223,7 +248,7 @@ function cityProfile(state: GameState): { drift: number; width: number } {
 
 export function newGame(seed: number = Date.now() >>> 0): GameState {
   const state: GameState = {
-    version: 12,
+    version: 14,
     seed,
     rngState: seed,
     week: 0,
@@ -239,6 +264,7 @@ export function newGame(seed: number = Date.now() >>> 0): GameState {
     companyForecasts: {},
     cityForecast: { low: 0, high: 0, weights: [] },
     regionForecasts: {},
+    prophecies: {},
     cityCycle: 0,
     indicators: {},
     insights: [],
@@ -255,6 +281,7 @@ export function newGame(seed: number = Date.now() >>> 0): GameState {
     effects: [],
     monthStart: STARTING_GOLD,
     weekFlows: 0,
+    weekTradeFees: 0,
     investorOffer: null,
     riskyDeposits: [],
     monthlyExcess: [],
@@ -396,7 +423,14 @@ function spyEstimate(state: GameState, forecast: Forecast): Band[] {
  * (guild id) or a company's own business.
  */
 export function targetForecast(state: GameState, targetId: string): Forecast {
-  return factorForecast(state, targetId);
+  // A basket or a company: the whole asset (every factor that moves it), as traded.
+  const p =
+    targetId === 'city' || isRegionId(targetId)
+      ? state.prophecies[targetId]
+      : assetProphecy(state, targetId);
+  if (!p) throw new Error(`No prophecy for ${targetId}`);
+  // What an insider knows: the public range of the quarter, weighted around the true destiny.
+  return { low: p.low, high: p.high, weights: weightsAround(p.low, p.high, p.target, 2) };
 }
 
 /** The city and its districts are open to everyone; guilds and companies need the right class. */
@@ -408,6 +442,17 @@ export function isTargetUnlocked(state: GameState, targetId: string): boolean {
 // ---------------------------------------------------------------------------
 // Player actions
 // ---------------------------------------------------------------------------
+
+/** Broker's fee for trading `amount` of an asset (0 for Crown bonds and managers). */
+export function tradeFee(assetId: string, amount: number): number {
+  return isBond(assetId) || isManager(assetId) ? 0 : amount * TRADE_FEE;
+}
+
+function chargeFee(state: GameState, assetId: string, fee: number): void {
+  if (fee <= 0) return;
+  state.weekTradeFees += fee;
+  state.assetPnl[assetId] = (state.assetPnl[assetId] ?? 0) - fee;
+}
 
 export function buy(state: GameState, assetId: string, amount: number): ActionResult {
   if (state.status !== 'playing') return fail('O jogo terminou.');
@@ -435,8 +480,10 @@ export function buy(state: GameState, assetId: string, amount: number): ActionRe
     });
     return ok;
   }
+  const fee = tradeFee(assetId, amount);
+  chargeFee(state, assetId, fee);
   const position = (state.positions[assetId] ??= { value: 0, cost: 0, hedged: false });
-  position.value += amount;
+  position.value += amount - fee;
   position.cost += amount;
   return ok;
 }
@@ -450,8 +497,10 @@ export function sell(state: GameState, assetId: string, amount: number): ActionR
   if (!position || position.value <= 0) return fail('Você não tem cotas disso.');
   if (!(amount > 0)) return fail('Informe um valor positivo.');
   amount = Math.min(amount, position.value);
+  const fee = tradeFee(assetId, amount);
+  chargeFee(state, assetId, fee);
   reducePosition(state, assetId, amount);
-  state.cash += amount;
+  state.cash += amount - fee;
   return ok;
 }
 
@@ -500,27 +549,35 @@ export function consult(state: GameState, expertId: ExpertId, targetId: string):
   }
   if (onlyBonds(state)) return fail('Quem só tem Títulos da Coroa não tem o que perguntar.');
   if (!isTargetUnlocked(state, targetId)) return fail('Você ainda não tem acesso a esta guilda.');
-  if (state.insights.some((i) => i.expert === expertId && i.targetId === targetId)) {
-    return fail('Você já fez essa pergunta a este especialista nesta semana.');
-  }
   const cost = expertCost(state, expertId);
   if (cost > state.purse) return fail('Seu bolso não tem florins para pagar a consulta.');
   const forecast = targetForecast(state, targetId);
 
   state.purse -= cost;
   const level = expertLevel(state, expertId);
+  // Asking again replaces the old answer (news may have changed the picture).
+  state.insights = state.insights.filter(
+    (i) => !(i.expert === expertId && i.targetId === targetId),
+  );
+  const asked = { week: state.week, publicMid: (forecast.low + forecast.high) / 2 };
   if (expertId === 'spy') {
     const estimate = hasEffect(state, 'stolenLedger')
       ? bands(forecast)
       : spyEstimate(state, forecast);
-    state.insights.push({ expert: 'spy', targetId, bands: estimate, level });
+    state.insights.push({ expert: 'spy', targetId, bands: estimate, level, ...asked });
   } else {
     const table = expertId === 'astrologer' ? ASTROLOGER_ACCURACY : DRUNK_ACCURACY;
     const lenses = expertId === 'astrologer' && hasEffect(state, 'brassLenses') ? LENS_BONUS : 0;
     const accuracy = Math.min(0.95, table[Math.min(level, table.length - 1)]! + lenses);
     const truth = leansUp(forecast);
     const honest = nextRandom(state) < accuracy;
-    state.insights.push({ expert: expertId, targetId, leansUp: honest ? truth : !truth, level });
+    state.insights.push({
+      expert: expertId,
+      targetId,
+      leansUp: honest ? truth : !truth,
+      level,
+      ...asked,
+    });
   }
   return ok;
 }
@@ -606,10 +663,18 @@ export function endWeek(state: GameState): WeekReport {
   }
 
   // 2. The market moves: the city, the districts, the sectors and each company's own business.
-  const sampled = sampleMoves(state, (id) => factorForecast(state, id));
+  const sampled = sampleMoves(
+    state,
+    (id) => factorForecast(state, id),
+    (id) => state.prophecies[id],
+  );
   const moves = sampled.assets;
   report.marketReturns = moves;
   report.factorMoves = sampled.factors;
+  for (const [id, move] of Object.entries(sampled.factors)) {
+    const p = state.prophecies[id];
+    if (p) p.progress += move;
+  }
 
   // Surprises nobody announced: fires, scandals, windfalls.
   const shockShare: Record<string, number> = {};
@@ -623,6 +688,15 @@ export function endWeek(state: GameState): WeekReport {
     moves[company.guildId] =
       (moves[company.guildId] ?? 0) + move / companiesOf(company.guildId).length;
     report.shocks.push({ companyId: company.id, move, headline });
+    // A fire or a windfall is permanent: the company's destiny moves with it.
+    const fate = state.prophecies[company.id];
+    if (fate) {
+      fate.progress += move;
+      fate.target += move;
+      // Everyone saw it: the public range moves too.
+      fate.low += move;
+      fate.high += move;
+    }
     shockShare[company.id] = (shockShare[company.id] ?? 0) + move;
     const basketShare = move / companiesOf(company.guildId).length;
     shockShare[company.guildId] = (shockShare[company.guildId] ?? 0) + basketShare;
@@ -740,7 +814,6 @@ export function endWeek(state: GameState): WeekReport {
   tickEffects(state, report);
   updateVisitor(state, report);
   rollInvestorOffer(state, report);
-  state.insights = [];
   rollForecasts(state);
   return report;
 }
@@ -1208,34 +1281,75 @@ export function localShift(state: GameState, targetId: string): number {
   return state.localNews.filter((n) => n.targetId === targetId).reduce((s, n) => s + n.shift, 0);
 }
 
+/** A new quarter: every factor gets a public range for the quarter and a hidden destiny in it. */
+function rollProphecies(state: GameState): void {
+  state.insights = [];
+  for (const id of FACTOR_IDS) {
+    const profile = id === 'city' ? cityProfile(state) : profileOf(id);
+    const forecast = generateForecast(
+      state,
+      { drift: profile.drift * SEASON_LENGTH, width: profile.width * QUARTER_WIDTH },
+      0,
+    );
+    const target = sampleReturn(forecast, nextRandom(state), nextRandom(state));
+    state.prophecies[id] = { ...forecast, target, progress: 0, weekCenter: 0, weekNoise: 0 };
+  }
+}
+
+/** This week's news for a factor, in percentage points. */
+function factorShift(state: GameState, id: FactorId, events: EventDef[]): number {
+  if (id === 'city' || isRegionId(id)) return localShift(state, id);
+  const guild = GUILDS.find((g) => g.id === id);
+  if (guild) return eventShift(guild.sector, events);
+  return companyShift(state, id);
+}
+
+/**
+ * Next week's forecast for a factor. The herald centres the range on the public path to the
+ * quarter's range; the hidden weights lean towards the true destiny's path.
+ */
+function weeklyForecast(state: GameState, id: FactorId): Forecast {
+  const profile = id === 'city' ? cityProfile(state) : profileOf(id);
+  const p = state.prophecies[id]!;
+  const done = ((state.week % SEASON_LENGTH) + 1) / SEASON_LENGTH;
+  const width = profile.width * (0.8 + 0.4 * nextRandom(state));
+  const publicTarget = (p.low + p.high) / 2;
+  const center =
+    PULL * (publicTarget * done - p.progress) + (nextRandom(state) - 0.5) * width * CENTER_NOISE;
+  let low = Math.round(center - width / 2);
+  let high = Math.round(center + width / 2);
+  if (high - low < 2) {
+    low -= 1;
+    high += 1;
+  }
+  const trueCenter = PULL * (p.target * done - p.progress);
+  p.weekCenter = trueCenter;
+  p.weekNoise = width * WEEKLY_NOISE;
+  return { low, high, weights: weightsAround(low, high, trueCenter, WEEKLY_SHARPNESS) };
+}
+
 function rollForecasts(state: GameState): void {
   stepCycle(state);
+  if (state.week % SEASON_LENGTH === 0) rollProphecies(state);
   for (const company of COMPANIES) {
     state.shockRisk[company.id] =
       nextRandom(state) < SHOCK_HIGH_SHARE ? SHOCK_HIGH_CHANCE : SHOCK_BASE_CHANCE;
   }
-  state.cityForecast = generateForecast(state, cityProfile(state), localShift(state, 'city'));
-  for (const region of REGIONS) {
-    state.regionForecasts[region.id] = generateForecast(
-      state,
-      region,
-      localShift(state, region.id),
-    );
-  }
+  // News moves the destiny; only part of it shows in the public range.
   const events = state.events.map((e) => getEvent(e.id));
-  for (const guild of GUILDS) {
-    state.sectorForecasts[guild.id] = generateForecast(
-      state,
-      guild,
-      eventShift(guild.sector, events),
-    );
+  for (const id of FACTOR_IDS) {
+    const shift = factorShift(state, id, events);
+    if (shift === 0) continue;
+    const p = state.prophecies[id]!;
+    p.target += shift * NEWS_TARGET;
+    p.low += shift * NEWS_VISIBILITY;
+    p.high += shift * NEWS_VISIBILITY;
   }
+  state.cityForecast = weeklyForecast(state, 'city');
+  for (const region of REGIONS) state.regionForecasts[region.id] = weeklyForecast(state, region.id);
+  for (const guild of GUILDS) state.sectorForecasts[guild.id] = weeklyForecast(state, guild.id);
   for (const company of COMPANIES) {
-    state.companyForecasts[company.id] = generateForecast(
-      state,
-      company,
-      companyShift(state, company.id),
-    );
+    state.companyForecasts[company.id] = weeklyForecast(state, company.id);
   }
 }
 
@@ -1275,7 +1389,9 @@ function recordWeek(state: GameState, report: WeekReport): void {
   const fees = report.managementFee + report.performanceFee;
   const flows = state.weekFlows;
   state.weekFlows = 0;
-  const explained = marketPnl + report.bondIncome - report.hedgeFees - fees + flows;
+  const tradeFees = state.weekTradeFees;
+  state.weekTradeFees = 0;
+  const explained = marketPnl + report.bondIncome - report.hedgeFees - fees + flows - tradeFees;
   state.ledger.push({
     week: state.week,
     startWealth,
@@ -1285,6 +1401,7 @@ function recordWeek(state: GameState, report: WeekReport): void {
     hedgeFees: report.hedgeFees,
     fees,
     flows,
+    tradeFees,
     other: endWealth - startWealth - explained,
     purse: state.purse,
   });

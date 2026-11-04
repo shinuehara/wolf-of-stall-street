@@ -190,6 +190,9 @@ export type Insight =
       leansUp: boolean;
       /** The expert's rank when asked (from perks); 0 is the rookie. */
       level: number;
+      /** Week asked, and the middle of the public quarter range then. */
+      week: number;
+      publicMid: number;
     }
   | {
       expert: 'spy';
@@ -198,7 +201,22 @@ export type Insight =
       bands: Band[];
       /** The spy's rank when asked (Veteran Spy perk); says how good he is, not if he is right. */
       level: number;
+      /** Week asked, and the middle of the public quarter range then. */
+      week: number;
+      publicMid: number;
     };
+
+/** A factor's quarter: the public range of its destiny, the hidden destiny and the way so far. */
+export interface Prophecy extends Forecast {
+  /** Where the factor's cumulative move (%) is headed by the quarter's end. Hidden. */
+  target: number;
+  /** Cumulative move (%) since the quarter began. */
+  progress: number;
+  /** This week's true expected move (%): PULL of the gap to the path. Hidden. */
+  weekCenter: number;
+  /** This week's noise scale (% standard deviation). */
+  weekNoise: number;
+}
 
 export interface Position {
   value: number;
@@ -298,6 +316,8 @@ export interface WeekRecord {
   fees: number;
   /** Money put in (+) or taken out (-) by investors, confiscations included. */
   flows: number;
+  /** Broker's fees paid on purchases and sales since the previous week. */
+  tradeFees: number;
   /** Anything else that changed the fund (should be ~0). */
   other: number;
   /** Manager's purse at the end of the week. */
@@ -405,7 +425,7 @@ export interface RiskyDeposit {
 }
 
 export interface GameState {
-  version: 12;
+  version: 14;
   seed: number;
   rngState: number;
   /** Weeks elapsed. A season is SEASON_LENGTH weeks. */
@@ -429,6 +449,8 @@ export interface GameState {
   cityForecast: Forecast;
   /** This week's forecasts for each district's local demand. */
   regionForecasts: Record<string, Forecast>;
+  /** This quarter's prophecy for every factor (city, districts, sectors, companies). */
+  prophecies: Record<string, Prophecy>;
   /**
    * Slow economic cycle of the city, in % per week. It drifts a little every week and
    * sets the long-term trend of the GDP; weekly moves stay noisy around it.
@@ -436,6 +458,7 @@ export interface GameState {
   cityCycle: number;
   /** GDP and district indices ('city' and region ids), starting at 100. */
   indicators: Record<string, IndicatorState>;
+  /** What the experts said this quarter (kept until the quarter ends). */
   insights: Insight[];
   events: ActiveEvent[];
   companyEvents: ActiveCompanyEvent[];
@@ -460,6 +483,8 @@ export interface GameState {
   monthStart: number;
   /** Deposits and withdrawals since the last finished week. */
   weekFlows: number;
+  /** Broker's fees paid since the last finished week. */
+  weekTradeFees: number;
   /** An investor waiting for an answer (valid until the week ends). */
   investorOffer: InvestorOffer | null;
   /** Accepted deposits that can still be traced and confiscated. */

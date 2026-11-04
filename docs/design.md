@@ -44,9 +44,10 @@ Cada guilda tem `minChapter` (padrão 1) e `minClass`; as duas precisam ser aten
 
 ## Loop de turno (1 turno = 1 semana)
 
-1. **O Arauto** anuncia a faixa de variação esperada de cada ativo (ex: `-3% a +5%`) e as
-   notícias do reino, da cidade, dos bairros e das empresas.
-2. O gestor **consulta especialistas** (opcional, pago do bolso).
+1. **O Arauto** anuncia a **profecia do trimestre** de cada ativo (onde termina o trimestre,
+   ex: `-8% a +14%`, e quanto já andou), o "humor da semana" e as notícias.
+2. O gestor **consulta especialistas** (opcional, pago do bolso); a resposta vale até o fim do
+   trimestre.
 3. **Aloca** o fundo entre cotas, cestas e Títulos da Coroa, e liga ou desliga o **seguro**.
 4. **Encerrar semana:** o mercado se move (com possíveis choques), os seguros são cobrados,
    os títulos rendem, as taxas vão do fundo para o bolso e o custo de vida sai do bolso.
@@ -54,6 +55,28 @@ Cada guilda tem `minChapter` (padrão 1) e `minClass`; as duas precisam ser aten
    **avaliação de classe** e a festa de fechamento.
 
 ## Mecânicas
+
+### A profecia do trimestre (modelo de mercado)
+
+Pedido do dono: o jogo induzia a comprar e vender tudo toda semana, porque cada semana era um
+jogo novo. Agora a informação vale o trimestre e segurar ou realizar vira decisão.
+
+- No começo de cada trimestre, cada fator (cidade, bairro, setor, empresa) ganha uma **faixa
+  pública** (`QUARTER_WIDTH` × a largura semanal) e um **destino oculto** sorteado dentro dela
+  (com a inclinação escondida de sempre).
+- Toda semana o fator anda `PULL` (0,5) da distância até o caminho reto rumo ao destino, mais
+  um ruído (`WEEKLY_NOISE` × largura). Quem sabe o destino percebe quando o preço **correu na
+  frente** (vender e realizar) ou **ficou para trás** (comprar).
+- O **humor da semana** do Arauto é calculado só com a faixa pública; pode errar e ser
+  ultrapassado. O seguro limita a semana a essa faixa.
+- **Notícias** movem o destino (`NEWS_TARGET` 0,4 do efeito por semana) e só um pouco a faixa
+  pública (`NEWS_VISIBILITY` 0,25). **Choques** movem tudo (destino, progresso e faixa
+  pública), porque todos veem o incêndio.
+- O ativo (cesta ou empresa) combina as profecias dos seus fatores com os mesmos pesos dos
+  movimentos (`assetProphecy`). O Mercado mostra a faixa do trimestre e "já andou X%"; o
+  detalhe mostra a barra com a posição de agora e o palpite do Espião.
+- **Corretagem da guilda** (`TRADE_FEE` 0,5%) em cada compra e venda de cestas e empresas
+  (não em Títulos nem gestores). Girar a carteira toda semana custa ~1% por volta.
 
 ### Você é um fundo de investimentos
 
@@ -271,9 +294,11 @@ Um local próprio com duas visões:
 | 🔮 Astróloga | 0,01 + 0,01% do fundo, do seu bolso | alta ou baixa, **60%** de acerto                                                                            | sempre |
 | 🕵️ Espião    | 0,04 + 0,05% do patrimônio          | uma **estimativa** da chance de cada faixa, com erro, e às vezes um **furo plantado** (o oposto da verdade) | sempre |
 
-Cada pergunta é sobre o **PIB da cidade**, um **bairro**, um **setor** ou uma **empresa**.
-O Espião mostra um selo de confiança (baixa, média, alta) conforme o nível do Espião
-Veterano. O selo diz quão bom ele é, não se aquela resposta está certa.
+Cada pergunta é sobre o **PIB da cidade**, um **bairro**, uma **cesta** ou uma **empresa**
+(o ativo inteiro, como é negociado) e fala de **onde termina o trimestre**. A resposta vale
+até o fim do trimestre; dá para **perguntar de novo** (pagando de novo) quando notícias mudam
+o quadro. A resposta é lida em relação à faixa pública: se a faixa andou desde então (um
+incêndio), o palpite anda junto. O Espião aprendiz erra mais e planta furos (15%).
 
 ### Patentes dos especialistas
 
@@ -363,12 +388,13 @@ e respostas dos especialistas, com erro). `src/sim/balance.test.ts` garante que:
 Referência (60 partidas, limite de 300 semanas, trimestres de 12 semanas, com a abertura
 gradual):
 
-| Bot                  | Vence    | Semanas até Conde | Quedas de classe  | Pior semana |
-| -------------------- | -------- | ----------------- | ----------------- | ----------- |
-| Só títulos           | 0        | —                 | —                 | —           |
-| Sem informação       | 40 de 60 | ~182              | 1,1 (6 masmorras) | -15%        |
-| Espião sem melhorias | 59 de 60 | ~130              | 0,33 (nenhuma)    | -15%        |
-| Espião com melhorias | 60 de 60 | ~101              | 0,03 (nenhuma)    | -12%        |
+| Bot                   | Vence    | Semanas até Conde | Quedas de classe  | Pior semana |
+| --------------------- | -------- | ----------------- | ----------------- | ----------- |
+| Só títulos            | 0        | —                 | —                 | —           |
+| Sem informação        | 33 de 60 | ~199              | 0,3 (7 masmorras) | -14%        |
+| Espião sem melhorias  | 59 de 60 | ~155              | 0,2 (nenhuma)     | -13%        |
+| Espião com melhorias  | 60 de 60 | ~128              | 0,02 (nenhuma)    | -11%        |
+| Oráculo (diagnóstico) | 60 de 60 | ~88               | 0                 | -11%        |
 
 Metas escolhidas por Claude (o dono delegou a dificuldade): quem chuta vai para a masmorra em
 ~10% das partidas; quem se informa, nunca; o melhor jogador chega em ~100 semanas (sobe
@@ -377,8 +403,14 @@ abertura gradual o melhor bot levava ~118 semanas. Os bots ainda não compram it
 dos visitantes. O mínimo possível hoje é 96 semanas (1 trimestre só de títulos + 7
 promoções).
 
-Alavancas principais: `DRIFT_SCALE`, `CENTER_NOISE`, `NEWS_VISIBILITY`, `NEWS_LEAN` e
-`LEAN_SHARPNESS` em `forecast.ts`; ruído do Espião, choques e preços das melhorias em `data.ts`.
+Com a profecia do trimestre (v0.16) o Espião mestre chega perto do oráculo, e quem não
+pergunta fica bem atrás. O bot **oráculo** (`'oracle'`) conhece todos os destinos: é o teto do
+que a informação pode render, para diagnóstico. Os bots seguram posições enquanto ainda valem
+a corretagem e repetem perguntas com mais de 4 semanas.
+
+Alavancas principais: `PULL`, `QUARTER_WIDTH`, `WEEKLY_NOISE`, `NEWS_TARGET`,
+`NEWS_VISIBILITY`, `DRIFT_SCALE` (1,0) em `forecast.ts`; `TRADE_FEE`, `FLOW_FLOOR_MARGIN`
+(1,3), ruído e furos do Espião, choques e preços das melhorias em `data.ts`.
 
 ## Ideias para depois
 

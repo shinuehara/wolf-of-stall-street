@@ -58,9 +58,14 @@ Key model facts (details in `docs/design.md`):
   titles, visitor items and living cost are paid from the purse. Class is measured by fund.
 - **Factor model.** Company weekly move = city GDP × region.cityBeta + sector × beta +
   district demand × LOCAL_DEMAND[sector] + own move. Baskets average their companies.
-- **Forecasts** are public ranges `[low, high]` split into 4 bands with hidden weights (lean).
-  News shifts only partly show in the public range (`NEWS_VISIBILITY`); the rest hides in
-  the lean. Experts reveal the lean with noise; perks reduce the noise.
+- **Quarter prophecy** (the market model). Each quarter every factor gets a public range and
+  a hidden destiny (`state.prophecies[id]`: low, high, target, progress). Each week a factor
+  moves `PULL × (target × weeksDone/12 − progress)` + noise (`weekCenter`, `weekNoise`, set
+  in `weeklyForecast`; sampled in `sampleMoves`). The weekly herald range (`*Forecasts`) is
+  the public guess only. News moves `target` (and a bit of the public range); shocks move
+  everything. `assetProphecy` combines factors for a basket/company. Experts answer about
+  the asset's quarter (`targetForecast`), answers last the quarter, can be re-asked, and
+  carry `week` + `publicMid`. A broker's fee (`TRADE_FEE`) is charged on stock trades.
 - **Time.** Quarter (`SEASON_LENGTH`) = 12 weeks = 3 months (`MONTH_LENGTH` = 4). Class
   review + party at week 12; visitors (merchant/smuggler) at weeks 4 and 8.
 - **Story / gradual unlock.** `state.story.chapter`: 0 = bonds only (quarter 1, no experts,
@@ -99,12 +104,13 @@ Key model facts (details in `docs/design.md`):
 ## Balance
 
 `src/sim/bots.ts` + `src/sim/balance.test.ts`. Strategies: bonds, naive, astrologer, spy,
-perks. To explore, write a temporary `src/sim/zz-explore.test.ts` that prints
+perks, oracle (knows every destiny: an upper bound for diagnostics). To explore, write a temporary `src/sim/zz-explore.test.ts` that prints
 `summarize(...)` for 60 seeds with `--silent=false`, then delete it. Main levers:
 `DRIFT_SCALE`, `CENTER_NOISE`, `NEWS_VISIBILITY`, `NEWS_LEAN`, `LEAN_SHARPNESS`
 (forecast.ts); class fees/costs, spy noise, shocks, perk and item prices (data.ts).
-Targets: bonds alone never win; information beats guessing; perks beat raw information;
-perks still have bad weeks (worst week < -10%).
+Targets (the owner delegated difficulty): bonds alone never win; information beats guessing;
+perks beat raw information; perks still have bad weeks (worst week < -10%); guessers go to
+the dungeon in ~10-20% of games, informed bots almost never.
 
 ## Gotchas
 

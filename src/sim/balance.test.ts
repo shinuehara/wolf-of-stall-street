@@ -35,4 +35,10 @@ describe('balance', { timeout: 300_000 }, () => {
   it('guessing is not a reliable way to nobility', () => {
     expect(naive.won).toBeLessThan(SEEDS.length * 0.85);
   });
+
+  it('the dungeon takes some guessers, but not the informed', () => {
+    expect(naive.lost).toBeLessThan(SEEDS.length * 0.25);
+    expect(spy.lost).toBeLessThanOrEqual(1);
+    expect(perks.lost).toBeLessThanOrEqual(1);
+  });
 });
