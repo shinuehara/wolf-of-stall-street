@@ -30,6 +30,23 @@ Pilares:
 
 ## Mecânicas
 
+### Você é um fundo de investimentos
+
+O patrimônio é **dinheiro de investidores**: o **fundo**. Você, o gestor, tem o seu
+**bolso**, que começa com 10 fl.
+
+- Toda semana o bolso recebe, tirado do fundo:
+  - **taxa de administração** = t_a × fundo (0,15%/sem como Servo até 0,30% como Conde);
+  - **taxa de performance** = t_p × lucro da semana, só quando há lucro (20% a 30%).
+- Do bolso saem: **especialistas**, **melhorias**, **títulos de nobreza** e o **custo de vida**.
+- Seguros são custo do fundo.
+- A **classe** é medida pelo tamanho do fundo (a fama do gestor).
+- **Derrota:** fundo abaixo do piso de Servo no fim da estação (fundo fechado), ou bolso sem
+  dinheiro para o custo de vida (masmorra por dívidas).
+
+Isso impede gastar o patrimônio todo em melhorias no dia 0: elas são compradas com as taxas
+que você acumula, e performar bem rende mais taxa de performance.
+
 ### Títulos da Coroa (renda fixa)
 
 **Ouro parado não rende.** Para render, o jogador compra Títulos da Coroa no Mercado:
@@ -135,11 +152,11 @@ Um local próprio com duas visões:
 
 ### Especialistas (falíveis)
 
-|              | Custo por pergunta         | O que diz                                                                                                   | Base   |
-| ------------ | -------------------------- | ----------------------------------------------------------------------------------------------------------- | ------ |
-| 🍺 Bêbado    | grátis                     | alta ou baixa, 50% de acerto (puro meme)                                                                    | sempre |
-| 🔮 Astróloga | 0,02 + 0,02% do patrimônio | alta ou baixa, **60%** de acerto                                                                            | sempre |
-| 🕵️ Espião    | 0,04 + 0,05% do patrimônio | uma **estimativa** da chance de cada faixa, com erro, e às vezes um **furo plantado** (o oposto da verdade) | sempre |
+|              | Custo por pergunta                  | O que diz                                                                                                   | Base   |
+| ------------ | ----------------------------------- | ----------------------------------------------------------------------------------------------------------- | ------ |
+| 🍺 Bêbado    | grátis                              | alta ou baixa, 50% de acerto (puro meme)                                                                    | sempre |
+| 🔮 Astróloga | 0,01 + 0,01% do fundo, do seu bolso | alta ou baixa, **60%** de acerto                                                                            | sempre |
+| 🕵️ Espião    | 0,04 + 0,05% do patrimônio          | uma **estimativa** da chance de cada faixa, com erro, e às vezes um **furo plantado** (o oposto da verdade) | sempre |
 
 Cada pergunta é sobre o **PIB da cidade**, um **bairro**, um **setor** ou uma **empresa**.
 O Espião mostra um selo de confiança (baixa, média, alta) conforme o nível do Espião
@@ -155,7 +172,7 @@ com elas, a rentabilidade sobe de verdade. Compradas na Taverna, aba "Contratar 
 | Telescópio da Astróloga     | 8 · Servo / 25 · Camponês                   | 60% → 68% → 75% de acerto                                             |
 | Espião Veterano             | 15 · Camponês / 35 · Artesão / 80 · Burguês | erro do Espião cai muito; furos plantados 25% → 12% → 5% → 1%         |
 | Rede de Informantes         | 35 · Artesão                                | avisa (⚠) quais empresas estão com risco alto de choque na semana     |
-| Contrato com os Seguradores | 25 · Camponês                               | seguro 40% mais barato                                                |
+| Contrato com os Seguradores | 8 · Camponês                                | seguro 40% mais barato                                                |
 | Cronista                    | 30 · Artesão                                | mostra os pesos de cidade, setor e bairro na previsão de cada empresa |
 | Livro-caixa do Escriba      | 10 · Servo                                  | gráficos com 40 semanas (antes 8)                                     |
 | Amigo do Tesoureiro         | 60 · Mercador                               | Títulos da Coroa rendem 50% a mais                                    |
@@ -207,11 +224,11 @@ Referência (60 partidas, limite de 300 semanas):
 
 | Bot                  | Vence | Perde | Semanas até Conde | Quedas de classe |
 | -------------------- | ----- | ----- | ----------------- | ---------------- |
-| Só títulos           | 0     | 60    | —                 | —                |
-| Sem informação       | 40    | 0     | ~212              | 2,4              |
-| Astróloga            | 47    | 1     | ~181              | 2,4              |
-| Espião sem melhorias | 48    | 9     | ~160              | 1,0              |
-| Espião com melhorias | 51    | 9     | ~147              | 0,25             |
+| Só títulos           | 0     | 0     | —                 | —                |
+| Sem informação       | 35    | 0     | ~210              | 2,8              |
+| Astróloga            | 51    | 0     | ~175              | 2,3              |
+| Espião sem melhorias | 58    | 0     | ~135              | 0,9              |
+| Espião com melhorias | 60    | 0     | ~91               | 0,1              |
 
 Alavancas principais: `DRIFT_SCALE`, `CENTER_NOISE`, `NEWS_VISIBILITY`, `NEWS_LEAN` e
 `LEAN_SHARPNESS` em `forecast.ts`; ruído do Espião, choques e preços das melhorias em `data.ts`.

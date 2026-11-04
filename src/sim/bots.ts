@@ -6,6 +6,7 @@ import {
   buyPerk,
   consult,
   endWeek,
+  expertCost,
   isGuildUnlocked,
   newGame,
   nextPerkLevel,
@@ -83,7 +84,10 @@ export function playBot(seed: number, strategy: BotStrategy): BotResult {
       for (const id of PERK_PRIORITY) {
         const next = nextPerkLevel(state, id);
         const floor = getClass(state.classIndex).floor;
-        if (next && state.classIndex >= next.minClass && state.cash - next.cost > floor * 1.15) {
+        const reserve =
+          getClass(state.classIndex).livingCost * 8 + getClass(state.classIndex).ascensionFee;
+        void floor;
+        if (next && state.classIndex >= next.minClass && state.purse - next.cost > reserve) {
           buyPerk(state, id);
         }
       }
@@ -102,7 +106,12 @@ export function playBot(seed: number, strategy: BotStrategy): BotResult {
           ...guilds.slice(0, 2).map((g) => g.id),
           ...guilds.slice(0, deep).flatMap((g) => companiesOf(g.id).map((c) => c.id)),
         ];
-        for (const id of targets) consult(state, expert, id);
+        // Questions are paid from the manager's purse: keep a few weeks of living costs.
+        const reserve = getClass(state.classIndex).livingCost * 4;
+        for (const id of targets) {
+          if (state.purse - expertCost(state, expert) < reserve) break;
+          consult(state, expert, id);
+        }
       }
 
       const candidates = guilds.flatMap((g) => [g.id, ...companiesOf(g.id).map((c) => c.id)]);

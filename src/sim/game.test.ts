@@ -6,7 +6,9 @@ import {
   CLASSES,
   SEASON_LENGTH,
   STARTING_GOLD,
+  STARTING_PURSE,
   TOP_CLASS,
+  getPerk,
 } from './data';
 import {
   acceptAscension,
@@ -113,7 +115,7 @@ describe('trading', () => {
     expect(state.assetPnl.bakers).toBeCloseTo(value - 40);
   });
 
-  it('keeps a weekly ledger that adds up', () => {
+  it('keeps a weekly ledger of the fund that adds up', () => {
     const state = newGame(9);
     buy(state, 'mines', 30);
     consult(state, 'astrologer', 'mines');
@@ -125,14 +127,14 @@ describe('trading', () => {
     expect(first!.startWealth).toBe(100);
     expect(second!.startWealth).toBeCloseTo(first!.endWealth);
     for (const r of state.ledger) {
-      const sum = r.marketPnl + r.bondIncome - r.hedgeFees - r.livingCost + r.other;
+      const sum = r.marketPnl + r.bondIncome - r.hedgeFees - r.fees + r.other;
       expect(r.endWealth - r.startWealth).toBeCloseTo(sum);
+      // Experts are paid by the manager, not by the investors.
+      expect(r.other).toBeCloseTo(0);
+      expect(r.fees).toBeGreaterThan(0);
     }
-    // The astrologer's fee shows up as "other" in the first week.
-    expect(first!.other).toBeLessThan(0);
-    expect(second!.other).toBeCloseTo(0);
+    expect(second!.purse).toBeCloseTo(state.purse);
   });
-
   it('only insures positions you hold', () => {
     const state = newGame(1);
     expect(setHedge(state, 'mines', true).ok).toBe(false);
@@ -142,15 +144,15 @@ describe('trading', () => {
 });
 
 describe('experts', () => {
-  it('charges for advice and records the insight once per week', () => {
+  it("charges advice to the manager's purse and records it once per week", () => {
     const state = newGame(5);
     const cost = expertCost(state, 'astrologer');
     expect(consult(state, 'astrologer', 'bakers').ok).toBe(true);
-    expect(state.cash).toBe(100 - cost);
+    expect(state.purse).toBeCloseTo(STARTING_PURSE - cost);
+    expect(state.cash).toBe(100);
     expect(consult(state, 'astrologer', 'bakers').ok).toBe(false);
     expect(state.insights).toHaveLength(1);
   });
-
   it('the spy is open from the start, but his estimate can be off', () => {
     let off = 0;
     for (let seed = 0; seed < 40; seed++) {
@@ -185,17 +187,21 @@ describe('experts', () => {
     expect(errorWith(3)).toBeLessThan(errorWith(0) / 2);
   });
 
-  it('perks are bought level by level, with class and cost requirements', () => {
+  it('perks are paid from the purse, level by level, with class requirements', () => {
     const state = newGame(1);
     expect(buyPerk(state, 'scribe').ok).toBe(true);
+    expect(state.purse).toBeCloseTo(STARTING_PURSE - getPerk('scribe').levels[0]!.cost);
+    expect(state.cash).toBe(100);
     expect(buyPerk(state, 'scribe').ok).toBe(false); // max level
+    state.purse = 1;
+    expect(buyPerk(state, 'telescope').ok).toBe(false); // purse too thin
+    state.purse = 100;
     expect(buyPerk(state, 'veteranSpy').ok).toBe(false); // needs Camponês
     state.classIndex = 1;
     expect(buyPerk(state, 'veteranSpy').ok).toBe(true);
     expect(perkLevel(state, 'veteranSpy')).toBe(1);
     expect(buyPerk(state, 'veteranSpy').ok).toBe(false); // level 2 needs Artesão
   });
-
   it('insured positions are protected from surprise shocks', () => {
     let shocked = 0;
     for (let seed = 0; seed < 300 && shocked < 5; seed++) {
@@ -245,7 +251,8 @@ describe('endWeek', () => {
     const serf = CLASSES[0]!;
     buy(state, BOND_LIQUID, 60);
     const report = endWeek(state);
-    expect(state.cash).toBeCloseTo(40 - serf.livingCost);
+    const fees = report.managementFee + report.performanceFee;
+    expect(state.cash).toBeCloseTo(40 - fees);
     expect(state.positions[BOND_LIQUID]!.value).toBeCloseTo(60 * (1 + serf.bondRate));
     expect(report.bondIncome).toBeCloseTo(60 * serf.bondRate);
     expect(state.week).toBe(1);
@@ -253,6 +260,26 @@ describe('endWeek', () => {
     expect(sell(state, BOND_LIQUID, Infinity).ok).toBe(true);
   });
 
+  it('the manager earns a management fee and a performance fee on profits', () => {
+    const state = newGame(3);
+    const serf = CLASSES[0]!;
+    buy(state, BOND_LIQUID, 100);
+    const report = endWeek(state);
+    const fund = 100 * (1 + serf.bondRate);
+    expect(report.managementFee).toBeCloseTo(fund * serf.managementFeeRate);
+    expect(report.performanceFee).toBeCloseTo(100 * serf.bondRate * serf.performanceFeeRate);
+    expect(state.purse).toBeCloseTo(
+      STARTING_PURSE + report.managementFee + report.performanceFee - serf.livingCost,
+    );
+  });
+
+  it('a broke manager goes to the dungeon even if the fund is fine', () => {
+    const state = newGame(3);
+    state.purse = 0;
+    state.cash = 0.01;
+    endWeek(state);
+    expect(state.status).toBe('lost');
+  });
   it('a locked Crown bond pays double, cannot be sold and returns to cash at maturity', () => {
     const state = newGame(3);
     const serf = CLASSES[0]!;
@@ -268,15 +295,14 @@ describe('endWeek', () => {
     endWeek(state);
     expect(state.lockedBonds).toHaveLength(0);
     const grown = 50 * (1 + serf.bondRate * BOND_LOCK_MULTIPLIER) ** BOND_LOCK_WEEKS;
-    expect(state.cash).toBeCloseTo(50 + grown - serf.livingCost * BOND_LOCK_WEEKS);
+    const fees = state.ledger.reduce((s, r) => s + r.fees, 0);
+    expect(state.cash).toBeCloseTo(50 + grown - fees);
   });
-
-  it('locked bonds count for the season review but not for paying a title', () => {
+  it('locked bonds count in the fund for the season review', () => {
     const state = newGame(3);
     buy(state, BOND_LOCKED, 100);
-    state.lockedBonds[0]!.value = 200;
-    state.ascensionOffer = true;
-    expect(acceptAscension(state).ok).toBe(false);
+    expect(wealth(state)).toBeCloseTo(100);
+    expect(state.cash).toBeCloseTo(0);
   });
 
   it('insured positions never move beyond the insured range', () => {
@@ -372,21 +398,23 @@ describe('endWeek', () => {
     expect(state.status).toBe('lost');
   });
 
-  it('offers a title when the season ends above the ceiling', () => {
+  it('offers a title when the season ends above the ceiling, paid from the purse', () => {
     const state = newGame(3);
     state.cash = 200;
     for (let i = 0; i < SEASON_LENGTH; i++) endWeek(state);
     expect(state.ascensionOffer).toBe(true);
-    const before = wealth(state);
+    const fund = wealth(state);
+    const purse = state.purse;
     expect(acceptAscension(state).ok).toBe(true);
     expect(state.classIndex).toBe(1);
-    expect(wealth(state)).toBeCloseTo(before - CLASSES[0]!.ascensionFee);
+    expect(wealth(state)).toBeCloseTo(fund);
+    expect(state.purse).toBeCloseTo(purse - CLASSES[0]!.ascensionFee);
   });
-
   it('becoming Count wins the game', () => {
     const state = newGame(3);
     state.classIndex = TOP_CLASS - 1;
     state.cash = 30000;
+    state.purse = 100;
     for (let i = 0; i < SEASON_LENGTH; i++) endWeek(state);
     acceptAscension(state);
     expect(state.status).toBe('won');

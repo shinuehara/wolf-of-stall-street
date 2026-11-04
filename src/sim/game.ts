@@ -34,6 +34,7 @@ import {
   REGION_NEWS,
   SEASON_LENGTH,
   STARTING_GOLD,
+  STARTING_PURSE,
   TOP_CLASS,
   companiesOf,
   getClass,
@@ -85,6 +86,10 @@ export interface WeekReport {
   positionPnl: Record<string, number>;
   bondIncome: number;
   hedgeFees: number;
+  /** Paid from the fund to the manager. */
+  managementFee: number;
+  performanceFee: number;
+  /** Paid from the manager's purse. */
   livingCost: number;
   seasonEnded: boolean;
   classChange: 'down' | 'stay' | 'up-offer' | null;
@@ -175,12 +180,13 @@ function cityProfile(state: GameState): { drift: number; width: number } {
 
 export function newGame(seed: number = Date.now() >>> 0): GameState {
   const state: GameState = {
-    version: 6,
+    version: 7,
     seed,
     rngState: seed,
     week: 0,
     classIndex: 0,
     cash: STARTING_GOLD,
+    purse: STARTING_PURSE,
     positions: {},
     assets: Object.fromEntries(
       ASSET_IDS.map((id) => [id, { price: assetStartPrice(id), history: [assetStartPrice(id)] }]),
@@ -282,8 +288,8 @@ export function buyPerk(state: GameState, id: PerkId): ActionResult {
   if (state.classIndex < level.minClass) {
     return fail(`Só a partir de ${getClass(level.minClass).name}.`);
   }
-  if (state.cash < level.cost) return fail('Você não tem florins livres para pagar.');
-  state.cash -= level.cost;
+  if (state.purse < level.cost) return fail('Seu bolso não tem florins para pagar.');
+  state.purse -= level.cost;
   state.perks[id] = perkLevel(state, id) + 1;
   log(
     state,
@@ -421,10 +427,10 @@ export function consult(state: GameState, expertId: ExpertId, targetId: string):
     return fail('Você já fez essa pergunta a este especialista nesta semana.');
   }
   const cost = expertCost(state, expertId);
-  if (cost > state.cash) return fail('Você não tem florins livres para pagar a consulta.');
+  if (cost > state.purse) return fail('Seu bolso não tem florins para pagar a consulta.');
   const forecast = targetForecast(state, targetId);
 
-  state.cash -= cost;
+  state.purse -= cost;
   if (expertId === 'spy') {
     const level = Math.min(perkLevel(state, 'veteranSpy'), SPY_CONFIDENCE.length - 1);
     state.insights.push({
@@ -450,13 +456,10 @@ export function consult(state: GameState, expertId: ExpertId, targetId: string):
 export function acceptAscension(state: GameState): ActionResult {
   if (!state.ascensionOffer) return fail('Não há título à venda para você agora.');
   const cls = currentClass(state);
-  if (liquidWealth(state) < cls.ascensionFee) {
-    return fail(
-      'Você não tem florins disponíveis para pagar o título (títulos presos não contam).',
-    );
+  if (state.purse < cls.ascensionFee) {
+    return fail('O título sai do seu bolso, e ele não tem florins suficientes.');
   }
-  raiseCash(state, cls.ascensionFee);
-  state.cash -= cls.ascensionFee;
+  state.purse -= cls.ascensionFee;
   state.classIndex += 1;
   state.ascensionOffer = false;
   const next = currentClass(state);
@@ -482,12 +485,15 @@ export function declineAscension(state: GameState): ActionResult {
 export function endWeek(state: GameState): WeekReport {
   if (state.status !== 'playing') throw new Error('Game is over');
   const cls = currentClass(state);
+  const fundAtStart = wealth(state);
   const report: WeekReport = {
     marketReturns: {},
     factorMoves: {},
     positionPnl: {},
     bondIncome: 0,
     hedgeFees: 0,
+    managementFee: 0,
+    performanceFee: 0,
     livingCost: cls.livingCost,
     seasonEnded: false,
     classChange: null,
@@ -570,24 +576,19 @@ export function endWeek(state: GameState): WeekReport {
       'good',
     );
   }
-  state.cash -= cls.livingCost;
-  if (state.cash < 0) {
-    const shortfall = -state.cash;
-    raiseCash(state, shortfall);
-    if (state.cash < 0) {
-      state.status = 'lost';
-      log(
-        state,
-        'Sem florins para pagar as contas. Os credores te arrastam para a masmorra.',
-        'bad',
-      );
-      return report;
-    }
-    log(
-      state,
-      `Faltou dinheiro vivo: vendemos ${fmt(shortfall)} florins em cotas para pagar as contas.`,
-      'bad',
-    );
+  // 4. The manager takes the fees from the fund, then pays the bills from the purse.
+  const profit = wealth(state) - fundAtStart;
+  report.managementFee = wealth(state) * cls.managementFeeRate;
+  report.performanceFee = Math.max(0, profit) * cls.performanceFeeRate;
+  const fees = report.managementFee + report.performanceFee;
+  raiseCash(state, fees);
+  state.cash -= fees;
+  state.purse += fees;
+  state.purse -= cls.livingCost;
+  if (state.purse < 0) {
+    state.status = 'lost';
+    log(state, 'Seu bolso não paga nem o pão. Os credores te arrastam para a masmorra.', 'bad');
+    return report;
   }
 
   state.week += 1;
@@ -791,7 +792,8 @@ function recordWeek(state: GameState, report: WeekReport): void {
   const startWealth = lastRecordedWealth(state);
   const endWealth = wealth(state);
   const marketPnl = Object.values(report.positionPnl).reduce((a, b) => a + b, 0);
-  const explained = marketPnl + report.bondIncome - report.hedgeFees - report.livingCost;
+  const fees = report.managementFee + report.performanceFee;
+  const explained = marketPnl + report.bondIncome - report.hedgeFees - fees;
   state.ledger.push({
     week: state.week,
     startWealth,
@@ -799,18 +801,20 @@ function recordWeek(state: GameState, report: WeekReport): void {
     marketPnl,
     bondIncome: report.bondIncome,
     hedgeFees: report.hedgeFees,
-    livingCost: report.livingCost,
+    fees,
     other: endWealth - startWealth - explained,
+    purse: state.purse,
   });
 }
 
 function logWeekSummary(state: GameState, report: WeekReport): void {
   const pnl = Object.values(report.positionPnl).reduce((a, b) => a + b, 0);
-  const net = pnl + report.bondIncome - report.hedgeFees - report.livingCost;
+  const fees = report.managementFee + report.performanceFee;
+  const net = pnl + report.bondIncome - report.hedgeFees - fees;
   const sign = net >= 0 ? '+' : '';
   log(
     state,
-    `Semana ${state.week}: ${sign}${fmt(net)} florins (cotas ${fmt(pnl)}, títulos ${fmt(report.bondIncome)}, seguros -${fmt(report.hedgeFees)}, custo de vida -${fmt(report.livingCost)}).`,
+    `Semana ${state.week}: fundo ${sign}${fmt(net)} fl; seu bolso recebeu ${fmt(fees)} fl de taxas e pagou ${fmt(report.livingCost)} de custo de vida.`,
     net >= 0 ? 'good' : 'bad',
   );
 }

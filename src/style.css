@@ -2054,3 +2054,24 @@ img.sprite,
 .hint-perk {
   color: var(--purple);
 }
+
+.purse-note {
+  margin-left: auto;
+  align-self: center;
+  font-size: 0.9em;
+}
+
+.report-sub {
+  font-size: 0.9rem;
+  color: var(--purple);
+  text-align: left;
+}
+
+@media (max-width: 720px) {
+  .hud {
+    grid-template-columns: repeat(3, auto);
+  }
+  .hud .hud-week {
+    display: none;
+  }
+}

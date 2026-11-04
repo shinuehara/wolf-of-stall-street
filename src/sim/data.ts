@@ -13,7 +13,10 @@ import type {
 } from './types';
 
 export const SEASON_LENGTH = 4;
+/** The investors' money the fund starts with. */
 export const STARTING_GOLD = 100;
+/** The manager's own money at the start. */
+export const STARTING_PURSE = 10;
 export const MAX_ACTIVE_EVENTS = 2;
 export const EVENT_CHANCE = 0.3;
 /** Astrologer accuracy by Telescope level. */
@@ -54,8 +57,8 @@ export const PERKS: readonly PerkDef[] = [
     icon: 'crystal',
     description: 'Lentes melhores, profecias melhores.',
     levels: [
-      { cost: 8, minClass: 0, effect: 'A Astróloga acerta 68% (antes 60%).' },
-      { cost: 25, minClass: 1, effect: 'A Astróloga acerta 75%.' },
+      { cost: 3, minClass: 0, effect: 'A Astróloga acerta 68% (antes 60%).' },
+      { cost: 8, minClass: 1, effect: 'A Astróloga acerta 75%.' },
     ],
   },
   {
@@ -64,9 +67,9 @@ export const PERKS: readonly PerkDef[] = [
     icon: 'hood',
     description: 'Um espião com mais anos de ofício erra menos e cai menos em furos plantados.',
     levels: [
-      { cost: 15, minClass: 1, effect: 'Erro pela metade; furos plantados caem de 25% para 12%.' },
-      { cost: 35, minClass: 2, effect: 'Erro bem menor; furos plantados 5%.' },
-      { cost: 80, minClass: 4, effect: 'Quase sempre certeiro; furos plantados 1%.' },
+      { cost: 6, minClass: 1, effect: 'Erro pela metade; furos plantados caem de 25% para 12%.' },
+      { cost: 15, minClass: 2, effect: 'Erro bem menor; furos plantados 5%.' },
+      { cost: 35, minClass: 4, effect: 'Quase sempre certeiro; furos plantados 1%.' },
     ],
   },
   {
@@ -76,7 +79,7 @@ export const PERKS: readonly PerkDef[] = [
     description: 'Moleques de recado que ouvem tudo pelas esquinas.',
     levels: [
       {
-        cost: 35,
+        cost: 15,
         minClass: 2,
         effect:
           'Avisa quais empresas estão com risco alto de choque (incêndio, escândalo…) nesta semana.',
@@ -88,7 +91,7 @@ export const PERKS: readonly PerkDef[] = [
     name: 'Contrato com os Seguradores',
     icon: 'shield',
     description: 'Cliente antigo paga menos.',
-    levels: [{ cost: 25, minClass: 1, effect: 'Seguro 40% mais barato.' }],
+    levels: [{ cost: 8, minClass: 1, effect: 'Seguro 40% mais barato.' }],
   },
   {
     id: 'chronicler',
@@ -97,7 +100,7 @@ export const PERKS: readonly PerkDef[] = [
     description: 'Um velho que sabe a história de cada empresa da cidade.',
     levels: [
       {
-        cost: 30,
+        cost: 10,
         minClass: 2,
         effect:
           'Mostra quanto cada empresa sente a cidade, o setor e o bairro (os pesos da previsão).',
@@ -109,14 +112,14 @@ export const PERKS: readonly PerkDef[] = [
     name: 'Livro-caixa do Escriba',
     icon: 'scroll',
     description: 'Registros antigos de preços.',
-    levels: [{ cost: 10, minClass: 0, effect: 'Gráficos com 40 semanas de histórico (antes 8).' }],
+    levels: [{ cost: 4, minClass: 0, effect: 'Gráficos com 40 semanas de histórico (antes 8).' }],
   },
   {
     id: 'treasurer',
     name: 'Amigo do Tesoureiro',
     icon: 'crown',
     description: 'Um conhecido no tesouro da Coroa consegue taxas melhores.',
-    levels: [{ cost: 60, minClass: 3, effect: 'Títulos da Coroa rendem 50% a mais.' }],
+    levels: [{ cost: 20, minClass: 3, effect: 'Títulos da Coroa rendem 50% a mais.' }],
   },
 ];
 
@@ -254,79 +257,93 @@ export const REGION_NEWS: Record<RegionId, readonly LocalNewsTemplate[]> = {
 };
 
 /**
- * The social ladder. Each ceiling minus the ascension fee lands at or above the next floor,
- * so buying a title never drops you straight back down.
+ * The social ladder, measured by the size of the fund you manage. Titles are paid from the
+ * manager's own purse, and the fees the manager earns grow with the title.
  */
 export const CLASSES: readonly SocialClass[] = [
   {
     id: 'serf',
     name: 'Servo',
     floor: 60,
-    ceiling: 130,
-    ascensionFee: 5,
-    livingCost: 0.5,
+    ceiling: 125,
+    ascensionFee: 3,
+    livingCost: 0.12,
     bondRate: 0.002,
     hedgeFeeRate: 0.01,
+    managementFeeRate: 0.0015,
+    performanceFeeRate: 0.2,
   },
   {
     id: 'peasant',
     name: 'Camponês',
-    floor: 115,
-    ceiling: 170,
-    ascensionFee: 7,
-    livingCost: 0.7,
+    floor: 112,
+    ceiling: 155,
+    ascensionFee: 4,
+    livingCost: 0.18,
     bondRate: 0.0025,
     hedgeFeeRate: 0.009,
+    managementFeeRate: 0.0017,
+    performanceFeeRate: 0.21,
   },
   {
     id: 'artisan',
     name: 'Artesão',
-    floor: 150,
-    ceiling: 220,
-    ascensionFee: 9,
-    livingCost: 0.9,
+    floor: 140,
+    ceiling: 195,
+    ascensionFee: 6,
+    livingCost: 0.25,
     bondRate: 0.003,
     hedgeFeeRate: 0.008,
+    managementFeeRate: 0.0019,
+    performanceFeeRate: 0.22,
   },
   {
     id: 'merchant',
     name: 'Mercador',
-    floor: 195,
-    ceiling: 285,
-    ascensionFee: 12,
-    livingCost: 1.2,
+    floor: 175,
+    ceiling: 245,
+    ascensionFee: 8,
+    livingCost: 0.35,
     bondRate: 0.0035,
     hedgeFeeRate: 0.007,
+    managementFeeRate: 0.0021,
+    performanceFeeRate: 0.23,
   },
   {
     id: 'burgher',
     name: 'Burguês',
-    floor: 255,
-    ceiling: 370,
-    ascensionFee: 15,
-    livingCost: 1.5,
+    floor: 220,
+    ceiling: 305,
+    ascensionFee: 10,
+    livingCost: 0.45,
     bondRate: 0.004,
     hedgeFeeRate: 0.006,
+    managementFeeRate: 0.0023,
+    performanceFeeRate: 0.24,
   },
   {
     id: 'knight',
     name: 'Cavaleiro',
-    floor: 330,
-    ceiling: 480,
-    ascensionFee: 20,
-    livingCost: 2,
+    floor: 275,
+    ceiling: 380,
+    ascensionFee: 13,
+    livingCost: 0.6,
     bondRate: 0.0045,
     hedgeFeeRate: 0.005,
+    managementFeeRate: 0.0025,
+    performanceFeeRate: 0.25,
   },
   {
     id: 'baron',
     name: 'Barão',
-    floor: 430,
-    ceiling: 620,
-    ascensionFee: 26,
-    livingCost: 2.6,
+    floor: 345,
+    ceiling: 475,
+    ascensionFee: 17,
+    livingCost: 0.8,
     bondRate: 0.005,
     hedgeFeeRate: 0.004,
+    managementFeeRate: 0.0028,
+    performanceFeeRate: 0.27,
   },
   {
     id: 'count',
@@ -337,6 +354,8 @@ export const CLASSES: readonly SocialClass[] = [
     livingCost: 0,
     bondRate: 0.005,
     hedgeFeeRate: 0.004,
+    managementFeeRate: 0.003,
+    performanceFeeRate: 0.3,
   },
 ];
 
@@ -861,8 +880,8 @@ export const EXPERTS: readonly ExpertDef[] = [
     emoji: '🔮',
     description:
       'Lê nos astros se algo pende para alta ou baixa. Acerta 6 em cada 10 (melhora com o Telescópio).',
-    baseCost: 0.02,
-    wealthCost: 0.0002,
+    baseCost: 0.01,
+    wealthCost: 0.0001,
     minClass: 0,
   },
   {
@@ -871,8 +890,8 @@ export const EXPERTS: readonly ExpertDef[] = [
     emoji: '🕵️',
     description:
       'Estima a chance de cada faixa. Pode errar e cair em furos (melhora com o Espião Veterano).',
-    baseCost: 0.04,
-    wealthCost: 0.0005,
+    baseCost: 0.02,
+    wealthCost: 0.0002,
     minClass: 0,
   },
 ];

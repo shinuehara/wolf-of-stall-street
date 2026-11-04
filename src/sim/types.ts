@@ -17,6 +17,10 @@ export interface SocialClass {
   bondRate: number;
   /** Weekly insurance premium, as a fraction of the insured position. */
   hedgeFeeRate: number;
+  /** Weekly management fee the manager takes from the fund (0.0025 = 0.25% of the fund). */
+  managementFeeRate: number;
+  /** Share of each week's profit the manager takes as performance fee. */
+  performanceFeeRate: number;
 }
 
 /** Anything with its own weekly forecast: a whole sector or one company's own business. */
@@ -208,9 +212,12 @@ export interface WeekRecord {
   marketPnl: number;
   bondIncome: number;
   hedgeFees: number;
-  livingCost: number;
-  /** Everything else: experts, titles bought. */
+  /** Management + performance fees paid from the fund to the manager. */
+  fees: number;
+  /** Anything else that changed the fund (should be ~0). */
   other: number;
+  /** Manager's purse at the end of the week. */
+  purse: number;
 }
 
 export interface AssetState {
@@ -239,13 +246,18 @@ export interface LogEntry {
 export type GameStatus = 'playing' | 'won' | 'lost';
 
 export interface GameState {
-  version: 6;
+  version: 7;
   seed: number;
   rngState: number;
   /** Weeks elapsed. A season is SEASON_LENGTH weeks. */
   week: number;
   classIndex: number;
+  /** The fund's idle gold (investors' money). */
   cash: number;
+  /**
+   * The manager's own purse: receives the fees, pays experts, perks, living costs and titles.
+   */
+  purse: number;
   /** Keyed by asset id: a guild id (basket) or a company id. */
   positions: Record<string, Position>;
   assets: Record<string, AssetState>;

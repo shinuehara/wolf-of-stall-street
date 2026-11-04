@@ -270,15 +270,19 @@ function renderHud(state: GameState): string {
         <strong class="hud-value">${cls.name}</strong>
       </div>
     </div>
-    <div class="hud-stat">
-      <span class="hud-label">Patrimônio</span>
-      <strong class="hud-value gold">${fmt(total)} fl</strong>
+    <div class="hud-stat" title="Dinheiro dos investidores sob sua gestão">
+      <span class="hud-label">Fundo</span>
+      <strong class="hud-value">${fmt(total)} fl</strong>
     </div>
-    <div class="hud-stat">
+    <div class="hud-stat" title="Ouro do fundo parado, sem render">
       <span class="hud-label">Livres</span>
       <strong class="hud-value">${fmt(state.cash)} fl</strong>
     </div>
-    <div class="hud-stat">
+    <div class="hud-stat purse" title="Seu bolso: recebe as taxas e paga especialistas, melhorias, títulos e custo de vida">
+      <span class="hud-label">Seu bolso</span>
+      <strong class="hud-value gold">${fmt(state.purse)} fl</strong>
+    </div>
+    <div class="hud-stat hud-week">
       <span class="hud-label">Estação ${season(state)}</span>
       <strong class="hud-value">Semana ${state.week + 1}</strong>
     </div>
@@ -304,7 +308,7 @@ function renderHud(state: GameState): string {
 function renderNav(state: GameState, ui: UiState): string {
   const playing = state.status === 'playing';
   const fees = Object.keys(state.positions).reduce((sum, id) => sum + hedgeFee(state, id), 0);
-  const bills = currentClass(state).livingCost + fees;
+  const bills = fees;
   return `<nav class="nav px" aria-label="Locais">
     ${SCREENS.map(
       (
@@ -318,7 +322,7 @@ function renderNav(state: GameState, ui: UiState): string {
       </button>`,
     ).join('')}
     <button class="nav-btn end-week" data-action="end-week" ${playing ? '' : 'disabled'}
-      title="Encerrar a semana: paga ${fmt(bills)} fl de contas">
+      title="Encerrar a semana (seguros do fundo: ${fmt(bills)} fl)">
       ${sprite('hourglass', 28)}
       <span>Fim da semana</span>
     </button>
@@ -404,16 +408,18 @@ function renderSquare(state: GameState, ui: UiState): string {
                <li><span>Cotas</span><span class="${tone(sumPnl(report))}">${signed(sumPnl(report))}</span></li>
                <li><span>Títulos da Coroa</span><span class="up">${signed(report.bondIncome)}</span></li>
                <li><span>Seguros</span><span class="down">${signed(-report.hedgeFees)}</span></li>
-               <li><span>Custo de vida</span><span class="down">${signed(-report.livingCost)}</span></li>
-             </ul>`
-          : `<p>Você chegou à cidade com <strong class="gold">100 florins</strong> e um sonho: virar <strong>Conde</strong>.</p>
+               <li><span>Taxas pagas a você</span><span class="down">${signed(-(report.managementFee + report.performanceFee))}</span></li>
+             </ul>
+             <p class="small">Seu bolso: <span class="up">+${fmtCost(report.managementFee)}</span> de administração, <span class="up">+${fmtCost(report.performanceFee)}</span> de performance, <span class="down">-${fmtCost(report.livingCost)}</span> de custo de vida.</p>`
+          : `<p>Investidores confiaram <strong class="gold">100 florins</strong> ao seu fundo. Você tem <strong class="gold">${fmt(state.purse)} fl</strong> no bolso e um sonho: virar <strong>Conde</strong>.</p>
+             <p class="muted small">Toda semana você recebe uma taxa de administração (sobre o fundo) e uma de performance (sobre o lucro). Do seu bolso saem especialistas, melhorias, títulos e o custo de vida.</p>
              <p class="muted">Ouro parado não rende. No <strong>Mercado</strong>, estacione nos Títulos da Coroa, compre a cesta de uma guilda ou aposte numa empresa. Na <strong>Taverna</strong>, ouça rumores. Depois, encerre a semana.</p>`
       }
     </article>
     <article class="card px">
       <h2>${sprite('castle', 20)} A estação</h2>
       <p>${verdict}</p>
-      <p class="muted small">Ouro parado não rende. No Mercado, os Títulos da Coroa pagam ${pct(cls.bondRate * 100, 2)} por semana (livre) ou ${pct(cls.bondRate * BOND_LOCK_MULTIPLIER * 100, 2)} (preso ${BOND_LOCK_WEEKS} semanas). Seu custo de vida é ${fmt(cls.livingCost)} fl por semana.</p>
+      <p class="muted small">Ouro parado não rende. No Mercado, os Títulos da Coroa pagam ${pct(cls.bondRate * 100, 2)} por semana (livre) ou ${pct(cls.bondRate * BOND_LOCK_MULTIPLIER * 100, 2)} (preso ${BOND_LOCK_WEEKS} semanas). Suas taxas: ${pct(cls.managementFeeRate * 100, 2)} do fundo por semana + ${whole(cls.performanceFeeRate * 100)}% do lucro. Seu custo de vida: ${fmtCost(cls.livingCost)} fl por semana.</p>
     </article>
   </div>
   <div class="travel">
@@ -1217,8 +1223,8 @@ function renderReturns(state: GameState): string {
         <td class="num ${tone(r.marketPnl)}">${signed(r.marketPnl)}</td>
         <td class="num">${signed(r.bondIncome)}</td>
         <td class="num">${signed(-r.hedgeFees)}</td>
-        <td class="num">${signed(-r.livingCost)}</td>
-        <td class="num">${signed(r.other)}</td>
+        <td class="num">${signed(-r.fees)}</td>
+        <td class="num gold">${fmt(r.purse)}</td>
       </tr>`,
     )
     .join('');
@@ -1246,7 +1252,7 @@ function renderReturns(state: GameState): string {
       </div>
       <div class="table-wrap px">
         <table class="ptable">
-          <thead><tr><th>Sem.</th><th class="num">Patrimônio</th><th class="num">Resultado</th><th class="num">%</th><th class="num">Cotas</th><th class="num">Títulos</th><th class="num">Seguros</th><th class="num">Vida</th><th class="num" title="Especialistas, títulos de nobreza">Outros</th></tr></thead>
+          <thead><tr><th>Sem.</th><th class="num">Patrimônio</th><th class="num">Resultado</th><th class="num">%</th><th class="num">Cotas</th><th class="num">Títulos</th><th class="num">Seguros</th><th class="num" title="Taxas de administração e performance pagas a você">Taxas</th><th class="num" title="Seu bolso no fim da semana">Bolso</th></tr></thead>
           <tbody>${weekRows}</tbody>
         </table>
       </div>
@@ -1261,7 +1267,7 @@ function renderTavern(state: GameState, ui: UiState): string {
   const tab = (id: UiState['tavernTab'], label: string) =>
     `<button role="tab" class="tab ${ui.tavernTab === id ? 'active' : ''}" aria-selected="${ui.tavernTab === id}" data-action="tavern-tab" data-tab="${id}">${label}</button>`;
   return `<div class="tavern-wrap">
-    <div class="tabs" role="tablist">${tab('ask', 'Perguntar')}${tab('hire', 'Contratar melhorias')}</div>
+    <div class="tabs" role="tablist">${tab('ask', 'Perguntar')}${tab('hire', 'Contratar melhorias')}<span class="purse-note">Pago do seu bolso: <strong class="gold">${fmt(state.purse)} fl</strong></span></div>
     ${ui.tavernTab === 'hire' ? renderPerkShop(state) : renderAsk(state, ui)}
   </div>`;
 }
@@ -1272,7 +1278,7 @@ function renderPerkShop(state: GameState): string {
     const level = perkLevel(state, perk.id);
     const next = nextPerkLevel(state, perk.id);
     const classOk = next ? state.classIndex >= next.minClass : false;
-    const affordable = next ? state.cash >= next.cost : false;
+    const affordable = next ? state.purse >= next.cost : false;
     return `<article class="perk px ${level > 0 ? 'owned' : ''}">
       <header class="perk-head">
         ${sprite(perk.icon as SpriteName, 32)}
@@ -1401,11 +1407,13 @@ function renderCastle(state: GameState, ui: UiState): string {
           : ''
       }
       <ul class="ledger">
-        <li><span>Custo de vida</span><span>${fmt(cls.livingCost)} fl/sem</span></li>
+        <li><span>Taxa de administração</span><span>${pct(cls.managementFeeRate * 100, 2)} do fundo/sem</span></li>
+        <li><span>Taxa de performance</span><span>${whole(cls.performanceFeeRate * 100)}% do lucro</span></li>
+        <li><span>Custo de vida (do bolso)</span><span>${fmtCost(cls.livingCost)} fl/sem</span></li>
         <li><span>Título da Coroa (livre)</span><span>${pct(cls.bondRate * 100, 2)}/sem</span></li>
         <li><span>Título da Coroa (${BOND_LOCK_WEEKS} sem.)</span><span>${pct(cls.bondRate * BOND_LOCK_MULTIPLIER * 100, 2)}/sem</span></li>
         <li><span>Taxa de seguro</span><span>${pct(cls.hedgeFeeRate * 100, 1)}/sem</span></li>
-        ${next ? `<li><span>Título de ${next.name}</span><span>${fmt(cls.ascensionFee)} fl</span></li>` : ''}
+        ${next ? `<li><span>Título de ${next.name} (do bolso)</span><span>${fmt(cls.ascensionFee)} fl</span></li>` : ''}
       </ul>
       ${next && unlocksNext.length ? `<p class="small">Como ${next.name} você ganha acesso a: <strong>${unlocksNext.join(', ')}</strong>.</p>` : ''}
     </article>
@@ -1473,7 +1481,14 @@ function renderModal(state: GameState, ui: UiState): string {
     <ul class="ledger">
       <li><span>Títulos da Coroa</span><span class="up">${signed(report.bondIncome)}</span></li>
       ${report.hedgeFees > 0 ? `<li><span>Seguros</span><span class="down">${signed(-report.hedgeFees)}</span></li>` : ''}
-      <li><span>Custo de vida</span><span class="down">${signed(-report.livingCost)}</span></li>
+      <li><span>Taxas pagas a você</span><span class="down">${signed(-(report.managementFee + report.performanceFee))}</span></li>
+    </ul>
+    <h3 class="report-sub">Seu bolso</h3>
+    <ul class="ledger">
+      <li><span>Taxa de administração</span><span class="up">+${fmtCost(report.managementFee)}</span></li>
+      <li><span>Taxa de performance</span><span class="up">+${fmtCost(report.performanceFee)}</span></li>
+      <li><span>Custo de vida</span><span class="down">-${fmtCost(report.livingCost)}</span></li>
+      <li><span>Saldo do bolso</span><span class="gold">${fmt(state.purse)} fl</span></li>
     </ul>
     ${news.length ? `<ul class="report-news">${news.map((n) => `<li class="log-${n.tone}">${esc(n.text)}</li>`).join('')}</ul>` : ''}
     ${
@@ -1502,7 +1517,13 @@ function sumPnl(report: WeekReport): number {
 }
 
 function reportNet(report: WeekReport): number {
-  return sumPnl(report) + report.bondIncome - report.hedgeFees - report.livingCost;
+  return (
+    sumPnl(report) +
+    report.bondIncome -
+    report.hedgeFees -
+    report.managementFee -
+    report.performanceFee
+  );
 }
 
 /** Small amounts (expert fees, premiums) with two decimals. */
