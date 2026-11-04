@@ -124,4 +124,4 @@ melhorias ~128 semanas; oráculo (teto) ~88. Quem usa o Espião não vai para a 
 | `222ce6e`                       | Aportes/resgates, propostas de aporte, influencer por guilda, time-lapse |
 | `cea8ed2`                       | Investidores por 3 meses, promoções/quedas múltiplas, gestores           |
 | `7c64891`                       | Último aviso antes da masmorra, saques param acima do piso               |
-| (este)                          | Profecia do trimestre, corretagem, perguntas valem o trimestre           |
+| `9803b83`                       | Profecia do trimestre, corretagem, perguntas valem o trimestre           |
