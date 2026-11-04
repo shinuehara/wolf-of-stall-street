@@ -509,6 +509,7 @@ export const GUILDS: readonly GuildDef[] = [
     drift: 0.2,
     width: 13,
     minClass: 0,
+    minChapter: 2,
     startPrice: 14,
   },
   {
@@ -519,6 +520,7 @@ export const GUILDS: readonly GuildDef[] = [
     drift: 0.4,
     width: 10,
     minClass: 0,
+    minChapter: 2,
     startPrice: 12,
   },
   {

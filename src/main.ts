@@ -14,7 +14,7 @@ import {
   type ActionResult,
   fmt,
 } from './sim/game';
-import { assetName, guildOfAsset, isBasket, isBond } from './sim/assets';
+import { BOND_LIQUID, assetName, guildOfAsset, isBasket, isBond } from './sim/assets';
 import type { ExpertId, GameState, ItemId, PerkId } from './sim/types';
 import { SCREENS, initialUi, render, type Screen } from './ui/render';
 import { clearGame, loadGame, saveGame } from './ui/storage';
@@ -80,6 +80,22 @@ root.addEventListener('click', (event) => {
       selectAsset(assetId);
       go('market');
       break;
+    case 'story-next':
+      ui.storyStep += 1;
+      break;
+    case 'story-done': {
+      const finished = state.story.pending;
+      state.story.pending = null;
+      ui.storyStep = 0;
+      if (finished === 'influencer') {
+        selectAsset('bakers');
+        ui.marketDetailOpen = false;
+      } else {
+        ui.selectedAsset = BOND_LIQUID;
+      }
+      go('market');
+      break;
+    }
     case 'gala-next':
       ui.galaStep = 1;
       break;
@@ -207,6 +223,7 @@ document.addEventListener('keydown', (event) => {
     }
     return;
   }
+  if (state.story.pending && !ui.showReport) return;
   if (event.key === 'Escape' && ui.showReport) {
     ui.showReport = false;
     update();

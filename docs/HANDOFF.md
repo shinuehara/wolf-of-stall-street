@@ -25,12 +25,15 @@ O jogo é jogável do começo ao fim e passa em 54 testes. Visão geral do que e
 - **Fim de trimestre:** festa em pixel art que cresce com a classe (Jantar Modesto → Baile
   de Gala do Conde), discurso do oficial (Meirinho arrogante, Escrivão formal, Camareiro
   bajulador; humor triste, neutro ou feliz), depois os números e o veredito.
+- **Abertura em história:** decreto do Rei → 1º trimestre só com Títulos da Coroa → Meirinho
+  humilha → cena do influencer Lucrécio Lucrativo libera as Padarias → no 3º trimestre abrem
+  Minas e Boticários → depois, por classe.
 - **Visitantes** nas semanas 4 e 8 de cada trimestre: Mercador (itens legais, 4 semanas) ou
   Contrabandista (itens fortes com risco de flagrante quando o efeito acaba).
 
 Balanceamento atual (bots, 60 partidas, até 300 semanas): só títulos nunca vence; sem
-informação vence ~60%, em ~221 semanas; Espião sem melhorias ~146 semanas; com melhorias
-~112 semanas, sem quedas de classe. Os bots ainda não compram itens de visitantes.
+informação vence ~60%, em ~220 semanas; Espião sem melhorias ~165 semanas; com melhorias
+~135 semanas, sem quedas de classe (era ~118 antes da abertura gradual). Os bots ainda não compram itens de visitantes.
 
 ## Decisões do dono (não desfazer sem perguntar)
 
@@ -47,6 +50,12 @@ informação vence ~60%, em ~221 semanas; Espião sem melhorias ~146 semanas; co
 - "Confiança" virou patente (Aprendiz, Júnior, Experiente, Mestre), com retrato melhorando.
 - Ciclo de 12 semanas (trimestre), festa de fechamento crescendo com a classe, visitantes
   mensais (mercador legal / contrabandista ilegal com contraparte).
+- Produtos liberados aos poucos, contados como história: começa só com Títulos da Coroa
+  (chato de propósito), Meirinho humilha, influencer medieval clichê de YouTube libera as
+  Padarias. Esta é a "primeira etapa"; o dono vai desenhar as próximas.
+- Ideias aceitas para depois: relatórios por setor e panorama macro do Espião (pacotes),
+  assinatura semanal, e "idles" de deixar dinheiro investido com investidores (forma a
+  definir: bolso aplicado ou sub-gestores).
 
 ## Perguntas em aberto (aguardando o dono)
 
@@ -54,17 +63,22 @@ informação vence ~60%, em ~221 semanas; Espião sem melhorias ~146 semanas; co
    subir duas classes num trimestre excepcional (fundo acima de dois tetos)?
 2. **Espião sem treino mostra números extremos** ("93%") que parecem certeza. Proposta:
    achatar as estimativas para o meio quanto pior a patente.
-3. **Ritmo geral:** o jogo é longo (~112 semanas no melhor bot). Encurtar a escada?
+3. **Ritmo geral:** o jogo é longo (~135 semanas no melhor bot com a abertura). Encurtar a
+   escada?
+4. **Idles:** "deixar dinheiro investido em investidores" quer dizer bolso aplicado com um
+   banqueiro ou sub-gestores que cuidam de parte do fundo?
+5. **Próximas etapas da história:** o que libera a Astróloga/Espião, seguro, visitantes, etc.
 
 ## Próximos passos sugeridos (prioridade sugerida por Claude)
 
-1. **Aportes e resgates de investidores:** trimestres bons trazem dinheiro novo, ruins
+1. **Relatórios por setor e panorama macro** (pedido do dono), depois os idles.
+2. **Aportes e resgates de investidores:** trimestres bons trazem dinheiro novo, ruins
    provocam saques. Cria tensão real (hoje quase ninguém perde) e combina com o tema.
-2. **Primeira estação guiada / tutorial** com o Meirinho; liberar sistemas aos poucos.
-3. **Dilemas no meio do jogo** (empréstimo forçado do Rei, fundo rival, cotas com desconto).
-4. **Mais emoção no fim da semana:** animação de preços, destaque para choques, som opcional.
-5. Bots que compram itens dos visitantes, para medir o efeito deles no balanceamento.
-6. Refatorar `src/ui/render.ts` (~1900 linhas) em arquivos por tela antes de crescer mais.
+3. **Continuar a abertura guiada:** próximas etapas da história (especialistas, seguro, visitantes).
+4. **Dilemas no meio do jogo** (empréstimo forçado do Rei, fundo rival, cotas com desconto).
+5. **Mais emoção no fim da semana:** animação de preços, destaque para choques, som opcional.
+6. Bots que compram itens dos visitantes, para medir o efeito deles no balanceamento.
+7. Refatorar `src/ui/render.ts` (~1900 linhas) em arquivos por tela antes de crescer mais.
 
 ## Histórico (commits em `main`)
 

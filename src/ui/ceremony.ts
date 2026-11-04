@@ -23,7 +23,7 @@ const SPEAKERS: { minClass: number; speaker: Speaker; lines: Record<Mood, string
         'Que vergonha. Até o porco do moleiro cuidaria melhor desse dinheiro. Próximo!',
       ],
       neutral: [
-        'Nem melhor, nem pior. Típico. Volte daqui a quatro semanas, se ainda tiver sapatos.',
+        'Nem melhor, nem pior. Típico. Volte no fim do trimestre, se ainda tiver sapatos.',
         'Anotado. Continua onde sempre esteve: lá embaixo. Não suje o tapete na saída.',
       ],
       happy: [
@@ -78,6 +78,11 @@ const SPEAKERS: { minClass: number; speaker: Speaker; lines: Record<Mood, string
   },
 ];
 
+/** The first quarter is bonds only: the Meirinho is not impressed, whatever happened. */
+const FIRST_QUARTER_LINES = [
+  'Seu servo imprestável… só isso? Doze semanas para render esse trocado? Minha avó ganha mais guardando moeda debaixo do colchão.',
+];
+
 export function seasonReturn(review: SeasonReview): number {
   return review.startWealth > 0 ? (review.endWealth / review.startWealth - 1) * 100 : 0;
 }
@@ -93,6 +98,9 @@ export function seasonSpeech(review: SeasonReview): { speaker: Speaker; mood: Mo
   const tier =
     [...SPEAKERS].reverse().find((t) => review.classBefore >= t.minClass) ?? SPEAKERS[0]!;
   const mood = seasonMood(review);
+  if (review.season === 1 && review.classBefore === 0 && review.outcome === 'stay') {
+    return { speaker: tier.speaker, mood: 'sad', line: FIRST_QUARTER_LINES[0]! };
+  }
   const options = tier.lines[mood];
   const line = options[review.season % options.length]!;
   return { speaker: tier.speaker, mood, line };

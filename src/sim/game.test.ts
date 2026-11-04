@@ -18,7 +18,7 @@ import {
   consult,
   endWeek,
   expertCost,
-  newGame,
+  newGame as freshGame,
   buyItem,
   hasShockWarnings,
   hedgeFee,
@@ -35,6 +35,14 @@ import {
 import { BOND_LIQUID, BOND_LOCKED } from './assets';
 import { assetRange, companyExposures } from './assets';
 import { getCompany } from './data';
+import type { GameState } from './types';
+
+/** Most rules are tested with the market already open (after the opening quarter). */
+function newGame(seed: number): GameState {
+  const state = freshGame(seed);
+  state.story = { chapter: 2, pending: null };
+  return state;
+}
 
 describe('newGame', () => {
   it('starts as a Serf with the starting gold and a forecast for every guild', () => {
@@ -94,21 +102,21 @@ describe('trading', () => {
     // wealth 100, all free: +10% buys 10
     expect(quickTrade(state, 'bakers', 0.1)).toEqual({ ok: true, amount: 10 });
     // +50% would be 50, still fits in the 90 free
-    quickTrade(state, 'mines', 0.5);
+    quickTrade(state, 'bakers.royal', 0.5);
     expect(state.cash).toBeCloseTo(40);
     // +50% again would be 50, but only 40 is free: buys 40
-    expect(quickTrade(state, 'mines', 0.5)).toEqual({ ok: true, amount: 40 });
+    expect(quickTrade(state, 'bakers.royal', 0.5)).toEqual({ ok: true, amount: 40 });
     expect(state.cash).toBeCloseTo(0);
     expect(quickTrade(state, 'bakers', 0.05).ok).toBe(false);
     // -50% would sell 50, but the bakers position is only 10: closes it
     expect(quickTrade(state, 'bakers', -0.5)).toEqual({ ok: true, amount: 10 });
     expect(state.positions.bakers).toBeUndefined();
     // -all closes the position
-    quickTrade(state, 'mines', -1);
-    expect(state.positions.mines).toBeUndefined();
+    quickTrade(state, 'bakers.royal', -1);
+    expect(state.positions['bakers.royal']).toBeUndefined();
     expect(state.cash).toBeCloseTo(100);
     // +all uses all free gold
-    expect(quickTrade(state, 'apothecaries', 1)).toEqual({ ok: true, amount: 100 });
+    expect(quickTrade(state, 'bakers.north', 1)).toEqual({ ok: true, amount: 100 });
   });
 
   it('tracks the cost of each position, reduced pro rata on sales', () => {
@@ -124,8 +132,8 @@ describe('trading', () => {
 
   it('keeps a weekly ledger of the fund that adds up', () => {
     const state = newGame(9);
-    buy(state, 'mines', 30);
-    consult(state, 'astrologer', 'mines');
+    buy(state, 'bakers.royal', 30);
+    consult(state, 'astrologer', 'bakers.royal');
     endWeek(state);
     buy(state, 'bakers', 20);
     endWeek(state);
@@ -144,9 +152,9 @@ describe('trading', () => {
   });
   it('only insures positions you hold', () => {
     const state = newGame(1);
-    expect(setHedge(state, 'mines', true).ok).toBe(false);
-    buy(state, 'mines', 10);
-    expect(setHedge(state, 'mines', true).ok).toBe(true);
+    expect(setHedge(state, 'bakers.royal', true).ok).toBe(false);
+    buy(state, 'bakers.royal', 10);
+    expect(setHedge(state, 'bakers.royal', true).ok).toBe(true);
   });
 });
 
@@ -225,12 +233,12 @@ describe('experts', () => {
     for (let seed = 0; seed < 300 && shocked < 5; seed++) {
       const state = newGame(seed);
       for (const c of Object.keys(state.shockRisk)) state.shockRisk[c] = 1;
-      buy(state, 'mines.deep', 50);
-      setHedge(state, 'mines.deep', true);
-      const r = assetRange(state, 'mines.deep');
+      buy(state, 'bakers.harbor', 50);
+      setHedge(state, 'bakers.harbor', true);
+      const r = assetRange(state, 'bakers.harbor');
       const report = endWeek(state);
-      if (report.shocks.some((s) => s.companyId === 'mines.deep')) shocked++;
-      const pct = (report.positionPnl['mines.deep']! / 50) * 100;
+      if (report.shocks.some((s) => s.companyId === 'bakers.harbor')) shocked++;
+      const pct = (report.positionPnl['bakers.harbor']! / 50) * 100;
       const d = (r.high - r.low) / 4;
       expect(pct).toBeGreaterThanOrEqual(r.low + d - 1e-9);
     }
@@ -326,16 +334,16 @@ describe('endWeek', () => {
   it('insured positions never move beyond the insured range', () => {
     for (let seed = 0; seed < 200; seed++) {
       const state = newGame(seed);
-      buy(state, 'mines', 50);
-      setHedge(state, 'mines', true);
-      buy(state, 'mines.deep', 20);
-      setHedge(state, 'mines.deep', true);
-      const basket = assetRange(state, 'mines');
-      const company = assetRange(state, 'mines.deep');
+      buy(state, 'bakers.royal', 50);
+      setHedge(state, 'bakers.royal', true);
+      buy(state, 'bakers.harbor', 20);
+      setHedge(state, 'bakers.harbor', true);
+      const basket = assetRange(state, 'bakers.royal');
+      const company = assetRange(state, 'bakers.harbor');
       const report = endWeek(state);
       for (const [id, r, amount] of [
-        ['mines', basket, 50],
-        ['mines.deep', company, 20],
+        ['bakers.royal', basket, 50],
+        ['bakers.harbor', company, 20],
       ] as const) {
         const d = (r.high - r.low) / 4;
         const pct = (report.positionPnl[id]! / amount) * 100;
@@ -471,15 +479,15 @@ describe('monthly visitors', () => {
     const state = newGame(3);
     state.purse = 20;
     state.visitor = { kind: 'merchant', offers: ['guildSeal', 'sharpQuill', 'routeMap'], sold: [] };
-    buy(state, 'mines', 50);
-    setHedge(state, 'mines', true);
-    expect(hedgeFee(state, 'mines')).toBeGreaterThan(0);
+    buy(state, 'bakers.royal', 50);
+    setHedge(state, 'bakers.royal', true);
+    expect(hedgeFee(state, 'bakers.royal')).toBeGreaterThan(0);
     const fullCost = expertCost(state, 'spy');
     expect(buyItem(state, 'guildSeal').ok).toBe(true);
     expect(buyItem(state, 'sharpQuill').ok).toBe(true);
     expect(buyItem(state, 'sharpQuill').ok).toBe(false);
     expect(buyItem(state, 'stolenLedger').ok).toBe(false); // not on offer
-    expect(hedgeFee(state, 'mines')).toBe(0);
+    expect(hedgeFee(state, 'bakers.royal')).toBe(0);
     expect(expertCost(state, 'spy')).toBeCloseTo(fullCost / 2, 1);
     expect(state.purse).toBeCloseTo(20 - getItem('guildSeal').cost - getItem('sharpQuill').cost);
     expect(hasShockWarnings(state)).toBe(false);
@@ -520,5 +528,37 @@ describe('monthly visitors', () => {
     }
     expect(caught).toBeGreaterThan(10);
     expect(escaped).toBeGreaterThan(10);
+  });
+});
+
+describe('the opening quarter', () => {
+  it('starts with the decree and only Crown bonds for sale', () => {
+    const state = freshGame(3);
+    expect(state.story).toEqual({ chapter: 0, pending: 'intro' });
+    expect(buy(state, 'bakers', 10).ok).toBe(false);
+    expect(consult(state, 'spy', 'city').ok).toBe(false);
+    expect(buy(state, BOND_LIQUID, 60).ok).toBe(true);
+    expect(buy(state, BOND_LOCKED, 40).ok).toBe(true);
+  });
+
+  it('no visitors in the first quarter; the bakers open after it with the influencer', () => {
+    const state = freshGame(3);
+    buy(state, BOND_LIQUID, 100);
+    for (let w = 0; w < SEASON_LENGTH - 1; w++) {
+      expect(endWeek(state).visitorArrived ?? null).toBeNull();
+    }
+    const report = endWeek(state);
+    expect(report.seasonReview?.season).toBe(1);
+    expect(state.classIndex).toBe(0);
+    expect(state.story).toEqual({ chapter: 1, pending: 'influencer' });
+    sell(state, BOND_LIQUID, 20);
+    expect(buy(state, 'bakers', 5).ok).toBe(true);
+    expect(buy(state, 'bakers.royal', 5).ok).toBe(true);
+    // Mines and apothecaries open one quarter later
+    expect(buy(state, 'mines', 5).ok).toBe(false);
+    for (let w = 0; w < SEASON_LENGTH; w++) endWeek(state);
+    expect(state.story.chapter).toBe(2);
+    if (state.cash < 5) sell(state, BOND_LIQUID, 5);
+    expect(buy(state, 'mines', 5).ok).toBe(true);
   });
 });

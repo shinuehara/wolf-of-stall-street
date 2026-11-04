@@ -197,11 +197,12 @@ function cityProfile(state: GameState): { drift: number; width: number } {
 
 export function newGame(seed: number = Date.now() >>> 0): GameState {
   const state: GameState = {
-    version: 9,
+    version: 10,
     seed,
     rngState: seed,
     week: 0,
     classIndex: 0,
+    story: { chapter: 0, pending: 'intro' },
     cash: STARTING_GOLD,
     purse: STARTING_PURSE,
     positions: {},
@@ -234,7 +235,7 @@ export function newGame(seed: number = Date.now() >>> 0): GameState {
   rollForecasts(state);
   log(
     state,
-    `Você chega à cidade com ${STARTING_GOLD} florins e um sonho: virar Conde.`,
+    `Por decreto do Rei, o povo pode comprar Títulos da Coroa. Seus vizinhos confiam ${STARTING_GOLD} florins a você.`,
     'neutral',
   );
   return state;
@@ -269,8 +270,13 @@ export function weeksUntilSeasonEnd(state: GameState): number {
   return SEASON_LENGTH - (state.week % SEASON_LENGTH);
 }
 
+/** In the first quarter only Crown bonds are allowed to commoners. */
+export function onlyBonds(state: GameState): boolean {
+  return state.story.chapter === 0;
+}
+
 export function isGuildUnlocked(state: GameState, guild: GuildDef): boolean {
-  return state.classIndex >= guild.minClass;
+  return state.story.chapter >= (guild.minChapter ?? 1) && state.classIndex >= guild.minClass;
 }
 
 export function isAssetUnlocked(state: GameState, assetId: string): boolean {
@@ -362,6 +368,7 @@ export function targetForecast(state: GameState, targetId: string): Forecast {
 
 /** The city and its districts are open to everyone; guilds and companies need the right class. */
 export function isTargetUnlocked(state: GameState, targetId: string): boolean {
+  if (onlyBonds(state)) return false;
   return targetId === 'city' || isRegionId(targetId) || isAssetUnlocked(state, targetId);
 }
 
@@ -373,6 +380,7 @@ export function buy(state: GameState, assetId: string, amount: number): ActionRe
   if (state.status !== 'playing') return fail('O jogo terminou.');
   if (!isBond(assetId)) {
     const guild = guildOfAsset(assetId);
+    if (onlyBonds(state)) return fail('Por enquanto o Rei só permite ao povo os Títulos da Coroa.');
     if (!isGuildUnlocked(state, guild)) {
       return fail(
         `Só a partir de ${getClass(guild.minClass).name} se negocia com a ${guild.name}.`,
@@ -454,6 +462,7 @@ export function consult(state: GameState, expertId: ExpertId, targetId: string):
       `O ${expert.name} não atende quem está abaixo de ${getClass(expert.minClass).name}.`,
     );
   }
+  if (onlyBonds(state)) return fail('Quem só tem Títulos da Coroa não tem o que perguntar.');
   if (!isTargetUnlocked(state, targetId)) return fail('Você ainda não tem acesso a esta guilda.');
   if (state.insights.some((i) => i.expert === expertId && i.targetId === targetId)) {
     return fail('Você já fez essa pergunta a este especialista nesta semana.');
@@ -638,6 +647,7 @@ export function endWeek(state: GameState): WeekReport {
     const classBefore = state.classIndex;
     report.classChange = reviewSeason(state);
     report.seasonReview = buildSeasonReview(state, classBefore, report.classChange);
+    if (state.status === 'playing') advanceStory(state);
     state.seasonStart = {
       wealth: wealth(state),
       purse: state.purse,
@@ -683,6 +693,17 @@ function buildSeasonReview(
   };
 }
 
+/** The market opens to commoners in steps, one per quarter at the start of the game. */
+function advanceStory(state: GameState): void {
+  if (state.story.chapter === 0) {
+    state.story = { chapter: 1, pending: 'influencer' };
+    log(state, 'A Guilda dos Padeiros abriu as portas para o povo!', 'good');
+  } else if (state.story.chapter === 1) {
+    state.story = { chapter: 2, pending: null };
+    log(state, 'Minas e Boticários também passam a aceitar o dinheiro do povo!', 'good');
+  }
+}
+
 function reviewSeason(state: GameState): WeekReport['classChange'] {
   const cls = currentClass(state);
   const total = wealth(state);
@@ -691,7 +712,7 @@ function reviewSeason(state: GameState): WeekReport['classChange'] {
       state.status = 'lost';
       log(
         state,
-        `Fim da estação: ${fmt(total)} florins não bastam nem para um Servo. Masmorra!`,
+        `Fim do trimestre: ${fmt(total)} florins não bastam nem para um Servo. Masmorra!`,
         'bad',
       );
       return 'down';
@@ -699,7 +720,7 @@ function reviewSeason(state: GameState): WeekReport['classChange'] {
     state.classIndex -= 1;
     log(
       state,
-      `Fim da estação: abaixo do piso de ${cls.name}. Você caiu para ${currentClass(state).name}.`,
+      `Fim do trimestre: abaixo do piso de ${cls.name}. Você caiu para ${currentClass(state).name}.`,
       'bad',
     );
     return 'down';
@@ -709,12 +730,12 @@ function reviewSeason(state: GameState): WeekReport['classChange'] {
     const next = getClass(state.classIndex + 1);
     log(
       state,
-      `Fim da estação: o camareiro oferece o título de ${next.name} por ${fmt(cls.ascensionFee)} florins.`,
+      `Fim do trimestre: o camareiro oferece o título de ${next.name} por ${fmt(cls.ascensionFee)} florins.`,
       'good',
     );
     return 'up-offer';
   }
-  log(state, `Fim da estação: você segue ${cls.name}.`, 'neutral');
+  log(state, `Fim do trimestre: você segue ${cls.name}.`, 'neutral');
   return 'stay';
 }
 
@@ -841,6 +862,7 @@ function tickEffects(state: GameState, report: WeekReport): void {
 function updateVisitor(state: GameState, report: WeekReport): void {
   state.visitor = null;
   if (state.week % MONTH_LENGTH !== 0 || state.week % SEASON_LENGTH === 0) return;
+  if (onlyBonds(state)) return;
   const kind: VisitorKind = nextRandom(state) < SMUGGLER_CHANCE ? 'smuggler' : 'merchant';
   const pool = ITEMS.filter((i) => i.seller === kind).map((i) => i.id);
   const offers: ItemId[] = [];

@@ -611,3 +611,147 @@ function paintGala(ctx: Ctx, tier: number, mood: 'sad' | 'neutral' | 'happy'): v
     }
   }
 }
+
+// --- story cut scenes --------------------------------------------------------
+
+export type StoryScene = 'intro' | 'influencer';
+
+const storyCache = new Map<StoryScene, string>();
+
+/** Wide backdrops for the story cut scenes (same size as the party). */
+export function storyUrl(name: StoryScene): string {
+  const hit = storyCache.get(name);
+  if (hit) return hit;
+  const canvas = document.createElement('canvas');
+  canvas.width = GALA_W;
+  canvas.height = GALA_H;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return '';
+  if (name === 'intro') paintDecree(ctx);
+  else paintInfluencer(ctx);
+  const url = canvas.toDataURL();
+  storyCache.set(name, url);
+  return url;
+}
+
+function crowd(ctx: Ctx, y: number, count: number, seed: number, cheering: boolean): void {
+  const rnd = seeded(seed);
+  for (let i = 0; i < count; i++) {
+    const x = 4 + Math.floor((i / count) * (GALA_W - 12)) + Math.floor(rnd() * 4);
+    const dy = Math.floor(rnd() * 4);
+    const color = GUEST_COLORS[Math.floor(rnd() * 5)]!;
+    person(ctx, x, y + dy, color, rnd() < 0.3 ? '#a8602f' : undefined, i);
+    if (cheering && rnd() < 0.6) {
+      rect(ctx, x, y + dy + 2, 1, 4, color);
+      rect(ctx, x, y + dy + 1, 1, 1, '#ffc59e');
+    }
+  }
+}
+
+/** The King's decree: a herald on the castle steps reads to the townsfolk. */
+function paintDecree(ctx: Ctx): void {
+  const W = GALA_W;
+  const H = GALA_H;
+  for (let y = 0; y < 50; y++) {
+    const colors = ['#3d8bff', '#4fa6ff', '#6fc0ff', '#9ad7ff'];
+    rect(ctx, 0, y, W, 1, colors[Math.min(3, Math.floor(y / 13))]!);
+  }
+  rect(ctx, 160, 6, 8, 8, '#ffcc33');
+  rect(ctx, 159, 7, 10, 6, '#ffcc33');
+  // castle wall with banners
+  rect(ctx, 40, 14, 112, 40, '#c3c9e8');
+  for (let x = 40; x < 152; x += 8) rect(ctx, x, 10, 5, 4, '#c3c9e8');
+  for (let y = 18; y < 54; y += 6) rect(ctx, 40, y, 112, 1, '#9aa3c7');
+  rect(ctx, 84, 30, 24, 24, '#5a2e1a');
+  rect(ctx, 86, 32, 20, 22, '#a8602f');
+  for (const bx of [52, 132]) {
+    rect(ctx, bx, 18, 10, 20, '#ff4f5e');
+    rect(ctx, bx, 38, 5, 3, '#ff4f5e');
+    rect(ctx, bx + 5, 38, 5, 2, '#ff4f5e');
+    rect(ctx, bx + 3, 24, 4, 4, '#ffcc33');
+  }
+  // ground
+  rect(ctx, 0, 54, W, H - 54, '#9aa3c7');
+  const rnd = seeded(11);
+  for (let i = 0; i < 120; i++)
+    rect(ctx, Math.floor(rnd() * W), 55 + Math.floor(rnd() * 25), 2, 1, '#6b73a3');
+  // steps and herald with an open scroll and a trumpet
+  rect(ctx, 76, 50, 40, 4, '#e2e6f7');
+  rect(ctx, 72, 54, 48, 3, '#c3c9e8');
+  person(ctx, 92, 37, '#2c5fd1', '#ffcc33', 1);
+  rect(ctx, 99, 40, 9, 9, '#fff4d6');
+  rect(ctx, 99, 40, 9, 1, '#a8602f');
+  rect(ctx, 99, 48, 9, 1, '#a8602f');
+  for (let y = 42; y < 47; y += 2) rect(ctx, 101, y, 5, 1, '#6b73a3');
+  rect(ctx, 84, 40, 8, 1, '#ffcc33');
+  rect(ctx, 82, 38, 2, 5, '#ffcc33');
+  crowd(ctx, 64, 22, 5, false);
+}
+
+/** A medieval influencer on a cart, pointing at a chart that only goes up. */
+function paintInfluencer(ctx: Ctx): void {
+  const W = GALA_W;
+  const H = GALA_H;
+  rect(ctx, 0, 0, W, H, '#241a4a');
+  const rnd = seeded(23);
+  for (let i = 0; i < 40; i++)
+    rect(ctx, Math.floor(rnd() * W), Math.floor(rnd() * 30), 1, 1, '#fff4d6');
+  // spotlights
+  ctx.fillStyle = 'rgba(255, 204, 51, 0.16)';
+  ctx.beginPath();
+  ctx.moveTo(20, 0);
+  ctx.lineTo(70, 0);
+  ctx.lineTo(110, 60);
+  ctx.lineTo(60, 60);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(150, 0);
+  ctx.lineTo(186, 0);
+  ctx.lineTo(120, 60);
+  ctx.lineTo(90, 60);
+  ctx.fill();
+  // cart stage
+  rect(ctx, 30, 44, 132, 10, '#a8602f');
+  rect(ctx, 30, 44, 132, 2, '#ffcc33');
+  for (let x = 34; x < 160; x += 12) rect(ctx, x, 48, 6, 4, '#ff4f5e');
+  for (const wx of [40, 144]) {
+    rect(ctx, wx, 52, 10, 10, '#5a2e1a');
+    rect(ctx, wx + 3, 55, 4, 4, '#ffcc33');
+  }
+  // the chart on an easel: a line that only goes up
+  rect(ctx, 104, 8, 52, 34, '#fff4d6');
+  rect(ctx, 104, 8, 52, 2, '#a8602f');
+  rect(ctx, 108, 38, 46, 1, '#6b73a3');
+  rect(ctx, 108, 12, 1, 27, '#6b73a3');
+  const pts = [37, 35, 36, 32, 33, 28, 26, 27, 21, 18, 14];
+  pts.forEach((y, i) => {
+    const x = 110 + i * 4;
+    const next = pts[i + 1];
+    rect(ctx, x, y, 4, 2, '#1f9e5a');
+    if (next !== undefined)
+      rect(ctx, x + 3, Math.min(y, next), 1, Math.abs(y - next) + 2, '#1f9e5a');
+  });
+  rect(ctx, 150, 10, 3, 3, '#4fe08a');
+  rect(ctx, 152, 8, 2, 2, '#4fe08a');
+  rect(ctx, 112, 42, 2, 4, '#5a2e1a');
+  rect(ctx, 146, 42, 2, 4, '#5a2e1a');
+  // the influencer: purple hat, feather, gold chain, one arm pointing at the chart
+  person(ctx, 80, 31, '#b56cff', '#6a35c9', 2);
+  rect(ctx, 82, 26, 1, 3, '#ff4f5e');
+  rect(ctx, 83, 25, 1, 2, '#ff4f5e');
+  rect(ctx, 82, 36, 3, 1, '#ffcc33');
+  rect(ctx, 87, 34, 14, 1, '#b56cff');
+  rect(ctx, 101, 33, 2, 2, '#ffc59e');
+  // a bag of gold and a bell ("toque o sino!")
+  rect(ctx, 62, 38, 8, 6, '#ffcc33');
+  rect(ctx, 64, 36, 4, 2, '#a8602f');
+  rect(ctx, 44, 20, 8, 7, '#ffcc33');
+  rect(ctx, 42, 27, 12, 2, '#ffcc33');
+  rect(ctx, 47, 17, 2, 3, '#ffcc33');
+  rect(ctx, 47, 29, 2, 2, '#ff8a3d');
+  rect(ctx, 39, 20, 1, 3, '#fff4d6');
+  rect(ctx, 56, 20, 1, 3, '#fff4d6');
+  // the audience
+  rect(ctx, 0, 62, W, H - 62, '#3a2d6b');
+  crowd(ctx, 64, 24, 9, true);
+}

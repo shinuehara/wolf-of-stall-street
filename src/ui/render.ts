@@ -50,6 +50,7 @@ import {
   expertRankName,
   hasShockWarnings,
   isGuildUnlocked,
+  onlyBonds,
   nextPerkLevel,
   perkLevel,
   season,
@@ -68,7 +69,8 @@ import type {
   WeekRecord,
 } from '../sim/types';
 import { seasonReturn, seasonSpeech } from './ceremony';
-import { GALA_NAMES, galaUrl, sceneUrl, type SceneName } from './scenes';
+import { GALA_NAMES, galaUrl, sceneUrl, storyUrl, type SceneName } from './scenes';
+import { STORIES } from './story';
 import { expertSprite, sprite, type SpriteName } from './sprites';
 
 export type Screen = SceneName;
@@ -81,6 +83,8 @@ export interface UiState {
   squareTab: 'news' | 'almanac';
   /** Almanac entry: 'city', a region id or a guild id. */
   almanacEntry: string;
+  /** Which line of the pending story cut scene is showing. */
+  storyStep: number;
   /** Quarter-close party: 0 = the scene and the speech, 1 = the numbers. */
   galaStep: 0 | 1;
   /** The visitor of the month was sent away (or not yet). */
@@ -105,9 +109,10 @@ export interface UiState {
 export function initialUi(): UiState {
   return {
     screen: 'square',
-    selectedAsset: 'bakers',
+    selectedAsset: BOND_LIQUID,
     squareTab: 'news',
     portfolioTab: 'position',
+    storyStep: 0,
     galaStep: 0,
     visitorDismissed: false,
     almanacEntry: 'city',
@@ -556,10 +561,19 @@ function renderRegionEntry(state: GameState, regionId: string): string {
     </div>`;
 }
 
+/** Why a guild is closed: the story has not reached it yet, or the class is too low. */
+function lockReason(state: GameState, guild: GuildDef): string {
+  const chapter = guild.minChapter ?? 1;
+  if (state.story.chapter < chapter) {
+    return state.story.chapter === 0 ? 'proibido ao povo' : 'abre no próximo trimestre';
+  }
+  return `a partir de ${getClass(guild.minClass).name}`;
+}
+
 function renderGuildEntry(state: GameState, guildId: string): string {
   const guild = getGuild(guildId);
   const locked = !isGuildUnlocked(state, guild);
-  return `<header class="almanac-head">${sprite(GUILD_SPRITE[guild.id]!, 40)}<div><h2>${guild.name}</h2><span class="muted small">${SECTOR_NAMES[guild.sector]}${locked ? ` · 🔒 a partir de ${getClass(guild.minClass).name}` : ''}</span></div></header>
+  return `<header class="almanac-head">${sprite(GUILD_SPRITE[guild.id]!, 40)}<div><h2>${guild.name}</h2><span class="muted small">${SECTOR_NAMES[guild.sector]}${locked ? ` · 🔒 ${lockReason(state, guild)}` : ''}</span></div></header>
     <div class="almanac-grid">
       <div class="almanac-col">
         <p>${GUILD_DESCRIPTIONS[guild.id] ?? ''}</p>
@@ -623,7 +637,7 @@ function renderGuildGroup(state: GameState, ui: UiState, guild: GuildDef): strin
     return `<li><button class="guild-row locked" data-action="select-asset" data-asset="${guild.id}">
       ${sprite(GUILD_SPRITE[guild.id]!, 28)}
       <span class="row-name">${guild.short}</span>
-      <span class="row-range muted">🔒 ${getClass(guild.minClass).name}</span><span></span>
+      <span class="row-range muted">🔒 ${lockReason(state, guild)}</span><span></span>
     </button></li>`;
   }
 
@@ -778,8 +792,13 @@ function renderAssetDetail(state: GameState, ui: UiState, assetId: string): stri
 
   if (!isGuildUnlocked(state, guild)) {
     return `${back}${head()}
-      <p class="locked-note">🔒 A ${guild.name} só negocia com quem é <strong>${getClass(guild.minClass).name}</strong> ou mais.
-      Suba na escada social para entrar.</p>`;
+      <p class="locked-note">${
+        state.story.chapter < (guild.minChapter ?? 1)
+          ? state.story.chapter === 0
+            ? `🔒 Por decreto, o povo só pode comprar Títulos da Coroa. A ${guild.name} ainda não aceita o seu dinheiro.`
+            : `🔒 A ${guild.name} abre para o povo no próximo trimestre.`
+          : `🔒 A ${guild.name} só negocia com quem é <strong>${getClass(guild.minClass).name}</strong> ou mais. Suba na escada social para entrar.`
+      }</p>`;
   }
 
   const asset = state.assets[assetId]!;
@@ -1383,6 +1402,15 @@ function renderPerkShop(state: GameState): string {
 }
 
 function renderAsk(state: GameState, ui: UiState): string {
+  if (onlyBonds(state)) {
+    return `<div class="dialog px tavern-closed">
+      ${sprite('mug', 48)}
+      <div>
+        <strong>O Taverneiro</strong> <span class="muted small">limpando o mesmo copo há uma hora</span>
+        <p>“Perguntar o quê? Título da Coroa rende o que o Rei manda, não tem segredo. Os especialistas só atendem quem tem ações. Volta quando abrirem as guildas pro povo.”</p>
+      </div>
+    </div>`;
+  }
   const playing = state.status === 'playing';
   const expert = EXPERTS.find((e) => e.id === ui.tavernExpert)!;
   const expertLocked = state.classIndex < expert.minClass;
@@ -1539,6 +1567,9 @@ function renderModal(state: GameState, ui: UiState): string {
       <p>Os credores venceram na semana ${state.week}. O Lobo vai uivar atrás das grades.</p>
       <button class="pbtn" data-action="new-game">Tentar de novo</button>`);
   }
+  if ((!ui.showReport || !ui.lastReport) && state.story.pending) {
+    return renderStoryModal(state, ui);
+  }
   if ((!ui.showReport || !ui.lastReport) && state.visitor && !ui.visitorDismissed) {
     return renderVisitorModal(state);
   }
@@ -1637,6 +1668,34 @@ function renderVisitorModal(state: GameState): string {
       .join('')}</div>
     <p class="small muted">Pago do seu bolso: <strong class="gold">${fmt(state.purse)} fl</strong>. A oferta vale só até o fim desta semana.</p>
     <button class="pbtn pbtn-ghost" data-action="dismiss-visitor">Ir embora</button>
+  </div></div>`;
+}
+
+function renderStoryModal(state: GameState, ui: UiState): string {
+  const story = STORIES[state.story.pending!];
+  const step = Math.min(ui.storyStep, story.beats.length - 1);
+  const beat = story.beats[step]!;
+  const last = step === story.beats.length - 1;
+  return `<div class="modal-backdrop gala-backdrop"><div class="gala story px" role="dialog" aria-modal="true" aria-label="${story.heading}">
+    <div class="gala-scene" style="background-image:url(${storyUrl(story.scene)})">
+      <div class="gala-title"><span>${story.kicker}</span><strong>${story.heading}</strong></div>
+    </div>
+    <div class="dialog mood-${beat.mood}">
+      ${sprite(beat.sprite, 48)}
+      <div>
+        <strong>${beat.name}</strong> <span class="muted small">${beat.title}</span>
+        <p class="typewriter">“${beat.text}”</p>
+      </div>
+    </div>
+    ${last ? `<p class="story-unlock">🔓 ${story.unlock}</p>` : ''}
+    <div class="gala-actions">
+      <span class="muted small story-dots">${story.beats.map((_, i) => (i === step ? '●' : '○')).join(' ')}</span>
+      ${
+        last
+          ? `<button class="pbtn" data-action="story-done">${story.finish} ▶</button>`
+          : `<button class="pbtn" data-action="story-next">Continuar ▶</button>`
+      }
+    </div>
   </div></div>`;
 }
 

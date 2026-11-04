@@ -20,6 +20,22 @@ Pilares:
   conforme o gestor contrata especialistas melhores.
 - **Humor e cerimônia.** Oficiais arrogantes ou bajuladores, festas de fechamento, visitantes.
 
+## Abertura (história e liberação gradual)
+
+O mercado abre aos poucos, contado como história (`state.story`, textos em `src/ui/story.ts`):
+
+1. **Decreto do Rei** (cena ao começar): você é um servo do campo; o Rei permite que o povo
+   compre Títulos da Coroa; os vizinhos confiam 100 fl ao seu fundo. **1º trimestre: só
+   títulos.** Taverna fechada ("perguntar o quê?"), sem visitantes. É lento de propósito.
+2. **Fim do 1º trimestre:** o Meirinho humilha ("Seu servo imprestável… só isso? … trocado").
+   Depois, a cena do **influencer Lucrécio Lucrativo** ("Pare de investir só na Coroa! Olha
+   esse gráfico! Esse aqui era servo e hoje é Duque só investindo em padarias!"). Libera a
+   **Guilda dos Padeiros** e os especialistas.
+3. **Fim do 2º trimestre:** Minas e Boticários abrem para o povo (mensagem nas notícias).
+4. Daí em diante as guildas abrem por classe, como na tabela abaixo.
+
+Cada guilda tem `minChapter` (padrão 1) e `minClass`; as duas precisam ser atendidas.
+
 ## Loop de turno (1 turno = 1 semana)
 
 1. **O Arauto** anuncia a faixa de variação esperada de cada ativo (ex: `-3% a +5%`) e as
@@ -71,9 +87,9 @@ Cada guilda é um **setor** com **3 empresas** de perfis diferentes. O jogador c
 
 | Guilda      | Setor       | Empresas (estável · segue o setor · arriscada)          | Liberada a partir de |
 | ----------- | ----------- | ------------------------------------------------------- | -------------------- |
-| Padeiros    | Alimentos   | Padaria Real · Forno do Norte · Padaria do Porto        | Servo                |
-| Mineiros    | Commodities | Companhia da Serra · Veio de Prata · Mina Funda         | Servo                |
-| Boticários  | Saúde       | Botica do Mosteiro · Botica Central · Elixir da Fênix   | Servo                |
+| Padeiros    | Alimentos   | Padaria Real · Forno do Norte · Padaria do Porto        | Servo, 2º trimestre  |
+| Mineiros    | Commodities | Companhia da Serra · Veio de Prata · Mina Funda         | Servo, 3º trimestre  |
+| Boticários  | Saúde       | Botica do Mosteiro · Botica Central · Elixir da Fênix   | Servo, 3º trimestre  |
 | Cambistas   | Bancos      | Banco da Ponte · Casa Fortuna · Câmbio do Ouro Velho    | Camponês             |
 | Mercadores  | Varejo      | Armazém Bom Preço · Sedaria Oriental · Tenda do Mascate | Camponês             |
 | Ferreiros   | Indústria   | Forja Real · Martelo de Bronze · Ferraria do Vale       | Artesão              |
@@ -281,17 +297,19 @@ e respostas dos especialistas, com erro). `src/sim/balance.test.ts` garante que:
 - com melhorias há menos quedas de classe, mas ainda há semanas de -10% ou pior;
 - chutar não é um caminho confiável para a nobreza.
 
-Referência (60 partidas, limite de 300 semanas, trimestres de 12 semanas):
+Referência (60 partidas, limite de 300 semanas, trimestres de 12 semanas, com a abertura
+gradual):
 
 | Bot                  | Vence    | Semanas até Conde | Quedas de classe | Pior semana |
 | -------------------- | -------- | ----------------- | ---------------- | ----------- |
 | Só títulos           | 0        | —                 | —                | —           |
-| Sem informação       | 25 de 40 | ~221              | 1,7              | -18%        |
-| Espião sem melhorias | 40 de 40 | ~146              | 0,15             | -16%        |
-| Espião com melhorias | 40 de 40 | ~112              | 0                | -12%        |
+| Sem informação       | 37 de 60 | ~220              | 1,1              | -17%        |
+| Espião sem melhorias | 59 de 60 | ~165              | 0,12             | -17%        |
+| Espião com melhorias | 60 de 60 | ~135              | 0                | -13%        |
 
-Os bots ainda não compram itens dos visitantes. O mínimo possível hoje é 84 semanas
-(7 promoções, uma por trimestre).
+Antes da abertura gradual o melhor bot levava ~118 semanas. Os bots ainda não compram itens
+dos visitantes. O mínimo possível hoje é 96 semanas (1 trimestre só de títulos + 7
+promoções).
 
 Alavancas principais: `DRIFT_SCALE`, `CENTER_NOISE`, `NEWS_VISIBILITY`, `NEWS_LEAN` e
 `LEAN_SHARPNESS` em `forecast.ts`; ruído do Espião, choques e preços das melhorias em `data.ts`.

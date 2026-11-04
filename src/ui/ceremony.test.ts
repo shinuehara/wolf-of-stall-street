@@ -38,4 +38,11 @@ describe('season ceremony', () => {
     expect(mood).toBe('sad');
     expect(line).toMatch(/Vossa Senhoria|meu senhor/);
   });
+
+  it('the first quarter (bonds only) gets the Meirinho at his worst', () => {
+    const { speaker, line } = seasonSpeech(review({ season: 1 }));
+    expect(speaker.name).toBe('O Meirinho');
+    expect(line).toMatch(/imprestável/);
+    expect(seasonSpeech(review({ season: 2 })).line).not.toMatch(/imprestável/);
+  });
 });

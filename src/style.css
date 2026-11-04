@@ -2378,3 +2378,26 @@ img.sprite,
     animation: none;
   }
 }
+
+/* Story cut scenes */
+.story .gala-actions {
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.story-dots {
+  letter-spacing: 2px;
+}
+
+.story-unlock {
+  margin: 0;
+  padding: 8px 14px;
+  background: var(--panel-lo);
+  border-top: var(--px) dashed var(--gold);
+  color: var(--gold);
+}
+
+.tavern-closed {
+  margin: 8px;
+}

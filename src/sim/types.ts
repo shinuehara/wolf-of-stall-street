@@ -42,6 +42,8 @@ export interface GuildDef extends ForecastProfile {
   sector: Sector;
   /** Minimum social class index that can trade this guild and its companies. */
   minClass: number;
+  /** Story chapter that opens the guild to commoners (default 1, after the first quarter). */
+  minChapter?: number;
   startPrice: number;
 }
 
@@ -321,13 +323,24 @@ export interface LogEntry {
 
 export type GameStatus = 'playing' | 'won' | 'lost';
 
+/** Story beats shown as cut scenes: the opening decree and the influencer after quarter 1. */
+export type StoryId = 'intro' | 'influencer';
+
+export interface StoryState {
+  /** 0: only Crown bonds (quarter 1). 1: bakers open (quarter 2). 2: guilds open by class. */
+  chapter: number;
+  /** A cut scene waiting to be shown. */
+  pending: StoryId | null;
+}
+
 export interface GameState {
-  version: 9;
+  version: 10;
   seed: number;
   rngState: number;
   /** Weeks elapsed. A season is SEASON_LENGTH weeks. */
   week: number;
   classIndex: number;
+  story: StoryState;
   /** The fund's idle gold (investors' money). */
   cash: number;
   /**

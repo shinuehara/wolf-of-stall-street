@@ -43,6 +43,7 @@ src/ui/
   scenes.ts       procedural pixel-art backdrops + the quarter-close party (galaUrl)
   sprites.ts      12x12 pixel sprites as strings, rank variants (expertSprite)
   ceremony.ts     who speaks at the quarter close and what they say
+  story.ts        story cut scenes (opening decree, influencer); art in scenes.ts storyUrl
   storage.ts      localStorage save; rejects saves whose version differs
 src/main.ts       event delegation (data-action attributes), UiState, finishWeek flow
 src/style.css     tokens on :root, pixel frames (.px), all component styles
@@ -62,6 +63,10 @@ Key model facts (details in `docs/design.md`):
   the lean. Experts reveal the lean with noise; perks reduce the noise.
 - **Time.** Quarter (`SEASON_LENGTH`) = 12 weeks = 3 months (`MONTH_LENGTH` = 4). Class
   review + party at week 12; visitors (merchant/smuggler) at weeks 4 and 8.
+- **Story / gradual unlock.** `state.story.chapter`: 0 = bonds only (quarter 1, no experts,
+  no visitors), 1 = bakers, 2 = mines + apothecaries; then guilds open by `minClass`.
+  `GuildDef.minChapter` (default 1). `state.story.pending` holds a cut scene to show.
+  Tests use a `newGame` wrapper in `game.test.ts` that skips the opening (chapter 2).
 - **Shocks** happen outside the announced range; insurance (hedge) clamps them too.
 
 ## Workflow the owner expects
