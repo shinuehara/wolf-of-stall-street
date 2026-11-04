@@ -113,4 +113,4 @@ informação vence 30% e vai para a masmorra em 1 de cada 3 partidas; Espião se
 | `46f8700`                       | Trimestres de 12 semanas, festa de fechamento, visitantes mensais        |
 | `2882f27`                       | Abertura em história: só títulos, Meirinho, influencer libera Padarias   |
 | `222ce6e`                       | Aportes/resgates, propostas de aporte, influencer por guilda, time-lapse |
-| (este)                          | Investidores por 3 meses, promoções/quedas múltiplas, gestores           |
+| `cea8ed2`                       | Investidores por 3 meses, promoções/quedas múltiplas, gestores           |
