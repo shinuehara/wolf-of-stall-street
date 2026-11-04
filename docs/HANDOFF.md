@@ -28,12 +28,16 @@ O jogo é jogável do começo ao fim e passa em 54 testes. Visão geral do que e
 - **Abertura em história:** decreto do Rei → 1º trimestre só com Títulos da Coroa → Meirinho
   humilha → cena do influencer Lucrécio Lucrativo libera as Padarias → no 3º trimestre abrem
   Minas e Boticários → depois, por classe.
+- **Investidores:** aportes e resgates mensais conforme o desempenho; propostas de aporte
+  (Milícia suja, Abade talvez desviado, Viúva limpa) com risco de confisco e multa.
+- **Influencer a cada guilda nova** ("A nova febre: …"), ganhando seguidores.
+- **Time-lapse** de ~2 s no fim de cada semana com explosão de pixels verdes/vermelhos.
 - **Visitantes** nas semanas 4 e 8 de cada trimestre: Mercador (itens legais, 4 semanas) ou
   Contrabandista (itens fortes com risco de flagrante quando o efeito acaba).
 
 Balanceamento atual (bots, 60 partidas, até 300 semanas): só títulos nunca vence; sem
-informação vence ~60%, em ~220 semanas; Espião sem melhorias ~165 semanas; com melhorias
-~135 semanas, sem quedas de classe (era ~118 antes da abertura gradual). Os bots ainda não compram itens de visitantes.
+informação vence ~75%, em ~186 semanas, com ~1,9 quedas de classe; Espião sem melhorias
+~140 semanas; com melhorias ~121 semanas, sem quedas de classe. Os bots ainda não compram itens de visitantes.
 
 ## Decisões do dono (não desfazer sem perguntar)
 
@@ -53,30 +57,36 @@ informação vence ~60%, em ~220 semanas; Espião sem melhorias ~165 semanas; co
 - Produtos liberados aos poucos, contados como história: começa só com Títulos da Coroa
   (chato de propósito), Meirinho humilha, influencer medieval clichê de YouTube libera as
   Padarias. Esta é a "primeira etapa"; o dono vai desenhar as próximas.
+- Patrimônio com aportes e retiradas conforme o sucesso; aportes podem ser bons ou ruins
+  (miliciano: mais taxa, risco de multa; religioso: limpo ou desviado da Igreja).
+- Uma cena nova do influencer a cada setor liberado ("padaria não está com nada, a nova
+  tendência é boticário").
+- Animação curta no fim da semana: time-lapse do preço + explosão de pixels verde/vermelha.
 - Ideias aceitas para depois: relatórios por setor e panorama macro do Espião (pacotes),
   assinatura semanal, e "idles" de deixar dinheiro investido com investidores (forma a
   definir: bolso aplicado ou sub-gestores).
 
 ## Perguntas em aberto (aguardando o dono)
 
-1. **Promoção dupla:** com trimestres de 12 semanas o mínimo é 84 semanas até Conde. Permitir
+1. **Promoção dupla:** com a abertura o mínimo é 96 semanas até Conde. Permitir
    subir duas classes num trimestre excepcional (fundo acima de dois tetos)?
 2. **Espião sem treino mostra números extremos** ("93%") que parecem certeza. Proposta:
    achatar as estimativas para o meio quanto pior a patente.
-3. **Ritmo geral:** o jogo é longo (~135 semanas no melhor bot com a abertura). Encurtar a
-   escada?
+3. **Ritmo geral:** ~121 semanas no melhor bot. Encurtar a escada?
 4. **Idles:** "deixar dinheiro investido em investidores" quer dizer bolso aplicado com um
    banqueiro ou sub-gestores que cuidam de parte do fundo?
 5. **Próximas etapas da história:** o que libera a Astróloga/Espião, seguro, visitantes, etc.
+6. **Sem informação vence mais** com os aportes (~75%, era ~62%). Aceitável (mais volátil,
+   mais quedas) ou endurecer?
 
 ## Próximos passos sugeridos (prioridade sugerida por Claude)
 
 1. **Relatórios por setor e panorama macro** (pedido do dono), depois os idles.
-2. **Aportes e resgates de investidores:** trimestres bons trazem dinheiro novo, ruins
-   provocam saques. Cria tensão real (hoje quase ninguém perde) e combina com o tema.
+2. **Reputação do gestor:** muda o tamanho e o tipo das propostas de aporte (nobres só
+   aparecem para quem tem boa fama; a Milícia procura quem está desesperado).
 3. **Continuar a abertura guiada:** próximas etapas da história (especialistas, seguro, visitantes).
 4. **Dilemas no meio do jogo** (empréstimo forçado do Rei, fundo rival, cotas com desconto).
-5. **Mais emoção no fim da semana:** animação de preços, destaque para choques, som opcional.
+5. **Mais emoção no fim da semana:** o time-lapse existe; falta destaque para choques e som.
 6. Bots que compram itens dos visitantes, para medir o efeito deles no balanceamento.
 7. Refatorar `src/ui/render.ts` (~1900 linhas) em arquivos por tela antes de crescer mais.
 
@@ -100,3 +110,5 @@ informação vence ~60%, em ~220 semanas; Espião sem melhorias ~165 semanas; co
 | `3a1ef72`                       | Cores nas faixas do Espião                                               |
 | `a3c3a0d`                       | Patentes dos especialistas e retratos por nível                          |
 | `46f8700`                       | Trimestres de 12 semanas, festa de fechamento, visitantes mensais        |
+| `2882f27`                       | Abertura em história: só títulos, Meirinho, influencer libera Padarias   |
+| (este)                          | Aportes/resgates, propostas de aporte, influencer por guilda, time-lapse |

@@ -274,6 +274,8 @@ export interface SeasonReview {
   endWealth: number;
   startPurse: number;
   endPurse: number;
+  /** Investor deposits (+) and withdrawals (-) during the season. */
+  flows: number;
   /** The season's weeks, oldest first. */
   weeks: WeekRecord[];
   /** Gain or loss per asset during the season. */
@@ -292,6 +294,8 @@ export interface WeekRecord {
   hedgeFees: number;
   /** Management + performance fees paid from the fund to the manager. */
   fees: number;
+  /** Money put in (+) or taken out (-) by investors, confiscations included. */
+  flows: number;
   /** Anything else that changed the fund (should be ~0). */
   other: number;
   /** Manager's purse at the end of the week. */
@@ -323,18 +327,60 @@ export interface LogEntry {
 
 export type GameStatus = 'playing' | 'won' | 'lost';
 
-/** Story beats shown as cut scenes: the opening decree and the influencer after quarter 1. */
-export type StoryId = 'intro' | 'influencer';
+/**
+ * Story beats shown as cut scenes: the opening decree, the influencer after quarter 1 and a
+ * new influencer video ("the new trend is…") whenever guilds open to the player.
+ */
+export type StoryEvent = { id: 'intro' } | { id: 'influencer' } | { id: 'trend'; guilds: string[] };
 
 export interface StoryState {
   /** 0: only Crown bonds (quarter 1). 1: bakers open (quarter 2). 2: guilds open by class. */
   chapter: number;
-  /** A cut scene waiting to be shown. */
-  pending: StoryId | null;
+  /** Cut scenes waiting to be shown, oldest first. */
+  queue: StoryEvent[];
+  /** Guilds the player has already been told about (each opens with one scene). */
+  announced: string[];
+}
+
+/** Someone wants to put money in the fund; it may be dirty. */
+export type InvestorKind = 'militia' | 'abbot' | 'widow';
+
+export interface InvestorDef {
+  id: InvestorKind;
+  name: string;
+  title: string;
+  line: string;
+  /** Deposit as a share of the fund. */
+  share: number;
+  /** Chance the money is dirty (1 = certainly, 0 = clean). Hidden from the player. */
+  dirtyChance: number;
+  /** While the money is being "washed", chance per week that it is traced. */
+  catchChance: number;
+  /** Weeks until dirty money is considered clean. */
+  riskWeeks: number;
+  /** Share of the purse taken as a fine when caught (on top of the confiscation). */
+  purseFine: number;
+  /** What the player is told about the risk. */
+  risk: string;
+  caught: string;
+  safe: string;
+}
+
+export interface InvestorOffer {
+  kind: InvestorKind;
+  amount: number;
+}
+
+/** A deposit that can still be confiscated. */
+export interface RiskyDeposit {
+  kind: InvestorKind;
+  amount: number;
+  dirty: boolean;
+  weeksLeft: number;
 }
 
 export interface GameState {
-  version: 10;
+  version: 11;
   seed: number;
   rngState: number;
   /** Weeks elapsed. A season is SEASON_LENGTH weeks. */
@@ -385,6 +431,14 @@ export interface GameState {
   visitor: Visitor | null;
   /** Items bought from visitors that are still in effect. */
   effects: ActiveEffect[];
+  /** Fund at the start of the current month, after flows: investors judge the month by it. */
+  monthStart: number;
+  /** Deposits and withdrawals since the last finished week. */
+  weekFlows: number;
+  /** An investor waiting for an answer (valid until the week ends). */
+  investorOffer: InvestorOffer | null;
+  /** Accepted deposits that can still be traced and confiscated. */
+  riskyDeposits: RiskyDeposit[];
   /** Set at a season's end when wealth reached the class ceiling. */
   ascensionOffer: boolean;
   status: GameStatus;

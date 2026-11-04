@@ -51,6 +51,13 @@ import {
   getGuild,
   getPerk,
   isRegionId,
+  FLOW_DEAD_ZONE,
+  FLOW_MAX_IN,
+  FLOW_MAX_OUT,
+  FLOW_SENSITIVITY,
+  INVESTORS,
+  OFFER_CHANCE,
+  getInvestor,
 } from './data';
 import {
   ASSET_IDS,
@@ -81,6 +88,7 @@ import type {
   SeasonReview,
   Shock,
   SocialClass,
+  InvestorKind,
 } from './types';
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
@@ -112,6 +120,12 @@ export interface WeekReport {
   smuggling: { item: ItemId; caught: boolean }[];
   /** Set when a visitor arrives at the square this week. */
   visitorArrived: VisitorKind | null;
+  /** Investors' monthly deposit (+) or withdrawal (-), 0 when nobody moved. */
+  investorFlow: number;
+  /** Deposits traced and taken back this week. */
+  confiscations: { kind: InvestorKind; amount: number; fine: number }[];
+  /** Someone offered to invest in the fund (answer before the week ends). */
+  offerArrived: InvestorKind | null;
 }
 
 const MAX_LOG = 60;
@@ -197,12 +211,12 @@ function cityProfile(state: GameState): { drift: number; width: number } {
 
 export function newGame(seed: number = Date.now() >>> 0): GameState {
   const state: GameState = {
-    version: 10,
+    version: 11,
     seed,
     rngState: seed,
     week: 0,
     classIndex: 0,
-    story: { chapter: 0, pending: 'intro' },
+    story: { chapter: 0, queue: [{ id: 'intro' }], announced: [] },
     cash: STARTING_GOLD,
     purse: STARTING_PURSE,
     positions: {},
@@ -227,6 +241,10 @@ export function newGame(seed: number = Date.now() >>> 0): GameState {
     seasonStart: { wealth: STARTING_GOLD, purse: STARTING_PURSE, assetPnl: {}, classIndex: 0 },
     visitor: null,
     effects: [],
+    monthStart: STARTING_GOLD,
+    weekFlows: 0,
+    investorOffer: null,
+    riskyDeposits: [],
     ascensionOffer: false,
     status: 'playing',
     log: [],
@@ -500,6 +518,7 @@ export function acceptAscension(state: GameState): ActionResult {
   state.ascensionOffer = false;
   const next = currentClass(state);
   log(state, `Você comprou o título e agora é ${next.name}!`, 'good');
+  announceGuilds(state);
   if (state.classIndex >= TOP_CLASS) {
     state.status = 'won';
     log(state, `Em ${state.week} semanas, o Lobo chegou à nobreza. Vida longa ao Conde!`, 'good');
@@ -537,10 +556,14 @@ export function endWeek(state: GameState): WeekReport {
     seasonReview: null,
     smuggling: [],
     visitorArrived: null,
+    investorFlow: 0,
+    confiscations: [],
+    offerArrived: null,
   };
 
-  // An unanswered title offer expires when the week ends.
+  // Unanswered offers expire when the week ends.
   state.ascensionOffer = false;
+  state.investorOffer = null;
 
   // 1. Insurance premiums are paid up front.
   for (const assetId of Object.keys(state.positions)) {
@@ -637,6 +660,10 @@ export function endWeek(state: GameState): WeekReport {
     return report;
   }
 
+  // 5. Investors: traced dirty money, then the monthly deposits and withdrawals.
+  tickRiskyDeposits(state, report);
+  if ((state.week + 1) % MONTH_LENGTH === 0) applyInvestorFlows(state, report);
+
   state.week += 1;
   logWeekSummary(state, report);
   recordWeek(state, report);
@@ -648,6 +675,7 @@ export function endWeek(state: GameState): WeekReport {
     report.classChange = reviewSeason(state);
     report.seasonReview = buildSeasonReview(state, classBefore, report.classChange);
     if (state.status === 'playing') advanceStory(state);
+    announceGuilds(state);
     state.seasonStart = {
       wealth: wealth(state),
       purse: state.purse,
@@ -663,6 +691,7 @@ export function endWeek(state: GameState): WeekReport {
   tickLocalNews(state);
   tickEffects(state, report);
   updateVisitor(state, report);
+  rollInvestorOffer(state, report);
   state.insights = [];
   rollForecasts(state);
   return report;
@@ -688,6 +717,7 @@ function buildSeasonReview(
     endWealth: wealth(state),
     startPurse: start.purse,
     endPurse: state.purse,
+    flows: state.ledger.slice(-SEASON_LENGTH).reduce((sum, r) => sum + r.flows, 0),
     weeks: state.ledger.slice(-SEASON_LENGTH),
     assetPnl,
   };
@@ -696,12 +726,139 @@ function buildSeasonReview(
 /** The market opens to commoners in steps, one per quarter at the start of the game. */
 function advanceStory(state: GameState): void {
   if (state.story.chapter === 0) {
-    state.story = { chapter: 1, pending: 'influencer' };
+    state.story.chapter = 1;
+    state.story.queue.push({ id: 'influencer' });
+    state.story.announced.push('bakers');
     log(state, 'A Guilda dos Padeiros abriu as portas para o povo!', 'good');
   } else if (state.story.chapter === 1) {
-    state.story = { chapter: 2, pending: null };
+    state.story.chapter = 2;
     log(state, 'Minas e Boticários também passam a aceitar o dinheiro do povo!', 'good');
   }
+}
+
+/** Every guild that opens to the player gets its own influencer video, once per game. */
+export function announceGuilds(state: GameState): void {
+  const fresh = GUILDS.filter(
+    (g) => isGuildUnlocked(state, g) && !state.story.announced.includes(g.id),
+  ).map((g) => g.id);
+  if (fresh.length === 0) return;
+  state.story.announced.push(...fresh);
+  state.story.queue.push({ id: 'trend', guilds: fresh });
+}
+
+/** The cut scene at the head of the queue was watched. */
+export function finishStory(state: GameState): void {
+  state.story.queue.shift();
+}
+
+// ---------------------------------------------------------------------------
+// Investors
+// ---------------------------------------------------------------------------
+
+/** Puts gold in (+) or takes it out (-) of the fund, selling positions if needed. */
+function moveFunds(state: GameState, amount: number): number {
+  if (amount < 0) {
+    raiseCash(state, -amount);
+    amount = -Math.min(-amount, state.cash);
+  }
+  state.cash += amount;
+  state.weekFlows += amount;
+  return amount;
+}
+
+/**
+ * At the end of each month investors compare the fund with the Crown bond: a good month
+ * brings new money, a bad one makes them withdraw.
+ */
+function applyInvestorFlows(state: GameState, report: WeekReport): void {
+  if (state.story.chapter >= 1 && state.monthStart > 0) {
+    const ret = (wealth(state) / state.monthStart - 1) * 100;
+    const benchmark = bondRate(state, BOND_LIQUID) * MONTH_LENGTH * 100;
+    const excess = ret - benchmark;
+    if (Math.abs(excess) > FLOW_DEAD_ZONE) {
+      const mood = 0.75 + nextRandom(state) * 0.5;
+      const share = Math.max(
+        -FLOW_MAX_OUT,
+        Math.min(FLOW_MAX_IN, ((excess * FLOW_SENSITIVITY) / 100) * mood),
+      );
+      const moved = moveFunds(state, wealth(state) * share);
+      report.investorFlow = moved;
+      log(
+        state,
+        moved > 0
+          ? `Mês bom! Novos investidores aportaram ${fmt(moved)} florins no fundo.`
+          : `Mês ruim: investidores assustados sacaram ${fmt(-moved)} florins do fundo.`,
+        moved > 0 ? 'good' : 'bad',
+      );
+    }
+  }
+  state.monthStart = wealth(state);
+}
+
+function tickRiskyDeposits(state: GameState, report: WeekReport): void {
+  for (const deposit of state.riskyDeposits) {
+    const investor = getInvestor(deposit.kind);
+    deposit.weeksLeft -= 1;
+    if (deposit.dirty && nextRandom(state) < investor.catchChance) {
+      const taken = -moveFunds(state, -deposit.amount);
+      const fine = state.purse * investor.purseFine;
+      state.purse -= fine;
+      state.monthStart = Math.max(0, state.monthStart - taken);
+      report.confiscations.push({ kind: deposit.kind, amount: taken, fine });
+      log(
+        state,
+        `${investor.caught} (${fmt(taken)} fl${fine > 0 ? `, multa de ${fmt(fine)} fl` : ''})`,
+        'bad',
+      );
+      deposit.weeksLeft = -1;
+    } else if (deposit.weeksLeft === 0) {
+      log(state, investor.safe, 'good');
+    }
+  }
+  state.riskyDeposits = state.riskyDeposits.filter((d) => d.weeksLeft > 0);
+}
+
+function rollInvestorOffer(state: GameState, report: WeekReport): void {
+  if (state.story.chapter < 1 || state.visitor || state.investorOffer) return;
+  if (nextRandom(state) >= OFFER_CHANCE) return;
+  const kind = pick(
+    state,
+    INVESTORS.map((i) => i.id),
+  );
+  const amount = Math.round(wealth(state) * getInvestor(kind).share * 10) / 10;
+  state.investorOffer = { kind, amount };
+  report.offerArrived = kind;
+  log(
+    state,
+    `${getInvestor(kind).name} quer investir ${fmt(amount)} florins no seu fundo.`,
+    'neutral',
+  );
+}
+
+export function acceptInvestor(state: GameState): ActionResult {
+  const offer = state.investorOffer;
+  if (state.status !== 'playing') return fail('O jogo terminou.');
+  if (!offer) return fail('Ninguém está oferecendo dinheiro agora.');
+  const investor = getInvestor(offer.kind);
+  moveFunds(state, offer.amount);
+  state.monthStart += offer.amount;
+  state.investorOffer = null;
+  if (investor.dirtyChance > 0) {
+    state.riskyDeposits.push({
+      kind: offer.kind,
+      amount: offer.amount,
+      dirty: nextRandom(state) < investor.dirtyChance,
+      weeksLeft: investor.riskWeeks,
+    });
+  }
+  log(state, `${investor.name} aportou ${fmt(offer.amount)} florins no fundo.`, 'good');
+  return ok;
+}
+
+export function declineInvestor(state: GameState): ActionResult {
+  if (!state.investorOffer) return fail('Ninguém está oferecendo dinheiro agora.');
+  state.investorOffer = null;
+  return ok;
 }
 
 function reviewSeason(state: GameState): WeekReport['classChange'] {
@@ -971,7 +1128,9 @@ function recordWeek(state: GameState, report: WeekReport): void {
   const endWealth = wealth(state);
   const marketPnl = Object.values(report.positionPnl).reduce((a, b) => a + b, 0);
   const fees = report.managementFee + report.performanceFee;
-  const explained = marketPnl + report.bondIncome - report.hedgeFees - fees;
+  const flows = state.weekFlows;
+  state.weekFlows = 0;
+  const explained = marketPnl + report.bondIncome - report.hedgeFees - fees + flows;
   state.ledger.push({
     week: state.week,
     startWealth,
@@ -980,6 +1139,7 @@ function recordWeek(state: GameState, report: WeekReport): void {
     bondIncome: report.bondIncome,
     hedgeFees: report.hedgeFees,
     fees,
+    flows,
     other: endWealth - startWealth - explained,
     purse: state.purse,
   });

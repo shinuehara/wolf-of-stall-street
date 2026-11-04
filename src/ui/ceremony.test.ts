@@ -12,6 +12,7 @@ function review(over: Partial<SeasonReview>): SeasonReview {
     endWealth: 101,
     startPurse: 10,
     endPurse: 11,
+    flows: 0,
     weeks: [],
     assetPnl: {},
     ...over,

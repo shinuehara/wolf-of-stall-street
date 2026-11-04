@@ -84,7 +84,10 @@ const FIRST_QUARTER_LINES = [
 ];
 
 export function seasonReturn(review: SeasonReview): number {
-  return review.startWealth > 0 ? (review.endWealth / review.startWealth - 1) * 100 : 0;
+  // Deposits and withdrawals are not the manager's merit (or fault).
+  return review.startWealth > 0
+    ? ((review.endWealth - review.flows) / review.startWealth - 1) * 100
+    : 0;
 }
 
 export function seasonMood(review: SeasonReview): Mood {

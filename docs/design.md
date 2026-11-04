@@ -31,8 +31,14 @@ O mercado abre aos poucos, contado como história (`state.story`, textos em `src
    Depois, a cena do **influencer Lucrécio Lucrativo** ("Pare de investir só na Coroa! Olha
    esse gráfico! Esse aqui era servo e hoje é Duque só investindo em padarias!"). Libera a
    **Guilda dos Padeiros** e os especialistas.
-3. **Fim do 2º trimestre:** Minas e Boticários abrem para o povo (mensagem nas notícias).
+3. **Fim do 2º trimestre:** Minas e Boticários abrem para o povo.
 4. Daí em diante as guildas abrem por classe, como na tabela abaixo.
+
+**Toda guilda nova ganha um vídeo novo do influencer** ("A nova febre: Boticários!"):
+ele declara a moda anterior "coisa do passado, até a minha sogra já investe", faz o
+discurso da guilda nova (um texto por guilda em `story.ts`) e ganha seguidores a cada vídeo.
+As cenas ficam numa fila (`state.story.queue`); cada guilda é anunciada uma vez
+(`state.story.announced`), mesmo que você caia e suba de classe de novo.
 
 Cada guilda tem `minChapter` (padrão 1) e `minClass`; as duas precisam ser atendidas.
 
@@ -149,6 +155,34 @@ faz essa conta antes dos outros.
 
 **Almanaque** (na Praça): descrição da cidade, dos bairros e das guildas, gráficos do PIB
 e da demanda de cada bairro, empresas de cada bairro e notícias ativas.
+
+### Investidores: aportes, resgates e propostas
+
+O fundo é dinheiro dos investidores, e eles reagem ao seu desempenho:
+
+- **No fim de cada mês** (a partir do 2º trimestre) comparam o retorno do mês com o do Título
+  da Coroa. Se o excesso passar de ±2 pontos, aportam ou resgatam
+  `0,8 × excesso` % do fundo (com um humor aleatório de ±25%), no máximo **+12%** de entrada
+  e **-15%** de saída por mês. Resgates vendem posições se faltar ouro livre.
+- Aportes e resgates **não contam como lucro**: ficam fora da taxa de performance, do
+  retorno do trimestre (cerimônia) e da pior semana dos bots. O livro-caixa registra `flows`.
+- **Propostas de aporte** (10% de chance por semana, fora das semanas de visitante). Valem até
+  o fim da semana: aceitar, recusar ou pensar.
+
+| Investidor         | Aporte    | Origem                                  | Risco (12 semanas)                                         |
+| ------------------ | --------- | --------------------------------------- | ---------------------------------------------------------- |
+| Capitão da Milícia | 35% fundo | sempre suja                             | 5%/sem. de o Meirinho rastrear: confisca + multa 40% bolso |
+| Abade de São Bento | 25% fundo | 40% de chance de ser desvio (escondido) | se for desvio, 5%/sem. de o Bispo tomar o aporte de volta  |
+| Viúva do Armador   | 15% fundo | limpa                                   | nenhum                                                     |
+
+O dinheiro aceito conta para a classe e rende taxa de administração. Os bots recusam todas as
+propostas.
+
+### Fim da semana: time-lapse
+
+Ao encerrar a semana, antes do relatório, um replay de ~2 s mostra o caminho do fundo na
+semana (linha que se desenha) e uma explosão de pixels verdes ou vermelhos, maior quanto
+maior o movimento, com os ativos da carteira aparecendo em seguida. Clique ou tecla pula.
 
 ### Trimestres, meses e visitantes
 
@@ -303,11 +337,13 @@ gradual):
 | Bot                  | Vence    | Semanas até Conde | Quedas de classe | Pior semana |
 | -------------------- | -------- | ----------------- | ---------------- | ----------- |
 | Só títulos           | 0        | —                 | —                | —           |
-| Sem informação       | 37 de 60 | ~220              | 1,1              | -17%        |
-| Espião sem melhorias | 59 de 60 | ~165              | 0,12             | -17%        |
-| Espião com melhorias | 60 de 60 | ~135              | 0                | -13%        |
+| Sem informação       | 45 de 60 | ~186              | 1,85             | -17%        |
+| Espião sem melhorias | 60 de 60 | ~140              | 0,23             | -16%        |
+| Espião com melhorias | 60 de 60 | ~121              | 0,02             | -13%        |
 
-Antes da abertura gradual o melhor bot levava ~118 semanas. Os bots ainda não compram itens
+Com os aportes e resgates o jogo ficou mais rápido para quem vai bem (era ~135 semanas) e
+mais volátil para quem chuta (mais quedas de classe, mas também mais vitórias). Antes da
+abertura gradual o melhor bot levava ~118 semanas. Os bots ainda não compram itens
 dos visitantes. O mínimo possível hoje é 96 semanas (1 trimestre só de títulos + 7
 promoções).
 

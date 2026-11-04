@@ -2401,3 +2401,154 @@ img.sprite,
 .tavern-closed {
   margin: 8px;
 }
+
+/* Investor offers */
+.offer-modal .dialog {
+  border: var(--px) solid var(--gold);
+}
+
+.offer-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.offer-facts > div {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 8px;
+  background: var(--panel-lo);
+}
+
+.offer-modal .actions {
+  flex-wrap: wrap;
+}
+
+/* Week time-lapse */
+.timelapse-backdrop {
+  cursor: pointer;
+}
+
+.timelapse {
+  width: min(520px, 100%);
+  padding: 14px 16px;
+  animation: pop 0.25s steps(4);
+}
+
+.timelapse-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.timelapse-chart {
+  position: relative;
+  height: 150px;
+  margin: 10px 0;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 29px, rgba(255, 255, 255, 0.05) 29px 30px),
+    var(--panel-lo);
+}
+
+.timelapse-chart svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.tl-base {
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.tl-line {
+  fill: none;
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.timelapse-chart svg {
+  animation: draw-line 1.1s steps(28) both;
+}
+
+.tl-line.up {
+  stroke: var(--green);
+}
+
+.tl-line.down {
+  stroke: var(--red);
+}
+
+@keyframes draw-line {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+.burst {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+.burst i {
+  position: absolute;
+  left: -3px;
+  top: -3px;
+  width: 6px;
+  height: 6px;
+  background: var(--c);
+  opacity: 0;
+  animation: burst 0.8s steps(8) var(--delay) forwards;
+}
+
+@keyframes burst {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy));
+  }
+}
+
+.timelapse-result {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 2rem;
+  text-align: center;
+  opacity: 0;
+  animation: fade-in 0.3s steps(3) 1.15s forwards;
+}
+
+.timelapse-assets {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.timelapse-assets .chip {
+  opacity: 0;
+  animation: fade-in 0.2s steps(2) forwards;
+}
+
+@keyframes fade-in {
+  to {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 640px) {
+  .offer-facts {
+    grid-template-columns: 1fr;
+  }
+}

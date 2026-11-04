@@ -4,6 +4,8 @@ import type {
   EventDef,
   ExpertDef,
   GuildDef,
+  InvestorDef,
+  InvestorKind,
   ItemDef,
   LocalNewsTemplate,
   PerkDef,
@@ -1069,4 +1071,68 @@ export function getClass(index: number): SocialClass {
   const cls = CLASSES[index];
   if (!cls) throw new Error(`Unknown class index: ${index}`);
   return cls;
+}
+
+// ---------------------------------------------------------------------------
+// Investors: monthly deposits and withdrawals, and special offers
+// ---------------------------------------------------------------------------
+
+/** Investors deposit or withdraw this share of the fund per point of monthly excess return. */
+export const FLOW_SENSITIVITY = 0.8;
+/** Months within this excess return (in %) over the Crown bond leave investors indifferent. */
+export const FLOW_DEAD_ZONE = 2;
+/** Largest monthly deposit and withdrawal, as a share of the fund. */
+export const FLOW_MAX_IN = 0.12;
+export const FLOW_MAX_OUT = 0.15;
+/** Chance per week (outside visitor weeks) that someone offers to invest in the fund. */
+export const OFFER_CHANCE = 0.1;
+
+export const INVESTORS: InvestorDef[] = [
+  {
+    id: 'militia',
+    name: 'O Capitão da Milícia',
+    title: '“segurança” particular do Burgo Velho',
+    line: 'Gestor, meus rapazes juntaram umas economias… de proteção. Ninguém precisa saber de onde veio, né? Só faz render.',
+    share: 0.35,
+    dirtyChance: 1,
+    catchChance: 0.05,
+    riskWeeks: 12,
+    purseFine: 0.4,
+    risk: 'Dinheiro sujo. Por 12 semanas, 5% de chance por semana de o Meirinho rastrear: confisca o aporte e multa 40% do seu bolso.',
+    caught:
+      'O Meirinho rastreou o dinheiro da Milícia! O aporte foi confiscado e você pagou multa.',
+    safe: 'O dinheiro da Milícia já circulou o bastante: agora parece limpo.',
+  },
+  {
+    id: 'abbot',
+    name: 'O Abade de São Bento do Ouro',
+    title: 'tesoureiro do mosteiro',
+    line: 'Paz e bem, meu filho. O mosteiro deseja multiplicar seus talentos, como manda a parábola. Os livros? Ah, os livros estão… em ordem.',
+    share: 0.25,
+    dirtyChance: 0.4,
+    catchChance: 0.05,
+    riskWeeks: 12,
+    purseFine: 0,
+    risk: 'Pode ser dízimo honesto ou dinheiro desviado da Igreja; ninguém sabe. Se for desvio, por 12 semanas o Bispo pode descobrir e levar o aporte de volta.',
+    caught: 'O Bispo descobriu o desvio do Abade! A Igreja tomou de volta o aporte.',
+    safe: 'O Bispo auditou o mosteiro: os livros do Abade estão em ordem.',
+  },
+  {
+    id: 'widow',
+    name: 'A Viúva do Armador',
+    title: 'herdeira de três naus',
+    line: 'Meu falecido marido dizia que ouro parado é ouro triste. Ouvi falar bem de você na feira.',
+    share: 0.15,
+    dirtyChance: 0,
+    catchChance: 0,
+    riskWeeks: 0,
+    purseFine: 0,
+    risk: 'Dinheiro limpo, herança registrada no cartório.',
+    caught: '',
+    safe: '',
+  },
+];
+
+export function getInvestor(id: InvestorKind): InvestorDef {
+  return INVESTORS.find((i) => i.id === id)!;
 }

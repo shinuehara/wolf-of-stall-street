@@ -1,4 +1,5 @@
-import type { StoryId } from '../sim/types';
+import { getGuild } from '../sim/data';
+import type { StoryEvent } from '../sim/types';
 import type { Mood } from './ceremony';
 import type { StoryScene } from './scenes';
 import type { SpriteName } from './sprites';
@@ -38,7 +39,7 @@ const INFLUENCER = {
 };
 
 /** Cut scenes, in Portuguese like all in-game text. */
-export const STORIES: Record<StoryId, Story> = {
+export const STORIES: Record<'intro' | 'influencer', Story> = {
   intro: {
     scene: 'intro',
     kicker: 'Valdouro, ano da graça de 1347',
@@ -99,3 +100,60 @@ export const STORIES: Record<StoryId, Story> = {
     finish: 'Ver as Padarias',
   },
 };
+
+/** The influencer's pitch for each guild when it opens ("the new trend is…"). */
+const HYPE: Record<string, string> = {
+  bakers: 'PADARIAS! Pão todo mundo come, todo santo dia!',
+  mines:
+    'A nova tendência é MINAS, meu povo! Prata é o novo pão! Quem comprou picareta no começo hoje tem castelo com fosso… de moedas!',
+  apothecaries:
+    'BOTICÁRIOS! Com essa tosse que anda pela cidade, xarope vai valer mais que ouro! Elixir da Fênix: guardem esse nome!',
+  changers:
+    'CAMBISTAS, plebe! Dinheiro que faz dinheiro! Banco nunca perde: quem perde é você, que não está no banco!',
+  fair: 'A FEIRA é o futuro! Todo mundo compra alguma coisa toda semana. Isso é matemática, é CIÊNCIA!',
+  forge:
+    'FERREIROS! O Rei vai entrar em guerra (fonte: confia) e espada não nasce em árvore, meu povo!',
+  fleet: 'NAVEGAÇÃO! Do outro lado do mar tem ouro, seda e gente que nunca ouviu falar de imposto!',
+  spices:
+    'ESPECIARIAS! Pimenta é o novo ouro! O ouro também continua sendo ouro, mas a pimenta é mais gostosa!',
+};
+
+/** A new influencer video for guilds that just opened; `announced` is the order they opened. */
+export function storyFor(event: StoryEvent, announced: string[]): Story {
+  if (event.id !== 'trend') return STORIES[event.id];
+  const first = announced.indexOf(event.guilds[0]!);
+  const old = first > 0 ? getGuild(announced[first - 1]!) : getGuild('bakers');
+  const followers = 300 + 150 * Math.max(1, first);
+  const names = event.guilds.map((id) => getGuild(id).short);
+  const who = {
+    ...INFLUENCER,
+    title: `o Arauto da Fortuna · ${followers} mil seguidores no mural da praça`,
+  };
+  return {
+    scene: 'influencer',
+    kicker: 'Lucrécio Lucrativo, ao vivo da carroça',
+    heading: `A nova febre: ${names.join(' e ')}!`,
+    beats: [
+      {
+        ...who,
+        mood: 'happy',
+        text: `FALA, PLEBE! Lucrécio de volta, agora com ${followers} mil seguidores! Obrigado, família!`,
+      },
+      {
+        ...who,
+        mood: 'sad',
+        text: `${old.short}? Isso é COISA DO PASSADO! Todo mundo já investe nisso, até a minha sogra. E quando a sogra entra, o esperto sai!`,
+      },
+      ...event.guilds.map((id) => ({ ...who, mood: 'happy' as Mood, text: HYPE[id] ?? '' })),
+      {
+        ...who,
+        mood: 'neutral',
+        text: 'Corre que ainda dá tempo! Não é recomendação de investimento, hein? Toca o sino da capela e compartilha com o compadre!',
+      },
+    ],
+    unlock: `Liberado no Mercado: ${event.guilds
+      .map((id) => getGuild(id).name)
+      .join(' e ')} (cesta e 3 empresas cada).`,
+    finish: `Ver ${names.join(' e ')}`,
+  };
+}

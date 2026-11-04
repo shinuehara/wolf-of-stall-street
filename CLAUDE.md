@@ -65,7 +65,13 @@ Key model facts (details in `docs/design.md`):
   review + party at week 12; visitors (merchant/smuggler) at weeks 4 and 8.
 - **Story / gradual unlock.** `state.story.chapter`: 0 = bonds only (quarter 1, no experts,
   no visitors), 1 = bakers, 2 = mines + apothecaries; then guilds open by `minClass`.
-  `GuildDef.minChapter` (default 1). `state.story.pending` holds a cut scene to show.
+  `GuildDef.minChapter` (default 1). `state.story.queue` holds cut scenes to show; every
+  guild gets one influencer "trend" scene when it opens (`announceGuilds`, `story.announced`).
+- **Investors.** Monthly flows vs the Crown bond (`applyInvestorFlows`), offers
+  (`state.investorOffer`, `INVESTORS` in data.ts), dirty deposits (`riskyDeposits`) that can
+  be confiscated. Flows go through `moveFunds` → `state.weekFlows` → `WeekRecord.flows`;
+  returns, performance fees and bot metrics exclude them. `state.monthStart` must be bumped
+  whenever money enters or leaves outside the market.
   Tests use a `newGame` wrapper in `game.test.ts` that skips the opening (chapter 2).
 - **Shocks** happen outside the announced range; insurance (hedge) clamps them too.
 
@@ -103,6 +109,9 @@ perks still have bad weeks (worst week < -10%).
 - Small money amounts (expert fees, premiums) use 2 decimals (`fmtCost`); `fmt` is 1 decimal.
 - `confirm()`/`alert()` do not work inside the Artifact host; confirmations are in-page.
 - `render.ts` uses a module-level `CHART_WEEKS` set per render from the Scribe perk.
+- The week time-lapse (`ui.timelapse`) auto-closes via `setTimeout` in `main.ts`; Playwright
+  clicks on it must use `page.evaluate(() => el.click())` (it is replaced mid-click).
+- Do not `rm` with a shell variable in the path; the sandbox refuses it. Use literal paths.
 - Fonts: Pixelify Sans (display) + VT323 (body), with `font-variant-ligatures: none`
   (otherwise "fl" renders as a ligature).
 

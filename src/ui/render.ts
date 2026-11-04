@@ -1,6 +1,7 @@
 import {
   MONTH_LENGTH,
   getItem,
+  getInvestor,
   ASTROLOGER_ACCURACY,
   DRUNK_ACCURACY,
   SPY_FAKE_CHANCE,
@@ -70,7 +71,7 @@ import type {
 } from '../sim/types';
 import { seasonReturn, seasonSpeech } from './ceremony';
 import { GALA_NAMES, galaUrl, sceneUrl, storyUrl, type SceneName } from './scenes';
-import { STORIES } from './story';
+import { storyFor } from './story';
 import { expertSprite, sprite, type SpriteName } from './sprites';
 
 export type Screen = SceneName;
@@ -85,6 +86,10 @@ export interface UiState {
   almanacEntry: string;
   /** Which line of the pending story cut scene is showing. */
   storyStep: number;
+  /** The investor's offer was put aside for now (still answerable until the week ends). */
+  offerDismissed: boolean;
+  /** The week's price time-lapse is playing (before the report). */
+  timelapse: boolean;
   /** Quarter-close party: 0 = the scene and the speech, 1 = the numbers. */
   galaStep: 0 | 1;
   /** The visitor of the month was sent away (or not yet). */
@@ -113,6 +118,8 @@ export function initialUi(): UiState {
     squareTab: 'news',
     portfolioTab: 'position',
     storyStep: 0,
+    offerDismissed: false,
+    timelapse: false,
     galaStep: 0,
     visitorDismissed: false,
     almanacEntry: 'city',
@@ -389,6 +396,11 @@ function renderSquare(state: GameState, ui: UiState): string {
           ? `<button class="visitor-call px" data-action="open-visitor">${sprite(state.visitor.kind === 'merchant' ? 'tent' : 'hood0', 28)}<span><strong>${state.visitor.kind === 'merchant' ? 'Um Mercador Viajante está na praça' : 'Um Contrabandista sussurra na esquina'}</strong><span class="small muted">Só até o fim da semana. Ver ofertas ▶</span></span></button>`
           : ''
       }
+      ${
+        state.investorOffer
+          ? `<button class="visitor-call px" data-action="open-offer">${sprite('coin', 28)}<span><strong>${getInvestor(state.investorOffer.kind).name} quer investir ${fmt(state.investorOffer.amount)} fl</strong><span class="small muted">Responda até o fim da semana ▶</span></span></button>`
+          : ''
+      }
       <ul class="news">
         ${state.localNews
           .map(
@@ -447,6 +459,16 @@ function renderSquare(state: GameState, ui: UiState): string {
     <article class="card px">
       <h2>${sprite('castle', 20)} O trimestre</h2>
       <p>${verdict}</p>
+      ${
+        state.riskyDeposits.length
+          ? `<div class="chips">${state.riskyDeposits
+              .map((d) => {
+                const investor = getInvestor(d.kind);
+                return `<span class="chip down" title="${esc(investor.risk)}">${d.kind === 'militia' ? 'Dinheiro da Milícia' : 'Dinheiro do Abade'} · ${d.weeksLeft} sem. de risco</span>`;
+              })
+              .join('')}</div>`
+          : ''
+      }
       ${
         state.effects.length
           ? `<div class="chips">${state.effects
@@ -1567,8 +1589,12 @@ function renderModal(state: GameState, ui: UiState): string {
       <p>Os credores venceram na semana ${state.week}. O Lobo vai uivar atrás das grades.</p>
       <button class="pbtn" data-action="new-game">Tentar de novo</button>`);
   }
-  if ((!ui.showReport || !ui.lastReport) && state.story.pending) {
+  if (ui.timelapse && ui.lastReport) return renderTimelapse(state, ui.lastReport);
+  if ((!ui.showReport || !ui.lastReport) && state.story.queue.length > 0) {
     return renderStoryModal(state, ui);
+  }
+  if ((!ui.showReport || !ui.lastReport) && state.investorOffer && !ui.offerDismissed) {
+    return renderOfferModal(state);
   }
   if ((!ui.showReport || !ui.lastReport) && state.visitor && !ui.visitorDismissed) {
     return renderVisitorModal(state);
@@ -1598,6 +1624,8 @@ function renderModal(state: GameState, ui: UiState): string {
     <ul class="ledger">
       <li><span>Títulos da Coroa</span><span class="up">${signed(report.bondIncome)}</span></li>
       ${report.hedgeFees > 0 ? `<li><span>Seguros</span><span class="down">${signed(-report.hedgeFees)}</span></li>` : ''}
+      ${report.investorFlow ? `<li><span>${report.investorFlow > 0 ? 'Aportes de investidores' : 'Resgates de investidores'}</span><span class="${tone(report.investorFlow)}">${signed(report.investorFlow)}</span></li>` : ''}
+      ${report.confiscations.map((c) => `<li><span>Confisco: ${c.kind === 'militia' ? 'dinheiro da Milícia' : 'dinheiro do Abade'}</span><span class="down">${signed(-c.amount)}</span></li>`).join('')}
       <li><span>Taxas pagas a você</span><span class="down">${signed(-(report.managementFee + report.performanceFee))}</span></li>
     </ul>
     <h3 class="report-sub">Seu bolso</h3>
@@ -1605,6 +1633,13 @@ function renderModal(state: GameState, ui: UiState): string {
       <li><span>Taxa de administração</span><span class="up">+${fmtCost(report.managementFee)}</span></li>
       <li><span>Taxa de performance</span><span class="up">+${fmtCost(report.performanceFee)}</span></li>
       <li><span>Custo de vida</span><span class="down">-${fmtCost(report.livingCost)}</span></li>
+      ${report.confiscations
+        .filter((c) => c.fine > 0)
+        .map(
+          (c) =>
+            `<li><span>Multa do Meirinho</span><span class="down">-${fmtCost(c.fine)}</span></li>`,
+        )
+        .join('')}
       <li><span>Saldo do bolso</span><span class="gold">${fmt(state.purse)} fl</span></li>
     </ul>
     ${news.length ? `<ul class="report-news">${news.map((n) => `<li class="log-${n.tone}">${esc(n.text)}</li>`).join('')}</ul>` : ''}
@@ -1671,8 +1706,102 @@ function renderVisitorModal(state: GameState): string {
   </div></div>`;
 }
 
+function renderOfferModal(state: GameState): string {
+  const offer = state.investorOffer!;
+  const investor = getInvestor(offer.kind);
+  const cls = currentClass(state);
+  const extraFee = offer.amount * cls.managementFeeRate;
+  const mood = investor.dirtyChance >= 1 ? 'sad' : investor.dirtyChance > 0 ? 'neutral' : 'happy';
+  const playing = state.status === 'playing';
+  return `<div class="modal-backdrop"><div class="modal px modal-wide offer-modal" role="dialog" aria-modal="true" aria-label="${investor.name}">
+    <div class="dialog mood-${mood}">
+      ${sprite(offer.kind === 'militia' ? 'shield' : offer.kind === 'abbot' ? 'scroll' : 'ship', 48)}
+      <div>
+        <strong>${investor.name}</strong> <span class="muted small">${investor.title}</span>
+        <p>“${investor.line}”</p>
+      </div>
+    </div>
+    <div class="offer-facts">
+      <div><span class="hud-label">Aporte</span><strong class="gold">${fmt(offer.amount)} fl</strong><span class="muted small">${whole((offer.amount / Math.max(1, wealth(state))) * 100)}% do fundo</span></div>
+      <div><span class="hud-label">Taxa a mais</span><strong class="up">+${fmtCost(extraFee)} fl/sem.</strong><span class="muted small">só de administração</span></div>
+      <div><span class="hud-label">Origem</span><strong class="${mood === 'sad' ? 'down' : mood === 'neutral' ? 'gold' : 'up'}">${mood === 'sad' ? 'suja' : mood === 'neutral' ? 'incerta' : 'limpa'}</strong><span class="muted small">${investor.dirtyChance > 0 ? `${investor.riskWeeks} sem. de risco` : 'sem risco'}</span></div>
+    </div>
+    <p class="small ${mood === 'happy' ? 'muted' : 'down'}">${investor.risk}</p>
+    <p class="small muted">O dinheiro entra no fundo: conta para a sua classe e para as taxas.</p>
+    <div class="actions">
+      <button class="pbtn" data-action="accept-investor" ${playing ? '' : 'disabled'}>Aceitar o dinheiro</button>
+      <button class="pbtn pbtn-ghost" data-action="decline-investor">Recusar</button>
+      <button class="pbtn pbtn-ghost" data-action="dismiss-offer">Pensar até o fim da semana</button>
+    </div>
+  </div></div>`;
+}
+
+/** A short replay of the week: the fund's path, then a burst of green or red pixels. */
+function renderTimelapse(state: GameState, report: WeekReport): string {
+  const record = state.ledger[state.ledger.length - 1];
+  const start = record?.startWealth ?? wealth(state);
+  const end = (record?.endWealth ?? wealth(state)) - (record?.flows ?? 0);
+  const change = start > 0 ? (end / start - 1) * 100 : 0;
+  const up = change >= 0;
+  // A random walk from start to end, the same every time for this week.
+  const n = 28;
+  let seed = state.week * 7919 + 17;
+  const rnd = () => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed / 0x7fffffff;
+  };
+  const vol = Math.max(Math.abs(end - start) * 0.6, start * 0.004);
+  const walk = [0];
+  for (let i = 1; i < n; i++) walk.push(walk[i - 1]! + (rnd() - 0.5) * vol * 0.5);
+  const values = walk.map(
+    (w, i) => start + ((end - start) * i) / (n - 1) + w - (walk[n - 1]! * i) / (n - 1),
+  );
+  // At least ±1% of the fund on screen, so a quiet week looks quiet.
+  const lo = Math.min(...values, start * 0.99);
+  const hi = Math.max(...values, start * 1.01);
+  const span = hi - lo || 1;
+  const W = 300;
+  const H = 120;
+  const pts = values.map(
+    (v, i) => [(i / (n - 1)) * W, H - 10 - ((v - lo) / span) * (H - 20)] as const,
+  );
+  const [ex, ey] = pts[pts.length - 1]!;
+  const strength = Math.min(1, Math.abs(change) / 8);
+  const count = 14 + Math.round(strength * 26);
+  const particles = Array.from({ length: count }, (_, i) => {
+    const angle = (i / count) * Math.PI * 2 + rnd() * 0.6;
+    const dist = 30 + rnd() * (40 + strength * 80);
+    const colors = up ? ['#4fe08a', '#1f9e5a', '#b8f0c8'] : ['#ff4f5e', '#b0243a', '#ffb3ba'];
+    return `<i style="--dx:${Math.round(Math.cos(angle) * dist)}px;--dy:${Math.round(Math.sin(angle) * dist)}px;--c:${colors[i % 3]};--delay:${(1.15 + rnd() * 0.15).toFixed(2)}s"></i>`;
+  }).join('');
+  const held = Object.keys(report.positionPnl).slice(0, 6);
+  return `<div class="modal-backdrop timelapse-backdrop" data-action="skip-timelapse">
+    <div class="timelapse px" role="dialog" aria-modal="true" aria-label="Resumo da semana">
+      <div class="timelapse-head"><span class="hud-label">Semana ${state.week}</span><span class="muted small">clique para pular</span></div>
+      <div class="timelapse-chart">
+        <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+          <line x1="0" x2="${W}" y1="${H - 10 - ((start - lo) / span) * (H - 20)}" y2="${H - 10 - ((start - lo) / span) * (H - 20)}" class="tl-base" />
+          <polyline points="${pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')}" class="tl-line ${up ? 'up' : 'down'}" />
+        </svg>
+        <div class="burst" style="left:${((ex / W) * 100).toFixed(1)}%;top:${((ey / H) * 100).toFixed(1)}%">${particles}</div>
+      </div>
+      <p class="timelapse-result ${up ? 'up' : 'down'}">${up ? '▲' : '▼'} ${pct(change)} <span class="small">(${signed(end - start)} fl)</span></p>
+      ${
+        held.length
+          ? `<div class="timelapse-assets">${held
+              .map((id, i) => {
+                const move = report.marketReturns[id] ?? 0;
+                return `<span class="chip ${tone(move)}" style="animation-delay:${(0.3 + i * 0.12).toFixed(2)}s">${assetName(id)} ${pct(move)}</span>`;
+              })
+              .join('')}</div>`
+          : ''
+      }
+    </div>
+  </div>`;
+}
+
 function renderStoryModal(state: GameState, ui: UiState): string {
-  const story = STORIES[state.story.pending!];
+  const story = storyFor(state.story.queue[0]!, state.story.announced);
   const step = Math.min(ui.storyStep, story.beats.length - 1);
   const beat = story.beats[step]!;
   const last = step === story.beats.length - 1;
@@ -1762,7 +1891,7 @@ function renderSeasonModal(state: GameState, ui: UiState, review: SeasonReview):
     </div>
     <div class="gala-body">
       <div class="season-tiles">
-        <div><span class="hud-label">Fundo no trimestre</span><strong class="${tone(ret)}">${pct(ret)}</strong><span class="muted small">${fmt(review.startWealth)} → ${fmt(review.endWealth)} fl</span></div>
+        <div><span class="hud-label">Fundo no trimestre</span><strong class="${tone(ret)}">${pct(ret)}</strong><span class="muted small">${fmt(review.startWealth)} → ${fmt(review.endWealth)} fl${Math.abs(review.flows) >= 0.05 ? ` · investidores ${signed(review.flows)}` : ''}</span></div>
         <div><span class="hud-label">Seu bolso</span><strong class="${tone(review.endPurse - review.startPurse)}">${signed(review.endPurse - review.startPurse)} fl</strong><span class="muted small">agora ${fmt(review.endPurse)} fl</span></div>
         <div><span class="hud-label">Semanas no azul</span><strong>${winWeeks} de ${review.weeks.length}</strong><span class="muted small">${mood === 'happy' ? 'que trimestre!' : mood === 'sad' ? 'trimestre para esquecer' : 'trimestre honesto'}</span></div>
       </div>

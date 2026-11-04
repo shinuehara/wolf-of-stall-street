@@ -14,6 +14,8 @@ import {
 } from './data';
 import {
   acceptAscension,
+  acceptInvestor,
+  declineInvestor,
   buy,
   consult,
   endWeek,
@@ -40,7 +42,7 @@ import type { GameState } from './types';
 /** Most rules are tested with the market already open (after the opening quarter). */
 function newGame(seed: number): GameState {
   const state = freshGame(seed);
-  state.story = { chapter: 2, pending: null };
+  state.story = { chapter: 2, queue: [], announced: ['bakers', 'mines', 'apothecaries'] };
   return state;
 }
 
@@ -534,7 +536,8 @@ describe('monthly visitors', () => {
 describe('the opening quarter', () => {
   it('starts with the decree and only Crown bonds for sale', () => {
     const state = freshGame(3);
-    expect(state.story).toEqual({ chapter: 0, pending: 'intro' });
+    expect(state.story.chapter).toBe(0);
+    expect(state.story.queue).toEqual([{ id: 'intro' }]);
     expect(buy(state, 'bakers', 10).ok).toBe(false);
     expect(consult(state, 'spy', 'city').ok).toBe(false);
     expect(buy(state, BOND_LIQUID, 60).ok).toBe(true);
@@ -550,7 +553,8 @@ describe('the opening quarter', () => {
     const report = endWeek(state);
     expect(report.seasonReview?.season).toBe(1);
     expect(state.classIndex).toBe(0);
-    expect(state.story).toEqual({ chapter: 1, pending: 'influencer' });
+    expect(state.story.chapter).toBe(1);
+    expect(state.story.queue).toEqual([{ id: 'intro' }, { id: 'influencer' }]);
     sell(state, BOND_LIQUID, 20);
     expect(buy(state, 'bakers', 5).ok).toBe(true);
     expect(buy(state, 'bakers.royal', 5).ok).toBe(true);
@@ -558,7 +562,78 @@ describe('the opening quarter', () => {
     expect(buy(state, 'mines', 5).ok).toBe(false);
     for (let w = 0; w < SEASON_LENGTH; w++) endWeek(state);
     expect(state.story.chapter).toBe(2);
+    expect(state.story.queue.at(-1)).toEqual({ id: 'trend', guilds: ['mines', 'apothecaries'] });
     if (state.cash < 5) sell(state, BOND_LIQUID, 5);
     expect(buy(state, 'mines', 5).ok).toBe(true);
+  });
+});
+
+describe('investors', () => {
+  it('a good month brings deposits and a bad one withdrawals, kept apart from returns', () => {
+    const good = newGame(8);
+    good.monthStart = 80; // the fund "grew" 25% this month
+    for (let w = 0; w < MONTH_LENGTH; w++) endWeek(good);
+    const goodFlows = good.ledger.reduce((s, r) => s + r.flows, 0);
+    expect(goodFlows).toBeGreaterThan(0);
+
+    const bad = newGame(8);
+    bad.monthStart = 130;
+    for (let w = 0; w < MONTH_LENGTH; w++) endWeek(bad);
+    const badFlows = bad.ledger.reduce((s, r) => s + r.flows, 0);
+    expect(badFlows).toBeLessThan(0);
+    expect(badFlows).toBeGreaterThanOrEqual(-0.16 * 130);
+    for (const r of [...good.ledger, ...bad.ledger]) expect(Math.abs(r.other)).toBeLessThan(1e-6);
+  });
+
+  it('the opening quarter has no investor flows or offers', () => {
+    const state = freshGame(5);
+    buy(state, BOND_LIQUID, 100);
+    for (let w = 0; w < SEASON_LENGTH - 1; w++) endWeek(state);
+    expect(state.ledger.every((r) => r.flows === 0)).toBe(true);
+    expect(state.investorOffer).toBeNull();
+  });
+
+  it('accepting an offer adds to the fund; declining or waiting a week drops it', () => {
+    const state = newGame(2);
+    state.investorOffer = { kind: 'widow', amount: 15 };
+    expect(acceptInvestor(state).ok).toBe(true);
+    expect(wealth(state)).toBeCloseTo(115);
+    expect(state.riskyDeposits).toHaveLength(0);
+    state.investorOffer = { kind: 'abbot', amount: 20 };
+    expect(declineInvestor(state).ok).toBe(true);
+    expect(acceptInvestor(state).ok).toBe(false);
+  });
+
+  it('militia money is confiscated with a fine when traced', () => {
+    let caught = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const state = newGame(seed);
+      state.investorOffer = { kind: 'militia', amount: 35 };
+      acceptInvestor(state);
+      expect(state.riskyDeposits[0]?.dirty).toBe(true);
+      for (let w = 0; w < 12 && state.status === 'playing'; w++) {
+        const purse = state.purse;
+        const report = endWeek(state);
+        const hit = report.confiscations[0];
+        if (hit) {
+          caught++;
+          expect(hit.amount).toBeCloseTo(35);
+          expect(hit.fine).toBeGreaterThan(0);
+          expect(state.purse).toBeLessThan(purse);
+        }
+      }
+      expect(state.riskyDeposits).toHaveLength(0);
+    }
+    // 5% a week for 12 weeks: about 46% of the games
+    expect(caught).toBeGreaterThan(8);
+    expect(caught).toBeLessThan(32);
+  });
+
+  it('each guild opened by a promotion gets its own influencer video', () => {
+    const state = newGame(4);
+    state.ascensionOffer = true;
+    state.purse = 50;
+    acceptAscension(state);
+    expect(state.story.queue).toEqual([{ id: 'trend', guilds: ['changers', 'fair'] }]);
   });
 });

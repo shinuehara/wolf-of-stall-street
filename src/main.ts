@@ -1,6 +1,9 @@
 import './style.css';
 import {
   acceptAscension,
+  acceptInvestor,
+  declineInvestor,
+  finishStory,
   buy,
   buyPerk,
   buyItem,
@@ -61,7 +64,21 @@ function finishWeek(): void {
   ui.showReport = true;
   ui.galaStep = 0;
   if (ui.lastReport.visitorArrived) ui.visitorDismissed = false;
+  if (ui.lastReport.offerArrived) ui.offerDismissed = false;
+  // A short replay of the week before the report; any click skips it.
+  if (state.status === 'playing' && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    ui.timelapse = true;
+    const week = state.week;
+    setTimeout(() => {
+      if (ui.timelapse && state.week === week) {
+        ui.timelapse = false;
+        update();
+      }
+    }, TIMELAPSE_MS);
+  }
 }
+
+const TIMELAPSE_MS = 2300;
 
 root.addEventListener('click', (event) => {
   const target = (event.target as HTMLElement).closest<HTMLElement>('[data-action]');
@@ -84,18 +101,35 @@ root.addEventListener('click', (event) => {
       ui.storyStep += 1;
       break;
     case 'story-done': {
-      const finished = state.story.pending;
-      state.story.pending = null;
+      const finished = state.story.queue[0];
+      finishStory(state);
       ui.storyStep = 0;
-      if (finished === 'influencer') {
-        selectAsset('bakers');
-        ui.marketDetailOpen = false;
-      } else {
+      if (finished?.id === 'intro') {
         ui.selectedAsset = BOND_LIQUID;
+      } else {
+        const guild = finished?.id === 'trend' ? finished.guilds[0]! : 'bakers';
+        selectAsset(guild);
+        ui.expandedGuilds[guild] = true;
+        ui.marketDetailOpen = false;
       }
       go('market');
       break;
     }
+    case 'skip-timelapse':
+      ui.timelapse = false;
+      break;
+    case 'accept-investor':
+      report(acceptInvestor(state));
+      break;
+    case 'decline-investor':
+      report(declineInvestor(state));
+      break;
+    case 'dismiss-offer':
+      ui.offerDismissed = true;
+      break;
+    case 'open-offer':
+      ui.offerDismissed = false;
+      break;
     case 'gala-next':
       ui.galaStep = 1;
       break;
@@ -223,7 +257,12 @@ document.addEventListener('keydown', (event) => {
     }
     return;
   }
-  if (state.story.pending && !ui.showReport) return;
+  if (ui.timelapse) {
+    ui.timelapse = false;
+    update();
+    return;
+  }
+  if (state.story.queue.length > 0 && !ui.showReport) return;
   if (event.key === 'Escape' && ui.showReport) {
     ui.showReport = false;
     update();

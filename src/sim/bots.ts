@@ -132,7 +132,10 @@ export function playBot(seed: number, strategy: BotStrategy): BotResult {
     const classBefore = state.classIndex;
     endWeek(state);
     const record = state.ledger[before];
-    if (record) worstWeek = Math.min(worstWeek, (record.endWealth / record.startWealth - 1) * 100);
+    if (record) {
+      const change = (record.endWealth - record.flows) / record.startWealth - 1;
+      worstWeek = Math.min(worstWeek, change * 100);
+    }
     if (state.classIndex < classBefore) classDrops++;
     if (state.ascensionOffer) acceptAscension(state);
   }
@@ -144,7 +147,7 @@ export function playBot(seed: number, strategy: BotStrategy): BotResult {
     classIndex: state.classIndex,
     classDrops,
     worstWeek,
-    avgWeek: pctOf((r) => r.endWealth - r.startWealth),
+    avgWeek: pctOf((r) => r.endWealth - r.flows - r.startWealth),
     avgMarket: pctOf((r) => r.marketPnl),
     avgOther: pctOf((r) => r.other),
   };
