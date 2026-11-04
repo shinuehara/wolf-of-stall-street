@@ -12,7 +12,7 @@ import {
   type ActionResult,
   fmt,
 } from './sim/game';
-import { assetName, guildOfAsset, isBasket } from './sim/assets';
+import { assetName, guildOfAsset, isBasket, isBond } from './sim/assets';
 import type { ExpertId, GameState } from './sim/types';
 import { SCREENS, initialUi, render, type Screen } from './ui/render';
 import { clearGame, loadGame, saveGame } from './ui/storage';
@@ -39,7 +39,7 @@ function selectAsset(assetId: string): void {
   ui.selectedAsset = assetId;
   ui.marketDetailOpen = true;
   // Picking a company opens its guild so it stays visible in the list.
-  if (!isBasket(assetId)) ui.expandedGuilds[guildOfAsset(assetId).id] = true;
+  if (!isBasket(assetId) && !isBond(assetId)) ui.expandedGuilds[guildOfAsset(assetId).id] = true;
 }
 
 function go(screen: Screen): void {

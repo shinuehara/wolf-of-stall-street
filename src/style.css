@@ -1939,3 +1939,13 @@ img.sprite,
 .chart-area {
   opacity: 0.1;
 }
+
+/* Crown bonds at the top of the market list */
+.crown-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px;
+  border: 2px solid var(--gold);
+  margin-bottom: 4px;
+}

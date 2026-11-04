@@ -32,8 +32,15 @@ Pilares:
 
 ### Títulos da Coroa (renda fixa)
 
-Todo florim livre (não investido em guildas) rende automaticamente uma taxa semanal baixa
-(0,20% para Servo até 0,50% para Barão).
+**Ouro parado não rende.** Para render, o jogador compra Títulos da Coroa no Mercado:
+
+| Título         | Rendimento semanal                            | Liquidez                                                                |
+| -------------- | --------------------------------------------- | ----------------------------------------------------------------------- |
+| Coroa (livre)  | taxa da classe: 0,20% (Servo) a 0,50% (Barão) | compra e venda a qualquer momento                                       |
+| Coroa (4 sem.) | 2× a taxa da classe, fixa na compra           | preso por 4 semanas; no vencimento volta sozinho para os florins livres |
+
+O título preso conta no patrimônio para a avaliação da estação, mas **não** pode ser vendido
+para pagar contas nem para comprar um título de nobreza. É a troca entre rendimento e liquidez.
 
 ### Guildas, empresas e cestas (ações)
 

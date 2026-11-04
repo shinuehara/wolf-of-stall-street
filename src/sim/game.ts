@@ -1,5 +1,6 @@
 import {
   ASTROLOGER_ACCURACY,
+  BOND_LOCK_WEEKS,
   CITY,
   CITY_NEWS,
   COMPANIES,
@@ -30,6 +31,10 @@ import {
 } from './data';
 import {
   ASSET_IDS,
+  BOND_LIQUID,
+  BOND_LOCKED,
+  bondRate,
+  isBond,
   assetRange,
   assetStartPrice,
   companyMove,
@@ -151,7 +156,7 @@ function cityProfile(state: GameState): { drift: number; width: number } {
 
 export function newGame(seed: number = Date.now() >>> 0): GameState {
   const state: GameState = {
-    version: 4,
+    version: 5,
     seed,
     rngState: seed,
     week: 0,
@@ -171,6 +176,7 @@ export function newGame(seed: number = Date.now() >>> 0): GameState {
     events: [],
     companyEvents: [],
     localNews: [],
+    lockedBonds: [],
     ledger: [],
     assetPnl: {},
     ascensionOffer: false,
@@ -195,8 +201,17 @@ export function invested(state: GameState): number {
   return Object.values(state.positions).reduce((sum, p) => sum + p.value, 0);
 }
 
-export function wealth(state: GameState): number {
+export function lockedValue(state: GameState): number {
+  return state.lockedBonds.reduce((sum, b) => sum + b.value, 0);
+}
+
+/** Everything that can be turned into cash this week (locked bonds excluded). */
+export function liquidWealth(state: GameState): number {
   return state.cash + invested(state);
+}
+
+export function wealth(state: GameState): number {
+  return liquidWealth(state) + lockedValue(state);
 }
 
 export function season(state: GameState): number {
@@ -212,7 +227,7 @@ export function isGuildUnlocked(state: GameState, guild: GuildDef): boolean {
 }
 
 export function isAssetUnlocked(state: GameState, assetId: string): boolean {
-  return isGuildUnlocked(state, guildOfAsset(assetId));
+  return isBond(assetId) || isGuildUnlocked(state, guildOfAsset(assetId));
 }
 
 export function expertCost(state: GameState, expertId: ExpertId): number {
@@ -247,14 +262,27 @@ export function isTargetUnlocked(state: GameState, targetId: string): boolean {
 
 export function buy(state: GameState, assetId: string, amount: number): ActionResult {
   if (state.status !== 'playing') return fail('O jogo terminou.');
-  const guild = guildOfAsset(assetId);
-  if (!isGuildUnlocked(state, guild)) {
-    return fail(`Só a partir de ${getClass(guild.minClass).name} se negocia com a ${guild.name}.`);
+  if (!isBond(assetId)) {
+    const guild = guildOfAsset(assetId);
+    if (!isGuildUnlocked(state, guild)) {
+      return fail(
+        `Só a partir de ${getClass(guild.minClass).name} se negocia com a ${guild.name}.`,
+      );
+    }
   }
   if (!(amount > 0)) return fail('Informe um valor positivo.');
   if (amount > state.cash + 1e-9) return fail('Você não tem tantos florins livres.');
   amount = Math.min(amount, state.cash);
   state.cash -= amount;
+  if (assetId === BOND_LOCKED) {
+    state.lockedBonds.push({
+      value: amount,
+      cost: amount,
+      rate: bondRate(state, BOND_LOCKED),
+      maturesWeek: state.week + BOND_LOCK_WEEKS,
+    });
+    return ok;
+  }
   const position = (state.positions[assetId] ??= { value: 0, cost: 0, hedged: false });
   position.value += amount;
   position.cost += amount;
@@ -263,6 +291,9 @@ export function buy(state: GameState, assetId: string, amount: number): ActionRe
 
 export function sell(state: GameState, assetId: string, amount: number): ActionResult {
   if (state.status !== 'playing') return fail('O jogo terminou.');
+  if (assetId === BOND_LOCKED) {
+    return fail('Títulos de 4 semanas ficam presos até o vencimento; o ouro volta sozinho.');
+  }
   const position = state.positions[assetId];
   if (!position || position.value <= 0) return fail('Você não tem cotas disso.');
   if (!(amount > 0)) return fail('Informe um valor positivo.');
@@ -286,6 +317,9 @@ export function quickTrade(state: GameState, assetId: string, share: number): Qu
     const result = buy(state, assetId, amount);
     return result.ok ? { ok: true, amount } : result;
   }
+  if (assetId === BOND_LOCKED) {
+    return fail('Títulos de 4 semanas ficam presos até o vencimento; o ouro volta sozinho.');
+  }
   const position = state.positions[assetId];
   if (!position) return fail('Você não tem cotas disso.');
   const amount = share <= -1 ? position.value : Math.min(wealth(state) * -share, position.value);
@@ -295,6 +329,8 @@ export function quickTrade(state: GameState, assetId: string, share: number): Qu
 
 export function setHedge(state: GameState, assetId: string, hedged: boolean): ActionResult {
   if (state.status !== 'playing') return fail('O jogo terminou.');
+  if (isBond(assetId))
+    return fail('Títulos da Coroa não precisam de seguro: o rendimento é garantido.');
   const position = state.positions[assetId];
   if (!position) return fail('Só dá para segurar uma posição que você tem.');
   position.hedged = hedged;
@@ -332,7 +368,11 @@ export function consult(state: GameState, expertId: ExpertId, targetId: string):
 export function acceptAscension(state: GameState): ActionResult {
   if (!state.ascensionOffer) return fail('Não há título à venda para você agora.');
   const cls = currentClass(state);
-  if (wealth(state) < cls.ascensionFee) return fail('Você não tem florins para pagar o título.');
+  if (liquidWealth(state) < cls.ascensionFee) {
+    return fail(
+      'Você não tem florins disponíveis para pagar o título (títulos presos não contam).',
+    );
+  }
   raiseCash(state, cls.ascensionFee);
   state.cash -= cls.ascensionFee;
   state.classIndex += 1;
@@ -388,6 +428,7 @@ export function endWeek(state: GameState): WeekReport {
   report.factorMoves = sampled.factors;
 
   for (const [assetId, position] of Object.entries(state.positions)) {
+    if (isBond(assetId)) continue;
     const raw = moves[assetId] ?? 0;
     const applied = position.hedged ? applyHedge(assetRange(state, assetId), raw) : raw;
     const pnl = position.value * (applied / 100);
@@ -407,10 +448,30 @@ export function endWeek(state: GameState): WeekReport {
     indicator.history.push(indicator.value);
   }
 
-  // 3. Idle gold earns Crown bond interest; then the bills come.
-  if (state.cash > 0) {
-    report.bondIncome = state.cash * cls.bondRate;
-    state.cash += report.bondIncome;
+  // 3. Crown bonds pay their interest (idle gold earns nothing); then the bills come.
+  const liquidBond = state.positions[BOND_LIQUID];
+  if (liquidBond) {
+    const interest = liquidBond.value * bondRate(state, BOND_LIQUID);
+    liquidBond.value += interest;
+    report.bondIncome += interest;
+    state.assetPnl[BOND_LIQUID] = (state.assetPnl[BOND_LIQUID] ?? 0) + interest;
+  }
+  for (const lot of state.lockedBonds) {
+    const interest = lot.value * lot.rate;
+    lot.value += interest;
+    report.bondIncome += interest;
+    state.assetPnl[BOND_LOCKED] = (state.assetPnl[BOND_LOCKED] ?? 0) + interest;
+  }
+  const matured = state.lockedBonds.filter((b) => b.maturesWeek <= state.week + 1);
+  if (matured.length > 0) {
+    const total = matured.reduce((sum, b) => sum + b.value, 0);
+    state.cash += total;
+    state.lockedBonds = state.lockedBonds.filter((b) => b.maturesWeek > state.week + 1);
+    log(
+      state,
+      `Títulos da Coroa venceram: ${fmt(total)} florins voltaram para o seu bolso.`,
+      'good',
+    );
   }
   state.cash -= cls.livingCost;
   if (state.cash < 0) {

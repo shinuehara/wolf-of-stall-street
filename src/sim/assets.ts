@@ -1,5 +1,7 @@
 import {
+  BOND_LOCK_MULTIPLIER,
   GUILDS,
+  getClass,
   LOCAL_DEMAND,
   companiesOf,
   getCompany,
@@ -35,6 +37,21 @@ export interface Exposure {
   weight: number;
 }
 
+/** Crown bond you can buy and sell any week. */
+export const BOND_LIQUID = 'crown.liquid';
+/** Crown bond locked for BOND_LOCK_WEEKS weeks at a higher rate. */
+export const BOND_LOCKED = 'crown.locked';
+
+export function isBond(assetId: string): boolean {
+  return assetId === BOND_LIQUID || assetId === BOND_LOCKED;
+}
+
+/** Weekly rate of a Crown bond for the player's class (0.002 = 0.2%). */
+export function bondRate(state: GameState, assetId: string): number {
+  const base = getClass(state.classIndex).bondRate;
+  return assetId === BOND_LOCKED ? base * BOND_LOCK_MULTIPLIER : base;
+}
+
 export function isBasket(assetId: string): boolean {
   return GUILDS.some((g) => g.id === assetId);
 }
@@ -49,6 +66,8 @@ export function componentsOf(assetId: string): CompanyDef[] {
 }
 
 export function assetName(assetId: string): string {
+  if (assetId === BOND_LIQUID) return 'Título da Coroa (livre)';
+  if (assetId === BOND_LOCKED) return 'Título da Coroa (4 sem.)';
   return isBasket(assetId) ? `Cesta ${getGuild(assetId).short}` : getCompany(assetId).name;
 }
 
@@ -83,6 +102,10 @@ export function factorForecast(state: GameState, factorId: FactorId): Forecast {
 
 /** The public range of this week's return for an asset, as announced by the herald. */
 export function assetRange(state: GameState, assetId: string): Range {
+  if (isBond(assetId)) {
+    const r = bondRate(state, assetId) * 100;
+    return { low: r, high: r };
+  }
   const parts = componentsOf(assetId).map((c) =>
     companyExposures(c).reduce(
       (acc, { factorId, weight }) => {
@@ -100,6 +123,7 @@ export function assetRange(state: GameState, assetId: string): Range {
 
 /** The true expected return (uses hidden information; for bots and tests). */
 export function assetExpectedReturn(state: GameState, assetId: string): number {
+  if (isBond(assetId)) return bondRate(state, assetId) * 100;
   const parts = componentsOf(assetId).map((c) =>
     companyExposures(c).reduce(
       (sum, { factorId, weight }) => sum + weight * expectedReturn(factorForecast(state, factorId)),

@@ -153,6 +153,16 @@ export interface Position {
   hedged: boolean;
 }
 
+/** A Crown bond lot locked until it matures. Its gold returns to free cash at maturity. */
+export interface LockedBond {
+  value: number;
+  cost: number;
+  /** Weekly rate fixed at purchase (0.004 = 0.4%). */
+  rate: number;
+  /** Week number at whose end the lot pays out. */
+  maturesWeek: number;
+}
+
 /** One line of the weekly ledger: how wealth changed in a finished week. */
 export interface WeekRecord {
   /** Week number that just ended (1 = first week). */
@@ -194,7 +204,7 @@ export interface LogEntry {
 export type GameStatus = 'playing' | 'won' | 'lost';
 
 export interface GameState {
-  version: 4;
+  version: 5;
   seed: number;
   rngState: number;
   /** Weeks elapsed. A season is SEASON_LENGTH weeks. */
@@ -223,6 +233,8 @@ export interface GameState {
   events: ActiveEvent[];
   companyEvents: ActiveCompanyEvent[];
   localNews: ActiveLocalNews[];
+  /** Crown bonds locked until maturity (the liquid bond is a normal position). */
+  lockedBonds: LockedBond[];
   /** One record per finished week, oldest first. */
   ledger: WeekRecord[];
   /** Lifetime gains and losses per asset, in gold. */

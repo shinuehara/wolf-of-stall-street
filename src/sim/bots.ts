@@ -1,5 +1,5 @@
 import { GUILDS, companiesOf } from './data';
-import { assetExpectedReturn, assetRange } from './assets';
+import { BOND_LIQUID, assetExpectedReturn, assetRange } from './assets';
 import { acceptAscension, buy, consult, endWeek, isGuildUnlocked, newGame, sell } from './game';
 import type { GameState, Insight } from './types';
 
@@ -71,6 +71,8 @@ export function playBot(seed: number, strategy: BotStrategy): BotResult {
       .slice(0, strategy === 'naive' ? 3 : 1);
     const budget = state.cash * 0.9;
     for (const [id] of picks) buy(state, id, budget / picks.length);
+    // Idle gold earns nothing: park the rest in the liquid Crown bond.
+    if (state.cash > 1) buy(state, BOND_LIQUID, state.cash - 1);
 
     endWeek(state);
     if (state.ascensionOffer) acceptAscension(state);

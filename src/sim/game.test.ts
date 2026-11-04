@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { CLASSES, SEASON_LENGTH, STARTING_GOLD, TOP_CLASS } from './data';
+import {
+  BOND_LOCK_MULTIPLIER,
+  BOND_LOCK_WEEKS,
+  CLASSES,
+  SEASON_LENGTH,
+  STARTING_GOLD,
+  TOP_CLASS,
+} from './data';
 import {
   acceptAscension,
   buy,
@@ -13,6 +20,7 @@ import {
   setHedge,
   wealth,
 } from './game';
+import { BOND_LIQUID, BOND_LOCKED } from './assets';
 import { assetRange, companyExposures } from './assets';
 import { getCompany } from './data';
 
@@ -172,12 +180,43 @@ describe('experts', () => {
 });
 
 describe('endWeek', () => {
-  it('pays bond interest on idle gold and charges living cost', () => {
+  it('idle gold earns nothing; the liquid Crown bond pays the class rate', () => {
     const state = newGame(3);
-    endWeek(state);
     const serf = CLASSES[0]!;
-    expect(state.cash).toBeCloseTo(100 * (1 + serf.bondRate) - serf.livingCost);
+    buy(state, BOND_LIQUID, 60);
+    const report = endWeek(state);
+    expect(state.cash).toBeCloseTo(40 - serf.livingCost);
+    expect(state.positions[BOND_LIQUID]!.value).toBeCloseTo(60 * (1 + serf.bondRate));
+    expect(report.bondIncome).toBeCloseTo(60 * serf.bondRate);
     expect(state.week).toBe(1);
+    // It can be sold any week.
+    expect(sell(state, BOND_LIQUID, Infinity).ok).toBe(true);
+  });
+
+  it('a locked Crown bond pays double, cannot be sold and returns to cash at maturity', () => {
+    const state = newGame(3);
+    const serf = CLASSES[0]!;
+    expect(buy(state, BOND_LOCKED, 50).ok).toBe(true);
+    expect(state.lockedBonds).toHaveLength(1);
+    expect(state.lockedBonds[0]!.maturesWeek).toBe(BOND_LOCK_WEEKS);
+    expect(sell(state, BOND_LOCKED, 10).ok).toBe(false);
+    expect(quickTrade(state, BOND_LOCKED, -1).ok).toBe(false);
+    expect(setHedge(state, BOND_LIQUID, true).ok).toBe(false);
+    expect(wealth(state)).toBeCloseTo(100);
+    for (let i = 0; i < BOND_LOCK_WEEKS - 1; i++) endWeek(state);
+    expect(state.lockedBonds).toHaveLength(1);
+    endWeek(state);
+    expect(state.lockedBonds).toHaveLength(0);
+    const grown = 50 * (1 + serf.bondRate * BOND_LOCK_MULTIPLIER) ** BOND_LOCK_WEEKS;
+    expect(state.cash).toBeCloseTo(50 + grown - serf.livingCost * BOND_LOCK_WEEKS);
+  });
+
+  it('locked bonds count for the season review but not for paying a title', () => {
+    const state = newGame(3);
+    buy(state, BOND_LOCKED, 100);
+    state.lockedBonds[0]!.value = 200;
+    state.ascensionOffer = true;
+    expect(acceptAscension(state).ok).toBe(false);
   });
 
   it('insured positions never move beyond the insured range', () => {

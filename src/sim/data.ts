@@ -19,6 +19,9 @@ export const ASTROLOGER_ACCURACY = 0.75;
 export const DRUNK_ACCURACY = 0.5;
 export const MAX_COMPANY_EVENTS = 3;
 export const COMPANY_EVENT_CHANCE = 0.4;
+/** Crown bonds: the locked one pays this many times the class rate, for LOCK_WEEKS weeks. */
+export const BOND_LOCK_WEEKS = 4;
+export const BOND_LOCK_MULTIPLIER = 2;
 export const MAX_LOCAL_NEWS = 2;
 export const LOCAL_NEWS_CHANCE = 0.3;
 

@@ -1,4 +1,6 @@
 import {
+  BOND_LOCK_MULTIPLIER,
+  BOND_LOCK_WEEKS,
   CITY,
   CLASSES,
   EXPERTS,
@@ -17,8 +19,12 @@ import {
   isRegionId,
 } from '../sim/data';
 import {
+  BOND_LIQUID,
+  BOND_LOCKED,
   assetName,
   assetRange,
+  bondRate,
+  isBond,
   companyExposures,
   componentsOf,
   factorForecast,
@@ -167,6 +173,7 @@ const SCALE = 25;
 const CHART_WEEKS = 40;
 
 function assetSprite(assetId: string): SpriteName {
+  if (isBond(assetId)) return 'crown';
   return GUILD_SPRITE[guildOfAsset(assetId).id]!;
 }
 
@@ -389,13 +396,13 @@ function renderSquare(state: GameState, ui: UiState): string {
                <li><span>Custo de vida</span><span class="down">${signed(-report.livingCost)}</span></li>
              </ul>`
           : `<p>Você chegou à cidade com <strong class="gold">100 florins</strong> e um sonho: virar <strong>Conde</strong>.</p>
-             <p class="muted">No <strong>Mercado</strong>, compre a cesta de uma guilda ou aposte numa empresa. Na <strong>Taverna</strong>, ouça rumores. Depois, encerre a semana.</p>`
+             <p class="muted">Ouro parado não rende. No <strong>Mercado</strong>, estacione nos Títulos da Coroa, compre a cesta de uma guilda ou aposte numa empresa. Na <strong>Taverna</strong>, ouça rumores. Depois, encerre a semana.</p>`
       }
     </article>
     <article class="card px">
       <h2>${sprite('castle', 20)} A estação</h2>
       <p>${verdict}</p>
-      <p class="muted small">Florins livres rendem ${pct(cls.bondRate * 100, 2)} por semana nos Títulos da Coroa. Seu custo de vida é ${fmt(cls.livingCost)} fl por semana.</p>
+      <p class="muted small">Ouro parado não rende. No Mercado, os Títulos da Coroa pagam ${pct(cls.bondRate * 100, 2)} por semana (livre) ou ${pct(cls.bondRate * BOND_LOCK_MULTIPLIER * 100, 2)} (preso ${BOND_LOCK_WEEKS} semanas). Seu custo de vida é ${fmt(cls.livingCost)} fl por semana.</p>
     </article>
   </div>
   <div class="travel">
@@ -532,10 +539,33 @@ function renderGuildEntry(state: GameState, guildId: string): string {
 function renderMarket(state: GameState, ui: UiState): string {
   return `<div class="market ${ui.marketDetailOpen ? 'detail-open' : ''}">
     <ul class="guild-list px" aria-label="Guildas e empresas">
+      ${renderCrownGroup(state, ui)}
       ${GUILDS.map((g) => renderGuildGroup(state, ui, g)).join('')}
     </ul>
     <article class="guild-detail px">${renderAssetDetail(state, ui, ui.selectedAsset)}</article>
   </div>`;
+}
+
+function renderCrownGroup(state: GameState, ui: UiState): string {
+  const lockedTotal = state.lockedBonds.reduce((sum, b) => sum + b.value, 0);
+  const row = (
+    id: string,
+    label: string,
+    held: number,
+  ) => `<div class="asset-item ${ui.selectedAsset === id ? 'selected' : ''}">
+      <span class="toggle-spacer"></span>
+      <button class="guild-row" data-action="select-asset" data-asset="${id}">
+        ${sprite('crown', 28)}
+        <span class="row-name">${label}</span>
+        <span class="row-range gold">${pct(bondRate(state, id) * 100, 2)} por semana</span>
+        <span class="row-pos ${held ? 'gold' : 'muted'}">${held ? `${fmt(held)} fl` : '—'}</span>
+      </button>
+      ${quickBar(state, id)}
+    </div>`;
+  return `<li class="crown-group">
+    ${row(BOND_LIQUID, 'Coroa <span class="muted small">(livre)</span>', state.positions[BOND_LIQUID]?.value ?? 0)}
+    ${row(BOND_LOCKED, `Coroa <span class="muted small">(${BOND_LOCK_WEEKS} sem.)</span>`, lockedTotal)}
+  </li>`;
 }
 
 function renderGuildGroup(state: GameState, ui: UiState, guild: GuildDef): string {
@@ -595,7 +625,7 @@ const QUICK_SHARES: [share: number, label: string][] = [
 function quickBar(state: GameState, assetId: string): string {
   const playing = state.status === 'playing';
   const canBuy = playing && state.cash > 0.005;
-  const canSell = playing && Boolean(state.positions[assetId]);
+  const canSell = playing && assetId !== BOND_LOCKED && Boolean(state.positions[assetId]);
   const name = assetName(assetId);
   return `<div class="quick" role="group" aria-label="Compra e venda rápida: ${esc(name)}">
     ${QUICK_SHARES.map(([share, label]) => {
@@ -614,7 +644,72 @@ function quickBar(state: GameState, assetId: string): string {
   </div>`;
 }
 
+function renderBondDetail(state: GameState, ui: UiState, assetId: string): string {
+  const locked = assetId === BOND_LOCKED;
+  const rate = bondRate(state, assetId);
+  const playing = state.status === 'playing';
+  const position = state.positions[assetId];
+  const held = locked ? state.lockedBonds.reduce((s, b) => s + b.value, 0) : (position?.value ?? 0);
+  const weekly = locked ? state.lockedBonds.reduce((s, b) => s + b.value * b.rate, 0) : held * rate;
+  const back = `<button class="pbtn pbtn-small back-btn" data-action="close-detail">◀ Guildas</button>`;
+  const lots = [...state.lockedBonds].sort((a, b) => a.maturesWeek - b.maturesWeek);
+  return `${back}
+    <header class="detail-head">
+      ${sprite('crown', 48)}
+      <div class="detail-title">
+        <h2>${assetName(assetId)}</h2>
+        <span class="muted small">Empréstimo à Coroa de ${CITY.name}: rendimento garantido, sem surpresas</span>
+      </div>
+      <div class="detail-price"><strong class="gold">${pct(rate * 100, 2)}</strong><span class="muted small">por semana</span></div>
+    </header>
+    <div class="detail-grid">
+      <div class="detail-main">
+        <p>${
+          locked
+            ? `Rende <strong>${BOND_LOCK_MULTIPLIER}×</strong> o título livre, mas o ouro fica <strong>preso por ${BOND_LOCK_WEEKS} semanas</strong>. A taxa fica fixa na compra e, no vencimento, o valor volta sozinho para os seus florins livres.`
+            : 'Rende a taxa da sua classe toda semana. Compre e venda quando quiser: é o lugar para estacionar o ouro entre uma aposta e outra.'
+        }</p>
+        <p class="muted small">Florins livres parados não rendem nada. A taxa sobe conforme você sobe na escada social.</p>
+        <ul class="ledger">
+          <li><span>Você tem aqui</span><span class="gold">${fmt(held)} fl</span></li>
+          <li><span>Rendimento previsto nesta semana</span><span class="up">+${weekly.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} fl</span></li>
+          ${locked ? '' : `<li><span>Rendimento do título preso</span><span>${pct(bondRate(state, BOND_LOCKED) * 100, 2)}/sem</span></li>`}
+        </ul>
+        ${
+          locked
+            ? lots.length
+              ? `<h3>Seus lotes</h3><ul class="ledger">${lots
+                  .map(
+                    (b) =>
+                      `<li><span>${fmt(b.value)} fl a ${pct(b.rate * 100, 2)}/sem</span><span>vence na semana ${b.maturesWeek}${b.maturesWeek - state.week <= 1 ? ' (esta semana)' : ` (faltam ${b.maturesWeek - state.week})`}</span></li>`,
+                  )
+                  .join('')}</ul>`
+              : '<p class="muted small">Você não tem lotes presos.</p>'
+            : ''
+        }
+      </div>
+      <div class="detail-side">
+        <div class="trade-box">
+          <div class="trade">
+            <input id="amount-${assetId}" type="number" inputmode="decimal" min="0" step="1" placeholder="florins"
+              aria-label="Valor em florins" data-amount="${assetId}" value="${esc(ui.amounts[assetId] ?? '')}" ${playing ? '' : 'disabled'} />
+          </div>
+          <div class="trade">
+            <button class="pbtn pbtn-small" data-action="fill" data-fraction="0.25" data-asset="${assetId}" ${playing ? '' : 'disabled'}>25%</button>
+            <button class="pbtn pbtn-small" data-action="fill" data-fraction="0.5" data-asset="${assetId}" ${playing ? '' : 'disabled'}>50%</button>
+            <button class="pbtn pbtn-small" data-action="fill" data-fraction="1" data-asset="${assetId}" ${playing ? '' : 'disabled'}>Tudo</button>
+          </div>
+          <div class="trade">
+            <button class="pbtn pbtn-buy" data-action="buy" data-asset="${assetId}" ${playing ? '' : 'disabled'}>${locked ? `Prender por ${BOND_LOCK_WEEKS} sem.` : 'Comprar'}</button>
+            ${locked ? '' : `<button class="pbtn pbtn-sell" data-action="sell" data-asset="${assetId}" ${playing && position ? '' : 'disabled'}>Vender</button>`}
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
 function renderAssetDetail(state: GameState, ui: UiState, assetId: string): string {
+  if (isBond(assetId)) return renderBondDetail(state, ui, assetId);
   const guild = guildOfAsset(assetId);
   const basket = isBasket(assetId);
   const company = basket ? null : getCompany(assetId);
@@ -948,26 +1043,66 @@ function statTile(label: string, value: string, sub = '', toneClass = ''): strin
   return `<div class="tile px"><span class="hud-label">${label}</span><strong class="tile-value ${toneClass}">${value}</strong>${sub ? `<span class="muted small">${sub}</span>` : ''}</div>`;
 }
 
+interface Holding {
+  id: string;
+  name: string;
+  where: string;
+  value: number;
+  cost: number;
+  range: string;
+  hedged: boolean;
+}
+
+function holdings(state: GameState): Holding[] {
+  const fromPositions = Object.entries(state.positions).map(([id, p]) => {
+    const r = assetRange(state, id);
+    const company = isBond(id) || isBasket(id) ? null : getCompany(id);
+    return {
+      id,
+      name: assetName(id),
+      where: isBond(id)
+        ? '<span class="muted small">Coroa</span>'
+        : company
+          ? `<span class="standing standing-${company.regionId}">${getRegion(company.regionId).name}</span>`
+          : '<span class="muted small">cesta</span>',
+      value: p.value,
+      cost: p.cost,
+      range: isBond(id) ? `${pct(r.low, 2)} fixo` : `${pct(r.low, 0)} a ${pct(r.high, 0)}`,
+      hedged: p.hedged,
+    };
+  });
+  const lots = state.lockedBonds.map((b) => ({
+    id: BOND_LOCKED,
+    name: `Título da Coroa · vence sem. ${b.maturesWeek}`,
+    where: '<span class="muted small">Coroa (preso)</span>',
+    value: b.value,
+    cost: b.cost,
+    range: `${pct(b.rate * 100, 2)} fixo`,
+    hedged: false,
+  }));
+  return [...fromPositions, ...lots].sort((a, b) => b.value - a.value);
+}
+
 function renderPositions(state: GameState): string {
   const total = wealth(state);
-  const entries = Object.entries(state.positions).sort((a, b) => b[1].value - a[1].value);
-  const investedTotal = entries.reduce((s, [, p]) => s + p.value, 0);
-  const costTotal = entries.reduce((s, [, p]) => s + p.cost, 0);
+  const entries = holdings(state);
+  const investedTotal = entries.reduce((s, h) => s + h.value, 0);
+  const costTotal = entries.reduce((s, h) => s + h.cost, 0);
   const openGain = investedTotal - costTotal;
   const share = (v: number) => (total > 0 ? (v / total) * 100 : 0);
 
   const tiles = `<div class="tiles">
     ${statTile('Patrimônio', `${fmt(total)} fl`)}
-    ${statTile('Em cotas', `${fmt(investedTotal)} fl`, `${whole(share(investedTotal))}% do patrimônio`)}
-    ${statTile('Livres', `${fmt(state.cash)} fl`, `${whole(share(state.cash))}% · rendem nos Títulos da Coroa`)}
+    ${statTile('Aplicado', `${fmt(investedTotal)} fl`, `${whole(share(investedTotal))}% · cotas e Títulos da Coroa`)}
+    ${statTile('Livres', `${fmt(state.cash)} fl`, `${whole(share(state.cash))}% · parados, não rendem`)}
     ${statTile('Ganho em aberto', `${signed(openGain)} fl`, costTotal > 0 ? pct((openGain / costTotal) * 100) + ' sobre o custo' : 'sem posições', tone(openGain))}
   </div>`;
 
   const bar = `<div class="alloc px" aria-label="Distribuição do patrimônio">
     ${entries
       .map(
-        ([id, p], i) =>
-          `<span class="alloc-seg" style="width:${share(p.value)}%;background:${ALLOC_COLORS[i % ALLOC_COLORS.length]}" title="${esc(assetName(id))}: ${whole(share(p.value))}%"></span>`,
+        (h, i) =>
+          `<span class="alloc-seg" style="width:${share(h.value)}%;background:${ALLOC_COLORS[i % ALLOC_COLORS.length]}" title="${esc(h.name)}: ${whole(share(h.value))}%"></span>`,
       )
       .join('')}
     <span class="alloc-seg alloc-free" style="width:${share(state.cash)}%" title="Livres: ${whole(share(state.cash))}%"></span>
@@ -975,28 +1110,26 @@ function renderPositions(state: GameState): string {
 
   if (entries.length === 0) {
     return `${tiles}${bar}<div class="card px empty-state">
-      <p>Você não tem cotas de nada. Todo o seu ouro está livre, rendendo nos Títulos da Coroa.</p>
+      <p>Você não tem nada aplicado. Ouro parado não rende: no Mercado há cotas de guildas e os Títulos da Coroa.</p>
       <button class="pbtn" data-action="go" data-screen="market">Ir ao Mercado</button>
     </div>`;
   }
 
   const rows = entries
-    .map(([id, p], i) => {
-      const gain = p.value - p.cost;
-      const r = assetRange(state, id);
-      const company = isBasket(id) ? null : getCompany(id);
+    .map((h, i) => {
+      const gain = h.value - h.cost;
       return `<tr>
-        <td><button class="linkish asset-link" data-action="open-asset" data-asset="${id}">
+        <td><button class="linkish asset-link" data-action="open-asset" data-asset="${h.id}">
           <span class="swatch" style="background:${ALLOC_COLORS[i % ALLOC_COLORS.length]}"></span>
-          ${sprite(assetSprite(id), 16)} ${assetName(id)}</button></td>
-        <td>${company ? `<span class="standing standing-${company.regionId}">${getRegion(company.regionId).name}</span>` : '<span class="muted small">cesta</span>'}</td>
-        <td class="num">${fmt(p.value)}</td>
-        <td class="num muted">${fmt(p.cost)}</td>
+          ${sprite(assetSprite(h.id), 16)} ${h.name}</button></td>
+        <td>${h.where}</td>
+        <td class="num">${fmt(h.value)}</td>
+        <td class="num muted">${fmt(h.cost)}</td>
         <td class="num ${tone(gain)}">${signed(gain)}</td>
-        <td class="num ${tone(gain)}">${p.cost > 0 ? pct((gain / p.cost) * 100) : '—'}</td>
-        <td class="num">${whole(share(p.value))}%</td>
-        <td class="num muted">${pct(r.low, 0)} a ${pct(r.high, 0)}</td>
-        <td>${p.hedged ? '🛡 sim' : '<span class="muted">não</span>'}</td>
+        <td class="num ${tone(gain)}">${h.cost > 0 ? pct((gain / h.cost) * 100) : '—'}</td>
+        <td class="num">${whole(share(h.value))}%</td>
+        <td class="num muted">${h.range}</td>
+        <td>${h.hedged ? '🛡 sim' : '<span class="muted">não</span>'}</td>
       </tr>`;
     })
     .join('');
@@ -1004,9 +1137,9 @@ function renderPositions(state: GameState): string {
   return `${tiles}${bar}
     <div class="table-wrap px">
       <table class="ptable">
-        <thead><tr><th>Ativo</th><th>Bairro</th><th class="num">Valor</th><th class="num">Custo</th><th class="num">Ganho</th><th class="num">%</th><th class="num">Peso</th><th class="num">Faixa da semana</th><th>Seguro</th></tr></thead>
+        <thead><tr><th>Ativo</th><th>Onde</th><th class="num">Valor</th><th class="num">Custo</th><th class="num">Ganho</th><th class="num">%</th><th class="num">Peso</th><th class="num">Faixa da semana</th><th>Seguro</th></tr></thead>
         <tbody>${rows}</tbody>
-        <tfoot><tr><td>Total em cotas</td><td></td><td class="num">${fmt(investedTotal)}</td><td class="num muted">${fmt(costTotal)}</td><td class="num ${tone(openGain)}">${signed(openGain)}</td><td class="num ${tone(openGain)}">${costTotal > 0 ? pct((openGain / costTotal) * 100) : '—'}</td><td class="num">${whole(share(investedTotal))}%</td><td></td><td></td></tr></tfoot>
+        <tfoot><tr><td>Total aplicado</td><td></td><td class="num">${fmt(investedTotal)}</td><td class="num muted">${fmt(costTotal)}</td><td class="num ${tone(openGain)}">${signed(openGain)}</td><td class="num ${tone(openGain)}">${costTotal > 0 ? pct((openGain / costTotal) * 100) : '—'}</td><td class="num">${whole(share(investedTotal))}%</td><td></td><td></td></tr></tfoot>
       </table>
     </div>`;
 }
@@ -1204,7 +1337,8 @@ function renderCastle(state: GameState, ui: UiState): string {
       }
       <ul class="ledger">
         <li><span>Custo de vida</span><span>${fmt(cls.livingCost)} fl/sem</span></li>
-        <li><span>Juros da Coroa</span><span>${pct(cls.bondRate * 100, 2)}/sem</span></li>
+        <li><span>Título da Coroa (livre)</span><span>${pct(cls.bondRate * 100, 2)}/sem</span></li>
+        <li><span>Título da Coroa (${BOND_LOCK_WEEKS} sem.)</span><span>${pct(cls.bondRate * BOND_LOCK_MULTIPLIER * 100, 2)}/sem</span></li>
         <li><span>Taxa de seguro</span><span>${pct(cls.hedgeFeeRate * 100, 1)}/sem</span></li>
         ${next ? `<li><span>Título de ${next.name}</span><span>${fmt(cls.ascensionFee)} fl</span></li>` : ''}
       </ul>

@@ -7,7 +7,7 @@ export function loadGame(): GameState | null {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
     const state = JSON.parse(raw) as GameState;
-    return state.version === 4 && state.ledger ? state : null;
+    return state.version === 5 && state.lockedBonds ? state : null;
   } catch {
     return null;
   }
