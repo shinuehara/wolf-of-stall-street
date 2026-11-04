@@ -116,7 +116,14 @@ export interface CompanyNewsTemplate {
 export type ExpertId = 'drunk' | 'astrologer' | 'spy';
 
 export type PerkId =
-  'telescope' | 'veteranSpy' | 'informants' | 'insurers' | 'chronicler' | 'scribe' | 'treasurer';
+  | 'drunkCare'
+  | 'telescope'
+  | 'veteranSpy'
+  | 'informants'
+  | 'insurers'
+  | 'chronicler'
+  | 'scribe'
+  | 'treasurer';
 
 export interface PerkLevel {
   cost: number;
@@ -175,14 +182,20 @@ export interface Band {
  * or a company id (about that company's own business, apart from everything else).
  */
 export type Insight =
-  | { expert: 'drunk' | 'astrologer'; targetId: string; leansUp: boolean }
+  | {
+      expert: 'drunk' | 'astrologer';
+      targetId: string;
+      leansUp: boolean;
+      /** The expert's rank when asked (from perks); 0 is the rookie. */
+      level: number;
+    }
   | {
       expert: 'spy';
       targetId: string;
       /** The spy's estimate, which may be off or even planted. */
       bands: Band[];
-      /** How sure the spy says he is (depends on the Veteran Spy perk), not whether he is right. */
-      confidence: 'baixa' | 'média' | 'alta';
+      /** The spy's rank when asked (Veteran Spy perk); says how good he is, not if he is right. */
+      level: number;
     };
 
 export interface Position {

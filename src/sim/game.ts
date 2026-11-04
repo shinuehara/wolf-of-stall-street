@@ -11,7 +11,6 @@ import {
   SHOCK_GOOD_SHARE,
   SHOCK_HIGH_CHANCE,
   SHOCK_HIGH_SHARE,
-  SPY_CONFIDENCE,
   SPY_FAKE_CHANCE,
   SPY_NOISE,
   CITY,
@@ -23,6 +22,8 @@ import {
   CYCLE_PERSISTENCE,
   CYCLE_SHOCK,
   DRUNK_ACCURACY,
+  EXPERT_PERK,
+  EXPERT_RANKS,
   EVENT_CHANCE,
   EVENTS,
   GUILDS,
@@ -279,6 +280,16 @@ export function perkLevel(state: GameState, id: PerkId): number {
   return state.perks[id] ?? 0;
 }
 
+/** An expert's rank: the level of the perk that trains them (0 = rookie). */
+export function expertLevel(state: GameState, expertId: ExpertId): number {
+  return perkLevel(state, EXPERT_PERK[expertId]);
+}
+
+export function expertRankName(expertId: ExpertId, level: number): string {
+  const ranks = EXPERT_RANKS[expertId];
+  return ranks[Math.min(level, ranks.length - 1)]!;
+}
+
 /** The next level of a perk the player could buy, or null when maxed out. */
 export function nextPerkLevel(state: GameState, id: PerkId) {
   return getPerk(id).levels[perkLevel(state, id)] ?? null;
@@ -435,24 +446,15 @@ export function consult(state: GameState, expertId: ExpertId, targetId: string):
   const forecast = targetForecast(state, targetId);
 
   state.purse -= cost;
+  const level = expertLevel(state, expertId);
   if (expertId === 'spy') {
-    const level = Math.min(perkLevel(state, 'veteranSpy'), SPY_CONFIDENCE.length - 1);
-    state.insights.push({
-      expert: 'spy',
-      targetId,
-      bands: spyEstimate(state, forecast),
-      confidence: SPY_CONFIDENCE[level]!,
-    });
+    state.insights.push({ expert: 'spy', targetId, bands: spyEstimate(state, forecast), level });
   } else {
-    const accuracy =
-      expertId === 'astrologer'
-        ? ASTROLOGER_ACCURACY[
-            Math.min(perkLevel(state, 'telescope'), ASTROLOGER_ACCURACY.length - 1)
-          ]!
-        : DRUNK_ACCURACY;
+    const table = expertId === 'astrologer' ? ASTROLOGER_ACCURACY : DRUNK_ACCURACY;
+    const accuracy = table[Math.min(level, table.length - 1)]!;
     const truth = leansUp(forecast);
     const honest = nextRandom(state) < accuracy;
-    state.insights.push({ expert: expertId, targetId, leansUp: honest ? truth : !truth });
+    state.insights.push({ expert: expertId, targetId, leansUp: honest ? truth : !truth, level });
   }
   return ok;
 }

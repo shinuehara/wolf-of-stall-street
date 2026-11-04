@@ -1,4 +1,7 @@
 import {
+  ASTROLOGER_ACCURACY,
+  DRUNK_ACCURACY,
+  SPY_FAKE_CHANCE,
   CHART_WEEKS_BASE,
   CHART_WEEKS_SCRIBE,
   INSURERS_DISCOUNT,
@@ -41,6 +44,8 @@ import {
   expertCost,
   fmt,
   hedgeFee,
+  expertLevel,
+  expertRankName,
   isGuildUnlocked,
   nextPerkLevel,
   perkLevel,
@@ -61,7 +66,7 @@ import type {
 } from '../sim/types';
 import { seasonReturn, seasonSpeech } from './ceremony';
 import { sceneUrl, type SceneName } from './scenes';
-import { sprite, type SpriteName } from './sprites';
+import { expertSprite, sprite, type SpriteName } from './sprites';
 
 export type Screen = SceneName;
 
@@ -174,12 +179,6 @@ const GUILD_SPRITE: Record<string, SpriteName> = {
   forge: 'anvil',
   fleet: 'ship',
   spices: 'pepper',
-};
-
-const EXPERT_SPRITE: Record<ExpertId, SpriteName> = {
-  drunk: 'mug',
-  astrologer: 'crystal',
-  spy: 'hood',
 };
 
 /** Distinct line colours for the companies of a basket chart. */
@@ -1024,18 +1023,59 @@ function renderChart(series: Series[], rescale: boolean, title = 'Preço nas úl
   </figure>`;
 }
 
+/** What an expert is like at a given rank, for the tavern cards. */
+function expertBlurb(expert: ExpertId, level: number): string {
+  const pctText = (p: number) => `${Math.round(p * 100)}%`;
+  switch (expert) {
+    case 'drunk': {
+      const acc = DRUNK_ACCURACY[Math.min(level, DRUNK_ACCURACY.length - 1)]!;
+      const flavor = [
+        'Metade do que diz é mentira.',
+        'Tomou banho. Às vezes acerta.',
+        'Quase sóbrio. Bebe leite agora.',
+      ];
+      return `Grátis. ${flavor[Math.min(level, 2)]} Acerta ${pctText(acc)}.`;
+    }
+    case 'astrologer': {
+      const acc = ASTROLOGER_ACCURACY[Math.min(level, ASTROLOGER_ACCURACY.length - 1)]!;
+      return `Diz se algo pende para alta ou baixa. Acerta ${pctText(acc)}${level < 2 ? ' (melhora com o Telescópio)' : ''}.`;
+    }
+    case 'spy': {
+      const fake = SPY_FAKE_CHANCE[Math.min(level, SPY_FAKE_CHANCE.length - 1)]!;
+      const quality = ['Erra muito', 'Erra menos', 'Erra pouco', 'Quase não erra'][
+        Math.min(level, 3)
+      ];
+      return `Estima a chance de cada faixa. ${quality}; ${pctText(fake)} das respostas são furos plantados${level < 3 ? ' (melhora com o Espião Veterano)' : ''}.`;
+    }
+  }
+}
+
+/** A rank badge for an expert, coloured from rookie to master. */
+function rankBadge(expert: ExpertId, level: number): string {
+  const max = expert === 'spy' ? 3 : 2;
+  const tier = level <= 0 ? 0 : level >= max ? 3 : level === 1 ? 1 : 2;
+  return `<span class="rank rank-${tier}">${expertRankName(expert, level)}</span>`;
+}
+
+function rankStars(expert: ExpertId, level: number): string {
+  const max = expert === 'spy' ? 3 : 2;
+  return `<span class="stars" aria-label="nível ${level} de ${max}">${'★'.repeat(level)}${'☆'.repeat(max - level)}</span>`;
+}
+
 function renderInsight(insight: Insight, full: boolean): string {
   const about = `<span class="insight-about">${targetName(insight.targetId)}</span>`;
+  const face = sprite(expertSprite(insight.expert, insight.level), 20);
+  const badge = rankBadge(insight.expert, insight.level);
   switch (insight.expert) {
     case 'drunk':
-      return `<div class="insight">${sprite('mug', 20)}${about}<span><em>"${insight.leansUp ? 'Vai subir, confia em mim! *hic*' : 'Vende tudo! Vai despencar! *hic*'}"</em></span></div>`;
+      return `<div class="insight">${face}${about}${badge}<span><em>"${insight.leansUp ? 'Vai subir, confia em mim! *hic*' : 'Vende tudo! Vai despencar! *hic*'}"</em></span></div>`;
     case 'astrologer':
-      return `<div class="insight">${sprite('crystal', 20)}${about}<span>Os astros apontam para <strong class="${insight.leansUp ? 'up' : 'down'}">${insight.leansUp ? 'ALTA' : 'BAIXA'}</strong>.</span></div>`;
+      return `<div class="insight">${face}${about}${badge}<span>Os astros apontam para <strong class="${insight.leansUp ? 'up' : 'down'}">${insight.leansUp ? 'ALTA' : 'BAIXA'}</strong>.</span></div>`;
     case 'spy':
       if (!full) {
-        return `<div class="insight">${sprite('hood', 20)}${about}<span>Chances: ${insight.bands.map((b, i) => `<span class="band-tone band-tone-${i + 1}">${Math.round(b.p * 100)}%</span>`).join(' · ')} <span class="confidence conf-${insight.confidence}">confiança ${insight.confidence}</span></span></div>`;
+        return `<div class="insight">${face}${about}<span>Chances: ${insight.bands.map((b, i) => `<span class="band-tone band-tone-${i + 1}">${Math.round(b.p * 100)}%</span>`).join(' · ')} ${badge}</span></div>`;
       }
-      return `<div class="insight insight-spy">${sprite('hood', 20)}${about}<span class="confidence conf-${insight.confidence}">confiança ${insight.confidence}</span>
+      return `<div class="insight insight-spy">${face}${about}${badge}
         <div class="bands">${insight.bands
           .map(
             (b, i) => `<div class="band" title="${pct(b.from)} a ${pct(b.to)}">
@@ -1330,17 +1370,17 @@ function renderAsk(state: GameState, ui: UiState): string {
         const cost = expertCost(state, e.id);
         return `<button class="expert-card px ${ui.tavernExpert === e.id ? 'selected' : ''} ${locked ? 'locked' : ''}"
           data-action="pick-expert" data-expert="${e.id}" aria-pressed="${ui.tavernExpert === e.id}">
-          ${sprite(EXPERT_SPRITE[e.id], 40)}
+          ${sprite(expertSprite(e.id, expertLevel(state, e.id)), 40)}
           <span class="expert-text">
-            <strong>${e.name}</strong>
-            <span class="small">${e.description}</span>
+            <strong>${expertRankName(e.id, expertLevel(state, e.id))} ${rankStars(e.id, expertLevel(state, e.id))}</strong>
+            <span class="small">${expertBlurb(e.id, expertLevel(state, e.id))}</span>
           </span>
           <span class="expert-cost ${locked ? 'muted' : 'gold'}">${locked ? `🔒 ${getClass(e.minClass).name}` : cost === 0 ? 'grátis' : `${fmtCost(cost)} fl por pergunta`}</span>
         </button>`;
       }).join('')}
     </div>
     <article class="card px ask">
-      <h2>${sprite(EXPERT_SPRITE[expert.id], 20)} Perguntar ${expert.id === 'astrologer' ? 'à' : 'ao'} ${expert.name} sobre…</h2>
+      <h2>${sprite(expertSprite(expert.id, expertLevel(state, expert.id)), 20)} Perguntar ${expert.id === 'astrologer' ? 'à' : 'ao'} ${expertRankName(expert.id, expertLevel(state, expert.id))} sobre…</h2>
       ${
         expertLocked
           ? `<p class="locked-note">🔒 O ${expert.name} não atende quem está abaixo de ${getClass(expert.minClass).name}.</p>`

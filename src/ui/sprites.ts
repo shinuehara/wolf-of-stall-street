@@ -263,7 +263,89 @@ export const SPRITES = {
   ],
 } as const;
 
-export type SpriteName = keyof typeof SPRITES;
+/** Swaps palette characters. */
+function recolor(rows: readonly string[], map: Record<string, string>): string[] {
+  return rows.map((r) => [...r].map((c) => map[c] ?? c).join(''));
+}
+
+/** Sets single pixels: [row, column, character]. */
+function patch(rows: readonly string[], edits: [number, number, string][]): string[] {
+  const grid = rows.map((r) => [...r]);
+  for (const [y, x, ch] of edits) {
+    const row = grid[y];
+    if (row && x < row.length) row[x] = ch;
+  }
+  return grid.map((r) => r.join(''));
+}
+
+function replaceRow(rows: readonly string[], y: number, row: string): string[] {
+  return rows.map((r, i) => (i === y ? row : r));
+}
+
+const HOOD = SPRITES.hood;
+const CRYSTAL = SPRITES.crystal;
+const MUG = SPRITES.mug;
+
+/**
+ * Expert portraits by rank: they look shabbier as rookies and grander as masters.
+ * Index = expert level (perk level).
+ */
+const RANK_SPRITES = {
+  // Spy: patched grey rag → blue cloak → purple cloak with gold trim → master with gold mask.
+  hood0: replaceRow(
+    patch(recolor(HOOD, { y: 's' }), [
+      [2, 4, 'b'],
+      [8, 2, 'b'],
+      [9, 9, 'b'],
+      [10, 3, 'b'],
+    ]),
+    11,
+    'k.kk.kk.k.kk',
+  ),
+  hood1: recolor(HOOD, { S: 'U', y: 'w' }),
+  hood2: replaceRow(recolor(HOOD, { S: 'P' }), 8, 'kyyyyyyyyyyk'),
+  hood3: replaceRow(
+    replaceRow(replaceRow(recolor(HOOD, { S: 'P' }), 5, '.kPyykkyyPk.'), 7, '.kPRRRRRRPk.'),
+    8,
+    'kyyyyyyyyyyk',
+  ),
+  // Astrologer: cracked dull ball → clear ball → ball on a gold stand with sparkles.
+  crystal0: patch(recolor(CRYSTAL, { w: 's', P: 'S' }), [
+    [2, 6, 'k'],
+    [3, 7, 'k'],
+    [4, 6, 'k'],
+    [5, 7, 'k'],
+  ]),
+  crystal1: [...CRYSTAL],
+  crystal2: patch(recolor(CRYSTAL, { b: 'y', B: 'o' }), [
+    [0, 0, 'w'],
+    [1, 1, 'y'],
+    [0, 11, 'y'],
+    [2, 11, 'w'],
+    [6, 0, 'y'],
+  ]),
+  // Drunk: dirty mug → clean mug → a glass of milk (he is nearly sober).
+  mug0: patch(recolor(MUG, { w: 's', y: 'o', o: 'b' }), [
+    [5, 2, 'b'],
+    [7, 6, 'B'],
+  ]),
+  mug1: [...MUG],
+  mug2: patch(recolor(MUG, { y: 'w', o: 's' }), [
+    [0, 10, 'y'],
+    [1, 11, 'w'],
+  ]),
+};
+
+const ALL_SPRITES: Record<string, readonly string[]> = { ...SPRITES, ...RANK_SPRITES };
+
+export type SpriteName = keyof typeof SPRITES | keyof typeof RANK_SPRITES;
+
+/** Portrait for an expert at a given rank. */
+export function expertSprite(expert: 'drunk' | 'astrologer' | 'spy', level: number): SpriteName {
+  const base = expert === 'spy' ? 'hood' : expert === 'astrologer' ? 'crystal' : 'mug';
+  const max = expert === 'spy' ? 3 : 2;
+  return `${base}${Math.max(0, Math.min(level, max))}` as SpriteName;
+}
 
 const cache = new Map<string, string>();
 
@@ -271,7 +353,7 @@ const cache = new Map<string, string>();
 export function spriteUrl(name: SpriteName): string {
   const hit = cache.get(name);
   if (hit) return hit;
-  const rows = SPRITES[name];
+  const rows = ALL_SPRITES[name]!;
   const width = Math.max(...rows.map((r) => r.length));
   const canvas = document.createElement('canvas');
   canvas.width = width;

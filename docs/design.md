@@ -176,6 +176,17 @@ Cada pergunta é sobre o **PIB da cidade**, um **bairro**, um **setor** ou uma *
 O Espião mostra um selo de confiança (baixa, média, alta) conforme o nível do Espião
 Veterano. O selo diz quão bom ele é, não se aquela resposta está certa.
 
+### Patentes dos especialistas
+
+Cada especialista tem uma patente, que sobe com a melhoria que o treina. A patente aparece
+no cartão (com estrelas) e em cada resposta, e o retrato fica mais caprichado a cada nível.
+
+| Especialista             | Patentes                                               | Retrato                                                                             |
+| ------------------------ | ------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| Bêbado (Banho e Sopa)    | Bêbado da Taverna → Bêbado Remediado → Ex-Bêbado       | caneca suja → caneca limpa → copo de leite                                          |
+| Astróloga (Telescópio)   | Astróloga Aprendiz → Astróloga Formada → Grã-Astróloga | bola rachada → bola limpa → suporte de ouro e brilhos                               |
+| Espião (Espião Veterano) | Espião Aprendiz → Júnior → Experiente → Mestre Espião  | capuz remendado → capa azul → capa roxa com ouro → máscara dourada e lenço vermelho |
+
 ### Melhorias (perks)
 
 A diversão vem de comprar melhores decisões. Sem melhorias, a informação ajuda pouco;

@@ -21,11 +21,24 @@ export const MAX_ACTIVE_EVENTS = 2;
 export const EVENT_CHANCE = 0.3;
 /** Astrologer accuracy by Telescope level. */
 export const ASTROLOGER_ACCURACY = [0.6, 0.68, 0.75];
-export const DRUNK_ACCURACY = 0.5;
+/** Drunk accuracy by Bath & Soup level. */
+export const DRUNK_ACCURACY = [0.5, 0.55, 0.6];
 /** Spy quality by Veteran Spy level: noise on his estimate and chance it is a planted lie. */
 export const SPY_NOISE = [1.2, 0.6, 0.3, 0.1];
 export const SPY_FAKE_CHANCE = [0.25, 0.12, 0.05, 0.01];
-export const SPY_CONFIDENCE = ['baixa', 'média', 'média', 'alta'] as const;
+/** Each expert's rank names, from rookie to master; the rank is the level of their perk. */
+export const EXPERT_RANKS = {
+  drunk: ['Bêbado da Taverna', 'Bêbado Remediado', 'Ex-Bêbado'],
+  astrologer: ['Astróloga Aprendiz', 'Astróloga Formada', 'Grã-Astróloga'],
+  spy: ['Espião Aprendiz', 'Espião Júnior', 'Espião Experiente', 'Mestre Espião'],
+} as const;
+
+/** The perk that ranks up each expert. */
+export const EXPERT_PERK = {
+  drunk: 'drunkCare',
+  astrologer: 'telescope',
+  spy: 'veteranSpy',
+} as const;
 
 /** Surprise shocks outside the announced range. */
 export const SHOCK_BASE_CHANCE = 0.02;
@@ -52,13 +65,23 @@ export const SHOCK_GOOD_NEWS: readonly string[] = [
 
 export const PERKS: readonly PerkDef[] = [
   {
+    id: 'drunkCare',
+    name: 'Banho e Sopa para o Bêbado',
+    icon: 'mug',
+    description: 'Um prato quente e um balde de água fria fazem milagres.',
+    levels: [
+      { cost: 1, minClass: 0, effect: 'O Bêbado vira Bêbado Remediado: acerta 55%.' },
+      { cost: 3, minClass: 1, effect: 'O Ex-Bêbado, quase sóbrio, acerta 60%.' },
+    ],
+  },
+  {
     id: 'telescope',
     name: 'Telescópio da Astróloga',
     icon: 'crystal',
     description: 'Lentes melhores, profecias melhores.',
     levels: [
-      { cost: 3, minClass: 0, effect: 'A Astróloga acerta 68% (antes 60%).' },
-      { cost: 8, minClass: 1, effect: 'A Astróloga acerta 75%.' },
+      { cost: 3, minClass: 0, effect: 'Vira Astróloga Formada: acerta 68% (antes 60%).' },
+      { cost: 8, minClass: 1, effect: 'Vira Grã-Astróloga: acerta 75%.' },
     ],
   },
   {
@@ -67,9 +90,17 @@ export const PERKS: readonly PerkDef[] = [
     icon: 'hood',
     description: 'Um espião com mais anos de ofício erra menos e cai menos em furos plantados.',
     levels: [
-      { cost: 6, minClass: 1, effect: 'Erro pela metade; furos plantados caem de 25% para 12%.' },
-      { cost: 15, minClass: 2, effect: 'Erro bem menor; furos plantados 5%.' },
-      { cost: 35, minClass: 4, effect: 'Quase sempre certeiro; furos plantados 1%.' },
+      {
+        cost: 6,
+        minClass: 1,
+        effect: 'Espião Júnior: erro pela metade; furos plantados 25% → 12%.',
+      },
+      { cost: 15, minClass: 2, effect: 'Espião Experiente: erro bem menor; furos plantados 5%.' },
+      {
+        cost: 35,
+        minClass: 4,
+        effect: 'Mestre Espião: quase sempre certeiro; furos plantados 1%.',
+      },
     ],
   },
   {

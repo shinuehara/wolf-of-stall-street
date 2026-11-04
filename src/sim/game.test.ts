@@ -17,6 +17,8 @@ import {
   endWeek,
   expertCost,
   newGame,
+  expertLevel,
+  expertRankName,
   buyPerk,
   perkLevel,
   quickTrade,
@@ -163,9 +165,20 @@ describe('experts', () => {
       const truth = bands(state.sectorForecasts.bakers!);
       const error = insight.bands.reduce((s, b, i) => s + Math.abs(b.p - truth[i]!.p), 0);
       if (error > 0.2) off++;
-      expect(insight.confidence).toBe('baixa');
+      expect(insight.level).toBe(0);
     }
     expect(off).toBeGreaterThan(5);
+  });
+
+  it('experts rank up with their perk', () => {
+    const state = newGame(2);
+    expect(expertRankName('spy', expertLevel(state, 'spy'))).toBe('Espião Aprendiz');
+    state.perks.veteranSpy = 3;
+    expect(expertRankName('spy', expertLevel(state, 'spy'))).toBe('Mestre Espião');
+    expect(buyPerk(state, 'drunkCare').ok).toBe(true);
+    expect(expertRankName('drunk', expertLevel(state, 'drunk'))).toBe('Bêbado Remediado');
+    consult(state, 'drunk', 'bakers');
+    expect(state.insights[0]!.level).toBe(1);
   });
 
   it('the Veteran Spy perk makes the estimate sharper', () => {
