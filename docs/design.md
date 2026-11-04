@@ -419,6 +419,11 @@ gradual):
 | Espião com melhorias  | 60 de 60 | ~128              | 0,02 (nenhuma)    | -11%        |
 | Oráculo (diagnóstico) | 60 de 60 | ~88               | 0                 | -11%        |
 
+Leitor perfeito do Bêbado (bot `drunk`, 60 partidas): interpreta cada pista certo; como
+aprendiz aposta na cesta da guilda, depois na empresa. Treinando o Bêbado: 58 de 60 vitórias,
+~150 semanas, 1 masmorra. Sem treinar (`drunkRookie`): 55 de 60, ~163 semanas, 3 masmorras.
+A fofoca típica aponta um destino ~11 pontos longe do meio da faixa pública.
+
 Metas escolhidas por Claude (o dono delegou a dificuldade): quem chuta vai para a masmorra em
 ~10% das partidas; quem se informa, nunca; o melhor jogador chega em ~100 semanas (sobe
 várias classes num trimestre bom). Versões anteriores: ~135 (abertura) e ~121 (aportes por mês). Antes da

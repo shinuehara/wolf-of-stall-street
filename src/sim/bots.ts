@@ -28,8 +28,19 @@ import type { ExpertId, GameState, PerkId } from './types';
  * - spy: asks the Spy when allowed (Astrologer before that), never buys perks.
  * - perks: like spy, but buys perks as soon as it can afford them, hedges risky picks.
  * - oracle: knows every true destiny; an upper bound for diagnostics, not a player.
+ * - drunk: buys the Drunk drinks and reads every clue right: as a rookie the cause gives the
+ *   guild and the direction (bet on the basket); once he says the district, the company.
+ *   Trains him as soon as it can (he becomes the confidant). drunkRookie never trains him.
  */
-export type BotStrategy = 'bonds' | 'naive' | 'astrologer' | 'spy' | 'perks' | 'oracle';
+export type BotStrategy =
+  'bonds' | 'naive' | 'astrologer' | 'spy' | 'perks' | 'oracle' | 'drunk' | 'drunkRookie';
+
+/**
+ * How far from the public middle a perfect reader of the Drunk assumes his company ends the
+ * quarter (he hints the direction, not the size). Rumours pick companies at least
+ * DRUNK_MIN_DEVIATION away; this is about their typical gap.
+ */
+const DRUNK_GAP_GUESS = 8;
 
 /** Diagnostics only: the oracle knows every true destiny (an upper bound, not a player). */
 let ORACLE = false;
@@ -64,6 +75,23 @@ function believedTarget(state: GameState, assetId: string): number {
   if (spy?.expert === 'spy') {
     const said = spy.bands.reduce((s, b) => s + b.p * ((b.from + b.to) / 2), 0);
     return said + (middle - spy.publicMid);
+  }
+  // The Drunk's rumours, read perfectly with what his current rank lets you see.
+  const rumours = state.insights.filter(
+    (i): i is Extract<typeof i, { expert: 'drunk' }> => i.expert === 'drunk' && !i.ramble,
+  );
+  if (rumours.length > 0) {
+    const knowsCompany = perkLevel(state, 'drunkCare') >= 1;
+    const sign = (up: boolean) => (up ? 1 : -1);
+    const exact = rumours.find((r) => r.targetId === assetId);
+    if (exact && knowsCompany) return middle + sign(exact.up) * DRUNK_GAP_GUESS;
+    const guild = GUILDS.find((g) => g.id === assetId)?.id ?? assetId.split('.')[0];
+    const inGuild = rumours.filter((r) => r.targetId.startsWith(`${guild}.`));
+    // A basket moves as the average of its three companies; a rookie reader cannot tell which
+    // company it is, so a rumour counts a third for each of them.
+    if (inGuild.length > 0 && (GUILDS.some((g) => g.id === assetId) || !knowsCompany)) {
+      return middle + inGuild.reduce((sum, r) => sum + sign(r.up), 0) * (DRUNK_GAP_GUESS / 3);
+    }
   }
   const astro = state.insights.find((i) => i.targetId === assetId && i.expert === 'astrologer');
   if (astro?.expert === 'astrologer') {
@@ -107,11 +135,30 @@ export function playBot(seed: number, strategy: BotStrategy): BotResult {
       }
     }
 
+    if (strategy === 'drunk') {
+      const next = nextPerkLevel(state, 'drunkCare');
+      const reserve =
+        getClass(state.classIndex).livingCost * 8 + getClass(state.classIndex).ascensionFee;
+      if (
+        next &&
+        state.classIndex >= next.minClass &&
+        state.purse - perkCost(state, 'drunkCare') > reserve
+      ) {
+        buyPerk(state, 'drunkCare');
+      }
+    }
+    if (strategy === 'drunk' || strategy === 'drunkRookie') {
+      const reserve = getClass(state.classIndex).livingCost * 4;
+      for (let d = 0; d < 3 && state.purse - expertCost(state, 'drunk') > reserve; d++) {
+        consult(state, 'drunk', '');
+      }
+    }
+
     if (strategy !== 'bonds') {
       const guilds = GUILDS.filter((g) => isGuildUnlocked(state, g)).sort(
         (a, b) => believedAsset(state, b.id) - believedAsset(state, a.id),
       );
-      if (strategy !== 'naive') {
+      if (strategy !== 'naive' && strategy !== 'drunk' && strategy !== 'drunkRookie') {
         const expert: ExpertId = strategy === 'spy' || strategy === 'perks' ? 'spy' : 'astrologer';
         // Answers last the quarter: a few new questions a week, sectors first, then companies.
         // An answer older than 4 weeks is stale (news moved things): ask again.
@@ -136,8 +183,17 @@ export function playBot(seed: number, strategy: BotStrategy): BotResult {
       const all = guilds.flatMap((g) => [g.id, ...companiesOf(g.id).map((c) => c.id)]);
       // An informed bot only bets on what it asked about (once it asked about anything).
       const known = all.filter((id) => state.insights.some((i) => i.targetId === id));
-      const candidates =
-        (strategy === 'spy' || strategy === 'perks') && known.length > 0 ? known : all;
+      const hinted = all.filter((id) => {
+        const p = assetProphecy(state, id);
+        return Math.abs(believedTarget(state, id) - (p.low + p.high) / 2) > 1e-6;
+      });
+      const informed =
+        strategy === 'spy' || strategy === 'perks'
+          ? known
+          : strategy === 'drunk' || strategy === 'drunkRookie'
+            ? hinted
+            : [];
+      const candidates = informed.length > 0 ? informed : all;
       const risky = (id: string) =>
         perkLevel(state, 'informants') > 0 && (state.shockRisk[id] ?? 0) > 0.05;
       // Holding costs nothing; switching pays the broker twice. Keep what still looks good.
