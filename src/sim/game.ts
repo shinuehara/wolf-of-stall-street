@@ -54,6 +54,7 @@ import {
   FLOW_DEAD_ZONE,
   FLOW_MAX_IN,
   FLOW_MAX_OUT,
+  FLOW_FLOOR_MARGIN,
   FLOW_MONTHS,
   FLOW_SENSITIVITY_IN,
   FLOW_SENSITIVITY_OUT,
@@ -833,15 +834,19 @@ function applyInvestorFlows(state: GameState, report: WeekReport): void {
     if (share !== 0) {
       const mood = 0.75 + nextRandom(state) * 0.5;
       share = Math.max(-FLOW_MAX_OUT, Math.min(FLOW_MAX_IN, share * mood));
-      const moved = moveFunds(state, wealth(state) * share);
+      // Withdrawals stop short of the class floor: the dungeon must come from the market.
+      const room = Math.max(0, wealth(state) - currentClass(state).floor * FLOW_FLOOR_MARGIN);
+      const amount = Math.max(-room, wealth(state) * share);
+      const moved = Math.abs(amount) < 0.05 ? 0 : moveFunds(state, amount);
       report.investorFlow = moved;
-      log(
-        state,
-        moved > 0
-          ? `Sua fama corre a cidade: novos investidores aportaram ${fmt(moved)} florins no fundo.`
-          : `Investidores assustados sacaram ${fmt(-moved)} florins do fundo.`,
-        moved > 0 ? 'good' : 'bad',
-      );
+      if (moved !== 0)
+        log(
+          state,
+          moved > 0
+            ? `Sua fama corre a cidade: novos investidores aportaram ${fmt(moved)} florins no fundo.`
+            : `Investidores assustados sacaram ${fmt(-moved)} florins do fundo.`,
+          moved > 0 ? 'good' : 'bad',
+        );
     }
   }
   state.monthStart = wealth(state);
@@ -978,7 +983,9 @@ function reviewSeason(state: GameState): WeekReport['classChange'] {
   // Below the floor: fall as many classes as needed (below the Serf's floor is the dungeon).
   if (total < before.floor) {
     while (state.classIndex > 0 && total < currentClass(state).floor) state.classIndex -= 1;
-    if (total < currentClass(state).floor) {
+    // Only a Serf who stays below the floor goes to the dungeon; falling from higher up
+    // stops at Serf, with one more quarter to recover.
+    if (startIndex === 0) {
       state.status = 'lost';
       log(
         state,
@@ -988,6 +995,14 @@ function reviewSeason(state: GameState): WeekReport['classChange'] {
       return 'down';
     }
     const fell = startIndex - state.classIndex;
+    if (total < currentClass(state).floor) {
+      log(
+        state,
+        `Fim do trimestre: você despencou para Servo, e o fundo nem cobre o piso. Último aviso: mais um trimestre assim e é masmorra.`,
+        'bad',
+      );
+      return 'down';
+    }
     log(
       state,
       `Fim do trimestre: abaixo do piso de ${before.name}. Você caiu ${fell > 1 ? `${fell} classes, ` : ''}para ${currentClass(state).name}.`,

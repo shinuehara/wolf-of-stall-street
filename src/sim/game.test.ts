@@ -446,6 +446,16 @@ describe('endWeek', () => {
     expect(two.status).toBe('playing');
   });
 
+  it('a fall from higher up stops at Serf, even below the floor (last warning)', () => {
+    const state = newGame(3);
+    state.classIndex = 2;
+    state.cash = 40;
+    state.monthStart = 40;
+    for (let i = 0; i < SEASON_LENGTH; i++) endWeek(state);
+    expect(state.classIndex).toBe(0);
+    expect(state.status).toBe('playing');
+  });
+
   it('sends a broke Serf to the dungeon', () => {
     const state = newGame(3);
     state.cash = 10;

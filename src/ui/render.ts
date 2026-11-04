@@ -1943,7 +1943,7 @@ function renderSeasonModal(state: GameState, ui: UiState, review: SeasonReview):
         <button class="pbtn" data-action="new-game">Tentar de novo</button>`;
       break;
     case 'down':
-      verdict = `<p class="verdict down">O fundo ficou abaixo do piso de ${whole(before.floor)} fl. Você caiu de <strong>${before.name}</strong> para <strong>${after.name}</strong>${review.classBefore - review.classAfter > 1 ? ` (${review.classBefore - review.classAfter} classes de uma vez)` : ''}.</p>
+      verdict = `<p class="verdict down">O fundo ficou abaixo do piso de ${whole(before.floor)} fl. Você caiu de <strong>${before.name}</strong> para <strong>${after.name}</strong>${review.classBefore - review.classAfter > 1 ? ` (${review.classBefore - review.classAfter} classes de uma vez)` : ''}.${review.endWealth < after.floor ? ` <strong>Último aviso:</strong> o fundo nem cobre o piso de Servo (${whole(after.floor)} fl). Se continuar assim no fim do próximo trimestre, é masmorra.` : ''}</p>
         <button class="pbtn" data-action="close-report">Seguir em frente</button>`;
       break;
     case 'stay':

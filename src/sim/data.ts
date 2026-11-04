@@ -1092,6 +1092,8 @@ export const FLOW_DEAD_ZONE = 2;
 /** Largest monthly deposit and withdrawal, as a share of the fund. */
 export const FLOW_MAX_IN = 0.12;
 export const FLOW_MAX_OUT = 0.15;
+/** Withdrawals stop when the fund is this close to the class floor (1.15 = 15% above it). */
+export const FLOW_FLOOR_MARGIN = 1.15;
 /** Chance per week (outside visitor weeks) that someone offers to invest in the fund. */
 export const OFFER_CHANCE = 0.1;
 
