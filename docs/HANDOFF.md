@@ -152,4 +152,4 @@ melhorias ~128 semanas; oráculo (teto) ~88. Quem usa o Espião não vai para a 
 | `380f855`                       | Potencial: um número por ativo; detalhes recolhidos                      |
 | `8870ccc`                       | Linha lisa para a Coroa no time-lapse e nos gráficos do fundo            |
 | `dcb1127`                       | Stop loss/gain (Corretor de Ordens), barras semanais reais no gráfico    |
-| (este)                          | Stop gain no destino; seguro como botão de escudo no Mercado             |
+| `f2a233f`                       | Stop gain no destino; seguro como botão de escudo no Mercado             |
