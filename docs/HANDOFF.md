@@ -140,4 +140,4 @@ melhorias ~128 semanas; oráculo (teto) ~88. Quem usa o Espião não vai para a 
 | `9803b83`                       | Profecia do trimestre, corretagem, perguntas valem o trimestre           |
 | `c6fbe64`                       | Bêbado que nunca mente: fofocas a interpretar, bobagens, 5 patentes      |
 | `5ce6055`                       | Árvores dos ajudantes (5 patentes), astros, análise completa, confidente |
-| (este)                          | Botão Vender tudo (Mercado e Carteira) com confirmação                   |
+| `f2728e5`                       | Botão Vender tudo (Mercado e Carteira) com confirmação                   |
