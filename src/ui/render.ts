@@ -64,6 +64,7 @@ import {
   expertCost,
   fmt,
   hedgeFee,
+  sellAllPreview,
   expertOfPerk,
   perkCost,
   tradeFee,
@@ -130,6 +131,8 @@ export interface UiState {
   weekNews: LogEntry[];
   showReport: boolean;
   confirmingRestart: boolean;
+  /** The "sell everything" button was pressed and waits for confirmation. */
+  confirmingSellAll: boolean;
   message: { text: string; tone: 'error' | 'info' } | null;
 }
 
@@ -154,6 +157,7 @@ export function initialUi(): UiState {
     weekNews: [],
     showReport: false,
     confirmingRestart: false,
+    confirmingSellAll: false,
     message: null,
   };
 }
@@ -680,10 +684,30 @@ function renderGuildEntry(state: GameState, guildId: string): string {
 function renderMarket(state: GameState, ui: UiState): string {
   return `<div class="market ${ui.marketDetailOpen ? 'detail-open' : ''}">
     <ul class="guild-list px" aria-label="Guildas e empresas">
+      <li class="sell-all-row">${sellAllBar(state, ui)}</li>
       ${renderCrownGroup(state, ui)}
       ${GUILDS.map((g) => renderGuildGroup(state, ui, g)).join('')}
     </ul>
     <article class="guild-detail px">${renderAssetDetail(state, ui, ui.selectedAsset)}</article>
+  </div>`;
+}
+
+/** "Sell everything" with an in-page confirmation (the broker charges every sale). */
+function sellAllBar(state: GameState, ui: UiState): string {
+  const { amount, fees, count } = sellAllPreview(state);
+  const playing = state.status === 'playing';
+  if (ui.confirmingSellAll && count > 0) {
+    return `<div class="sell-all confirm">
+      <span>Vender <strong>tudo</strong> (${count} ${count === 1 ? 'posição' : 'posições'}): recebe <strong class="gold">${fmt(amount - fees)} fl</strong>${fees > 0 ? `, paga <span class="down">${fmtCost(fees)} fl</span> de corretagem` : ''}.${state.lockedBonds.length ? ' Títulos presos ficam até vencer.' : ''}</span>
+      <span class="actions">
+        <button class="pbtn pbtn-small pbtn-sell" data-action="confirm-sell-all">Vender tudo</button>
+        <button class="pbtn pbtn-small pbtn-ghost" data-action="cancel-sell-all">Cancelar</button>
+      </span>
+    </div>`;
+  }
+  return `<div class="sell-all">
+    <span class="muted small">${count > 0 ? `Aplicado: ${fmt(amount)} fl em ${count} ${count === 1 ? 'posição' : 'posições'}` : 'Nada aplicado'}</span>
+    <button class="pbtn pbtn-small pbtn-sell" data-action="sell-all" ${playing && count > 0 ? '' : 'disabled'}>Vender tudo</button>
   </div>`;
 }
 
@@ -1371,7 +1395,7 @@ function renderPortfolio(state: GameState, ui: UiState): string {
     `<button role="tab" class="tab ${ui.portfolioTab === id ? 'active' : ''}" aria-selected="${ui.portfolioTab === id}" data-action="portfolio-tab" data-tab="${id}">${label}</button>`;
   return `<div class="portfolio">
     <div class="tabs" role="tablist">${tab('position', 'Posição de hoje')}${tab('returns', 'Rentabilidade')}${tab('managers', 'Gestores')}</div>
-    ${ui.portfolioTab === 'returns' ? renderReturns(state) : ui.portfolioTab === 'managers' ? renderManagers(state, ui) : renderPositions(state)}
+    ${ui.portfolioTab === 'returns' ? renderReturns(state) : ui.portfolioTab === 'managers' ? renderManagers(state, ui) : renderPositions(state, ui)}
   </div>`;
 }
 
@@ -1470,7 +1494,7 @@ function holdings(state: GameState): Holding[] {
   return [...fromPositions, ...lots].sort((a, b) => b.value - a.value);
 }
 
-function renderPositions(state: GameState): string {
+function renderPositions(state: GameState, ui: UiState): string {
   const total = wealth(state);
   const entries = holdings(state);
   const investedTotal = entries.reduce((s, h) => s + h.value, 0);
@@ -1522,6 +1546,7 @@ function renderPositions(state: GameState): string {
     .join('');
 
   return `${tiles}${bar}
+    ${sellAllBar(state, ui)}
     <div class="table-wrap px">
       <table class="ptable">
         <thead><tr><th>Ativo</th><th>Onde</th><th class="num">Valor</th><th class="num">Custo</th><th class="num">Ganho</th><th class="num">%</th><th class="num">Peso</th><th class="num">Profecia do trimestre</th><th>Seguro</th></tr></thead>

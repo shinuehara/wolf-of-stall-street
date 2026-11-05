@@ -540,6 +540,26 @@ export function sell(state: GameState, assetId: string, amount: number): ActionR
   return ok;
 }
 
+/**
+ * What selling everything would bring: every position (stocks, the liquid Crown bond, money
+ * with managers) back to free gold, minus the broker's fees. Locked bonds stay locked.
+ */
+export function sellAllPreview(state: GameState): { amount: number; fees: number; count: number } {
+  const ids = Object.keys(state.positions);
+  const amount = ids.reduce((sum, id) => sum + state.positions[id]!.value, 0);
+  const fees = ids.reduce((sum, id) => sum + tradeFee(id, state.positions[id]!.value), 0);
+  return { amount, fees, count: ids.length };
+}
+
+export function sellAll(state: GameState): ActionResult {
+  if (state.status !== 'playing') return fail('O jogo terminou.');
+  const ids = Object.keys(state.positions);
+  if (ids.length === 0) return fail('Você não tem nada para vender.');
+  for (const id of ids) sell(state, id, state.positions[id]!.value);
+  log(state, 'Você vendeu tudo. O ouro está livre no fundo.', 'neutral');
+  return ok;
+}
+
 export type QuickTradeResult = { ok: true; amount: number } | { ok: false; error: string };
 
 /**

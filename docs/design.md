@@ -144,6 +144,10 @@ Cada linha do Mercado tem atalhos `+5% +10% +50% +Tudo` e `-5% -10% -50% -Tudo`.
 florins livres; `-10%` tenta vender 200 fl, limitado à posição (zera se for menor).
 `+Tudo` usa todos os florins livres; `-Tudo` zera a posição.
 
+**Vender tudo** (topo da lista do Mercado e na Carteira): transforma todas as posições (cotas,
+Título livre, dinheiro com gestores) em ouro livre, com confirmação na tela mostrando quanto
+você recebe e a corretagem. Títulos presos ficam até vencer.
+
 ### A cidade de Valdouro e seus bairros
 
 A cidade tem um **PIB** e três **bairros**. Cada guilda tem uma empresa em cada bairro.

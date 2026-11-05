@@ -15,6 +15,7 @@ import {
   newGame,
   quickTrade,
   sell,
+  sellAll,
   setHedge,
   type ActionResult,
   fmt,
@@ -52,6 +53,7 @@ function selectAsset(assetId: string): void {
 function go(screen: Screen): void {
   ui.screen = screen;
   ui.confirmingRestart = false;
+  ui.confirmingSellAll = false;
 }
 
 function finishWeek(): void {
@@ -225,6 +227,21 @@ root.addEventListener('click', (event) => {
     case 'close-report':
       ui.showReport = false;
       break;
+    case 'sell-all':
+      ui.confirmingSellAll = true;
+      break;
+    case 'cancel-sell-all':
+      ui.confirmingSellAll = false;
+      break;
+    case 'confirm-sell-all': {
+      const freed = state.cash;
+      const result = sellAll(state);
+      ui.confirmingSellAll = false;
+      ui.message = result.ok
+        ? { text: `Vendeu tudo: ${fmt(state.cash - freed)} fl livres no fundo.`, tone: 'info' }
+        : { text: result.error, tone: 'error' };
+      break;
+    }
     case 'cancel-restart':
       ui.confirmingRestart = false;
       break;

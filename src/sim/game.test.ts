@@ -35,6 +35,8 @@ import {
   quickTrade,
   PRE_HISTORY_WEEKS,
   sell,
+  sellAll,
+  sellAllPreview,
   setHedge,
   targetForecast,
   wealth,
@@ -835,5 +837,21 @@ describe('the quarter prophecy', () => {
     expect(state.insights[0]!.week).toBe(0);
     for (let w = 1; w < SEASON_LENGTH; w++) endWeek(state);
     expect(state.insights).toHaveLength(0);
+  });
+});
+
+describe('selling everything', () => {
+  it('turns every position into free gold, paying the broker; locked bonds stay', () => {
+    const state = newGame(7);
+    buy(state, 'bakers', 30);
+    buy(state, BOND_LIQUID, 20);
+    buy(state, BOND_LOCKED, 10);
+    const preview = sellAllPreview(state);
+    expect(preview.count).toBe(2);
+    expect(sellAll(state).ok).toBe(true);
+    expect(Object.keys(state.positions)).toHaveLength(0);
+    expect(state.lockedBonds).toHaveLength(1);
+    expect(state.cash).toBeCloseTo(40 + preview.amount - preview.fees);
+    expect(sellAll(state).ok).toBe(false);
   });
 });
