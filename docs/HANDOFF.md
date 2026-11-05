@@ -147,4 +147,4 @@ melhorias ~128 semanas; oráculo (teto) ~88. Quem usa o Espião não vai para a 
 | `5ce6055`                       | Árvores dos ajudantes (5 patentes), astros, análise completa, confidente |
 | `f2728e5`                       | Botão Vender tudo (Mercado e Carteira) com confirmação                   |
 | `380f855`                       | Potencial: um número por ativo; detalhes recolhidos                      |
-| (este)                          | Linha lisa para a Coroa no time-lapse e nos gráficos do fundo            |
+| `8870ccc`                       | Linha lisa para a Coroa no time-lapse e nos gráficos do fundo            |
