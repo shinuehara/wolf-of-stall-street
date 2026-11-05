@@ -145,4 +145,4 @@ melhorias ~128 semanas; oráculo (teto) ~88. Quem usa o Espião não vai para a 
 | `c6fbe64`                       | Bêbado que nunca mente: fofocas a interpretar, bobagens, 5 patentes      |
 | `5ce6055`                       | Árvores dos ajudantes (5 patentes), astros, análise completa, confidente |
 | `f2728e5`                       | Botão Vender tudo (Mercado e Carteira) com confirmação                   |
-| (este)                          | Potencial: um número por ativo; detalhes recolhidos                      |
+| `380f855`                       | Potencial: um número por ativo; detalhes recolhidos                      |
