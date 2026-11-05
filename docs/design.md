@@ -372,6 +372,22 @@ um **choque fora da faixa anunciada**: incêndio, escândalo, roubo (-14% a -28%
 raramente, um golpe de sorte (+12% a +22%). O **seguro protege também dos choques**, pois
 limita o resultado à faixa segurada. A Rede de Informantes avisa as semanas de risco alto.
 
+### Stop loss e stop gain (Corretor de Ordens)
+
+Ideia do dono, com o modelo matemático dele: cada semana de cada ativo tem uma **barra**
+(`WeekBar`): um salto na abertura (choques), a **mínima** e a **máxima** (alcançam além da
+abertura e do fechamento por `BAR_REACH` × ruído semanal) e **quem veio primeiro** (50/50).
+O caminho é abertura → (salto) → primeira → segunda → fechamento.
+
+- A melhoria **Corretor de Ordens** (6 fl, a partir de Camponês) libera stops por posição,
+  medidos sobre o **custo** da posição: stop loss −5/−10/−15% e stop gain +5/+10/+15%.
+- A semana é percorrida nessa ordem: se a posição cruza um stop, é vendida inteira **naquele
+  nível** (com corretagem). Se um choque salta por cima do stop, sai no preço depois do salto.
+- O gráfico de cada ativo desenha as semanas jogadas com a barra real (os mesmos 4 pontos) e
+  as linhas tracejadas dos stops; o histórico de antes do jogo segue com oscilação visual.
+- O seguro limita também a mínima e a máxima da semana.
+- Os bots ainda não usam stops.
+
 ### Seguro (hedge)
 
 Para qualquer posição (cesta ou empresa), o jogador pode contratar seguro da Guilda dos Seguradores: a faixa de

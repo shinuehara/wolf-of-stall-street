@@ -2831,3 +2831,57 @@ details.more[open] > summary {
     gap: 4px;
   }
 }
+
+/* Stop orders */
+.stops {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.stop-row {
+  display: grid;
+  grid-template-columns: 5.5em repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  align-items: center;
+}
+
+.stop-row .qbtn.on {
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
+  filter: brightness(1.25);
+}
+
+.chart-body {
+  position: relative;
+}
+
+.chart-stop {
+  stroke-width: 1.5;
+  stroke-dasharray: 5 3;
+}
+
+.chart-stop-up {
+  stroke: var(--green);
+}
+
+.chart-stop-down {
+  stroke: var(--red);
+}
+
+.chart-stop-label {
+  position: absolute;
+  right: 4px;
+  transform: translateY(-100%);
+  font-size: 0.7rem;
+  pointer-events: none;
+}
+
+.chart-stop-label.up {
+  color: var(--green);
+}
+
+.chart-stop-label.down {
+  color: var(--red);
+}

@@ -71,11 +71,13 @@ import {
   getManager,
   INVESTORS,
   OFFER_CHANCE,
+  BAR_REACH,
   TRADE_FEE,
   getInvestor,
 } from './data';
 import {
   ASSET_IDS,
+  assetName,
   assetProphecy,
   companyExposures,
   componentsOf,
@@ -130,6 +132,8 @@ import type {
   ManagerId,
   EventDef,
   Prophecy,
+  Position,
+  WeekBar,
 } from './types';
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
@@ -167,6 +171,8 @@ export interface WeekReport {
   confiscations: { kind: InvestorKind; amount: number; fine: number }[];
   /** Someone offered to invest in the fund (answer before the week ends). */
   offerArrived: InvestorKind | null;
+  /** Stop orders that sold a position this week (return on cost and gold freed). */
+  stops: { assetId: string; kind: 'loss' | 'gain'; ret: number; amount: number }[];
   /** What each hired manager held this week (asset ids and weights). */
   managerPicks: Partial<Record<ManagerId, { id: string; weight: number }[]>>;
 }
@@ -243,7 +249,7 @@ function seedHistory(state: GameState): void {
     const history = path.map((v) => v * scale);
     history[history.length - 1] = end;
     if (INDICATOR_IDS.includes(id)) state.indicators[id] = { value: end, history };
-    else state.assets[id] = { price: end, history };
+    else state.assets[id] = { price: end, history, bars: history.map(() => null) };
   }
 }
 
@@ -260,7 +266,7 @@ function cityProfile(state: GameState): { drift: number; width: number } {
 
 export function newGame(seed: number = Date.now() >>> 0): GameState {
   const state: GameState = {
-    version: 16,
+    version: 17,
     seed,
     rngState: seed,
     week: 0,
@@ -270,7 +276,10 @@ export function newGame(seed: number = Date.now() >>> 0): GameState {
     purse: STARTING_PURSE,
     positions: {},
     assets: Object.fromEntries(
-      ASSET_IDS.map((id) => [id, { price: assetStartPrice(id), history: [assetStartPrice(id)] }]),
+      ASSET_IDS.map((id) => [
+        id,
+        { price: assetStartPrice(id), history: [assetStartPrice(id)], bars: [null] },
+      ]),
     ),
     sectorForecasts: {},
     companyForecasts: {},
@@ -850,6 +859,84 @@ export function declineAscension(state: GameState): ActionResult {
 // Turn resolution
 // ---------------------------------------------------------------------------
 
+/** A week's bar for an asset: the close is the sampled move; high and low reach a bit beyond. */
+function weekBar(
+  state: GameState,
+  assetId: string,
+  moves: Record<string, number>,
+  shocks: Record<string, number>,
+): WeekBar {
+  const close = moves[assetId] ?? 0;
+  const gap = shocks[assetId] ?? 0;
+  const r = assetRange(state, assetId);
+  const noise = (r.high - r.low) * WEEKLY_NOISE * BAR_REACH;
+  const reach = () => Math.abs(nextRandom(state) + nextRandom(state) - 1) * 2 * noise;
+  const continuous = close - gap;
+  return {
+    gap,
+    low: gap + Math.min(0, continuous) - reach(),
+    high: gap + Math.max(0, continuous) + reach(),
+    lowFirst: nextRandom(state) < 0.5,
+  };
+}
+
+/**
+ * Walks a position along the week's bar (gap, then low/high in order, then close) and returns
+ * the move at which a stop sells it, if any. Past a stop in a gap, it sells at the gap price.
+ */
+function checkStops(
+  position: Position,
+  bar: WeekBar,
+  charm: number,
+  cover: (move: number) => number,
+  close: number,
+): { kind: 'loss' | 'gain'; move: number; ret: number } | null {
+  const r0 = position.value / position.cost - 1;
+  const ret = (move: number) => (1 + r0) * (1 + move / 100) - 1;
+  const moveFor = (target: number) => ((1 + target) / (1 + r0) - 1) * 100;
+  const path: { move: number; gap: boolean }[] = [];
+  if (bar.gap !== 0) path.push({ move: cover(bar.gap + charm), gap: true });
+  const first = bar.lowFirst ? bar.low : bar.high;
+  const second = bar.lowFirst ? bar.high : bar.low;
+  path.push({ move: cover(first + charm), gap: false });
+  path.push({ move: cover(second + charm), gap: false });
+  path.push({ move: close, gap: false });
+  for (const point of path) {
+    const now = ret(point.move);
+    if (position.stopLoss !== undefined && now <= position.stopLoss) {
+      const fill = point.gap ? now : position.stopLoss;
+      return { kind: 'loss', move: moveFor(fill), ret: fill };
+    }
+    if (position.stopGain !== undefined && now >= position.stopGain) {
+      const fill = point.gap ? now : position.stopGain;
+      return { kind: 'gain', move: moveFor(fill), ret: fill };
+    }
+  }
+  return null;
+}
+
+/** Sets (or clears, with null) the stop orders of a position. Needs the broker. */
+export function setStops(
+  state: GameState,
+  assetId: string,
+  stops: { loss?: number | null; gain?: number | null },
+): ActionResult {
+  if (perkLevel(state, 'broker') === 0) return fail('Contrate o Corretor de Ordens na Taverna.');
+  const position = state.positions[assetId];
+  if (!position || isBond(assetId) || isManager(assetId)) {
+    return fail('Só dá para pôr stop numa posição em cotas que você tem.');
+  }
+  if (stops.loss !== undefined) {
+    if (stops.loss === null) delete position.stopLoss;
+    else position.stopLoss = stops.loss;
+  }
+  if (stops.gain !== undefined) {
+    if (stops.gain === null) delete position.stopGain;
+    else position.stopGain = stops.gain;
+  }
+  return ok;
+}
+
 export function endWeek(state: GameState): WeekReport {
   if (state.status !== 'playing') throw new Error('Game is over');
   const cls = currentClass(state);
@@ -873,6 +960,7 @@ export function endWeek(state: GameState): WeekReport {
     confiscations: [],
     offerArrived: null,
     managerPicks: {},
+    stops: [],
   };
 
   // Unanswered offers expire when the week ends.
@@ -942,22 +1030,55 @@ export function endWeek(state: GameState): WeekReport {
     moves[managerAsset(id)] = afterFee - Math.max(0, afterFee) * manager.performanceShare;
   }
 
+  // How each asset traded within the week: a gap (shocks), then its low and high, then the close.
+  const bars: Record<string, WeekBar> = {};
+  for (const assetId of ASSET_IDS) bars[assetId] = weekBar(state, assetId, moves, shockShare);
+
+  const stopped: { assetId: string; kind: 'loss' | 'gain'; ret: number }[] = [];
   for (const [assetId, position] of Object.entries(state.positions)) {
     if (isBond(assetId)) continue;
     let raw = moves[assetId] ?? 0;
     const shock = shockShare[assetId] ?? 0;
-    if (shock < 0 && hasEffect(state, 'luckyCharm')) raw -= shock / 2;
-    const applied = position.hedged ? applyHedge(assetRange(state, assetId), raw) : raw;
+    // The lucky charm softens bad shocks: the whole week's path moves up with it.
+    const charm = shock < 0 && hasEffect(state, 'luckyCharm') ? -shock / 2 : 0;
+    raw += charm;
+    const range = isManager(assetId) ? null : assetRange(state, assetId);
+    const cover = (x: number) => (position.hedged && range ? applyHedge(range, x) : x);
+    let applied = cover(raw);
+    // Stop orders, checked along the week's path in the order it traded.
+    const bar = bars[assetId];
+    if (bar && (position.stopLoss !== undefined || position.stopGain !== undefined)) {
+      const hit = checkStops(position, bar, charm, cover, applied);
+      if (hit) {
+        applied = hit.move;
+        stopped.push({ assetId, kind: hit.kind, ret: hit.ret });
+      }
+    }
     const pnl = position.value * (applied / 100);
     position.value += pnl;
     report.positionPnl[assetId] = pnl;
     state.assetPnl[assetId] = (state.assetPnl[assetId] ?? 0) + pnl;
   }
 
+  // Triggered stops sell the whole position at the stop (or after a gap), paying the broker.
+  for (const hit of stopped) {
+    const position = state.positions[hit.assetId];
+    if (!position) continue;
+    const before = state.cash;
+    sell(state, hit.assetId, position.value);
+    report.stops.push({ ...hit, amount: state.cash - before });
+    log(
+      state,
+      `${hit.kind === 'gain' ? 'Stop gain' : 'Stop loss'}: ${assetName(hit.assetId)} vendida a ${hit.ret >= 0 ? '+' : ''}${fmt(hit.ret * 100)}% sobre o custo.`,
+      hit.kind === 'gain' ? 'good' : 'bad',
+    );
+  }
+
   for (const assetId of ASSET_IDS) {
     const asset = state.assets[assetId]!;
     asset.price *= 1 + (moves[assetId] ?? 0) / 100;
     asset.history.push(asset.price);
+    asset.bars.push(bars[assetId] ?? null);
   }
   for (const id of INDICATOR_IDS) {
     const indicator = state.indicators[id]!;

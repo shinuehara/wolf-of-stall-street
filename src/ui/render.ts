@@ -32,6 +32,8 @@ import {
   REGIONS,
   SEASON_LENGTH,
   TRADE_FEE,
+  STOP_GAIN_LEVELS,
+  STOP_LOSS_LEVELS,
   TOP_CLASS,
   companiesOf,
   getClass,
@@ -92,6 +94,7 @@ import type {
   Sector,
   WeekRecord,
   ManagerId,
+  WeekBar,
 } from '../sim/types';
 import { seasonReturn, seasonSpeech } from './ceremony';
 import { GALA_NAMES, galaUrl, sceneUrl, storyUrl, type SceneName } from './scenes';
@@ -951,15 +954,30 @@ function renderAssetDetail(state: GameState, ui: UiState, assetId: string): stri
 
   const chartSeries = basket
     ? [
-        { values: asset.history, color: 'var(--gold)', main: true, label: 'Cesta' },
+        {
+          values: asset.history,
+          color: 'var(--gold)',
+          main: true,
+          label: 'Cesta',
+          bars: asset.bars,
+        },
         ...components.map((c, i) => ({
           values: state.assets[c.id]!.history,
+          bars: state.assets[c.id]!.bars,
           color: COMPANY_COLORS[i] ?? 'var(--muted)',
           main: false,
           label: c.name,
         })),
       ]
-    : [{ values: asset.history, color: 'var(--gold)', main: true, label: assetName(assetId) }];
+    : [
+        {
+          values: asset.history,
+          color: 'var(--gold)',
+          main: true,
+          label: assetName(assetId),
+          bars: asset.bars,
+        },
+      ];
 
   const members = basket
     ? `<div class="members">${components
@@ -1000,7 +1018,7 @@ function renderAssetDetail(state: GameState, ui: UiState, assetId: string): stri
     <div class="detail-grid">
       <div class="detail-main">
         ${readingCard(state, assetId)}
-        ${renderChart(chartSeries, basket)}
+        ${renderChart(chartSeries, basket, undefined, undefined, stopMarks(state, assetId))}
         ${members}
         <details class="more">
           <summary>Ver detalhes: profecia, o que cada ajudante disse, humor da semana</summary>
@@ -1044,6 +1062,7 @@ function renderAssetDetail(state: GameState, ui: UiState, assetId: string): stri
                 </label>`
               : '<p class="muted small">Vender sem valor vende tudo.</p>'
           }
+          ${position ? stopControls(state, assetId) : ''}
           ${
             isBasket(assetId) || !isBond(assetId)
               ? `<p class="muted small">Corretagem da guilda: ${(TRADE_FEE * 100).toLocaleString('pt-BR')}% em cada compra e venda (${fmtCost(tradeFee(assetId, 10))} fl a cada 10 fl).</p>`
@@ -1059,6 +1078,15 @@ interface Series {
   color: string;
   main: boolean;
   label: string;
+  /** How each week traded (aligned with values); weeks without a bar get a visual wobble. */
+  bars?: (WeekBar | null)[];
+}
+
+/** A horizontal line on a chart (a stop order). */
+interface ChartMark {
+  value: number;
+  label: string;
+  tone: 'up' | 'down';
 }
 
 /**
@@ -1079,7 +1107,12 @@ const TICKS_PER_WEEK = 6;
  * Purely visual: each week is a random-walk bridge that starts and ends exactly at the real
  * closes, seeded by the series and the absolute week so it never changes between renders.
  */
-function oscillate(values: number[], key: string, firstWeek: number): ChartPoint[] {
+function oscillate(
+  values: number[],
+  key: string,
+  firstWeek: number,
+  bars?: (WeekBar | null)[],
+): ChartPoint[] {
   const points: ChartPoint[] = [{ t: 0, v: values[0]! }];
   // Only as jumpy as the series really is: a fund in Crown bonds draws a smooth line.
   const returns = values.slice(1).map((v, i) => (values[i]! > 0 ? v / values[i]! - 1 : 0));
@@ -1089,6 +1122,16 @@ function oscillate(values: number[], key: string, firstWeek: number): ChartPoint
   for (let i = 1; i < values.length; i++) {
     const from = values[i - 1]!;
     const to = values[i]!;
+    // A week played: draw how it really traded (gap, low and high in order, close).
+    const bar = bars?.[i];
+    if (bar) {
+      const at = (move: number) => from * (1 + move / 100);
+      if (bar.gap !== 0) points.push({ t: i - 1 + 0.05, v: at(bar.gap) });
+      points.push({ t: i - 1 + 0.35, v: at(bar.lowFirst ? bar.low : bar.high) });
+      points.push({ t: i - 1 + 0.7, v: at(bar.lowFirst ? bar.high : bar.low) });
+      points.push({ t: i, v: to });
+      continue;
+    }
     let seed = hashString(`${key}:${firstWeek + i}`);
     const rand = () => {
       seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
@@ -1120,6 +1163,7 @@ function renderChart(
   rescale: boolean,
   title = 'Preço nas últimas',
   maxWeeks = CHART_WEEKS,
+  marks: ChartMark[] = [],
 ): string {
   const main = series.find((s) => s.main)!;
   const n = Math.min(maxWeeks + 1, main.values.length);
@@ -1129,13 +1173,17 @@ function renderChart(
   const firstWeek = main.values.length - n;
   const windowed = series.map((s) => {
     const values = s.values.slice(-n);
-    if (!rescale || s.main) return { ...s, values };
+    const bars = s.bars?.slice(-n);
+    if (!rescale || s.main) return { ...s, values, bars };
     const base = values[0]!;
     const target = main.values[firstWeek]!;
-    return { ...s, values: values.map((v) => (v / base) * target) };
+    return { ...s, values: values.map((v) => (v / base) * target), bars };
   });
-  const dense = windowed.map((s) => ({ ...s, points: oscillate(s.values, s.label, firstWeek) }));
-  const all = dense.flatMap((s) => s.points.map((p) => p.v));
+  const dense = windowed.map((s) => ({
+    ...s,
+    points: oscillate(s.values, s.label, firstWeek, s.bars),
+  }));
+  const all = [...dense.flatMap((s) => s.points.map((p) => p.v)), ...marks.map((m) => m.value)];
   const min = Math.min(...all);
   const max = Math.max(...all);
   const pad = (max - min) * 0.08 || max * 0.05 || 1;
@@ -1180,7 +1228,19 @@ function renderChart(
           .join('')}
         <path d="${linePath(mainDense.points)}" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
         <line x1="0" x2="${W}" y1="${lastY.toFixed(1)}" y2="${lastY.toFixed(1)}" class="chart-last" vector-effect="non-scaling-stroke" />
+        ${marks
+          .map(
+            (m) =>
+              `<line x1="0" x2="${W}" y1="${y(m.value).toFixed(1)}" y2="${y(m.value).toFixed(1)}" class="chart-stop chart-stop-${m.tone}" vector-effect="non-scaling-stroke"><title>${esc(m.label)}</title></line>`,
+          )
+          .join('')}
       </svg>
+      ${marks
+        .map(
+          (m) =>
+            `<span class="chart-stop-label ${m.tone}" style="top:${((y(m.value) / H) * 100).toFixed(1)}%">${esc(m.label)}</span>`,
+        )
+        .join('')}
     </div>
     <div class="chart-foot"><span>há ${n - 1} sem.</span><span>agora</span></div>
   </figure>`;
@@ -1344,6 +1404,54 @@ function spyParts(parts: { key: string; value: number }[]): string {
     .join(
       '',
     )}<li class="spy-total"><span>Análise completa</span><span class="${tone(total)}">${pct(total)}</span></li></ul>`;
+}
+
+/** Price levels of a position's stops, for the chart. */
+function stopMarks(state: GameState, assetId: string): ChartMark[] {
+  const position = state.positions[assetId];
+  if (!position || position.cost <= 0) return [];
+  const price = state.assets[assetId]!.price;
+  const r0 = position.value / position.cost - 1;
+  const level = (ret: number) => price * ((1 + ret) / (1 + r0));
+  const marks: ChartMark[] = [];
+  if (position.stopGain !== undefined) {
+    marks.push({
+      value: level(position.stopGain),
+      label: `stop gain ${pct(position.stopGain * 100, 0)}`,
+      tone: 'up',
+    });
+  }
+  if (position.stopLoss !== undefined) {
+    marks.push({
+      value: level(position.stopLoss),
+      label: `stop loss ${pct(position.stopLoss * 100, 0)}`,
+      tone: 'down',
+    });
+  }
+  return marks;
+}
+
+/** Stop-order buttons for a position (with the broker), measured on its cost. */
+function stopControls(state: GameState, assetId: string): string {
+  if (isBond(assetId) || isManager(assetId)) return '';
+  if (!state.perks.broker) {
+    return '<p class="muted small">Stop loss e stop gain: contrate o Corretor de Ordens na Taverna.</p>';
+  }
+  const position = state.positions[assetId]!;
+  const now = position.value / position.cost - 1;
+  const button = (kind: 'loss' | 'gain', value: number | null, current: number | undefined) => {
+    const on =
+      value === null
+        ? current === undefined
+        : current !== undefined && Math.abs(current - value) < 1e-9;
+    const label = value === null ? 'sem' : pct(value * 100, 0);
+    return `<button class="qbtn ${kind === 'loss' ? 'qsell' : 'qbuy'} ${on ? 'on' : ''}" data-action="set-stop" data-kind="${kind}" data-value="${value ?? ''}" data-asset="${assetId}">${label}</button>`;
+  };
+  return `<div class="stops">
+    <span class="small muted">Sobre o custo (agora <span class="${tone(now)}">${pct(now * 100)}</span>):</span>
+    <div class="stop-row"><span class="small down">Stop loss</span>${[...STOP_LOSS_LEVELS, null].map((v) => button('loss', v, position.stopLoss)).join('')}</div>
+    <div class="stop-row"><span class="small up">Stop gain</span>${[...STOP_GAIN_LEVELS, null].map((v) => button('gain', v, position.stopGain)).join('')}</div>
+  </div>`;
 }
 
 /** How strong a potential is, as arrows. */
@@ -1967,6 +2075,7 @@ function renderModal(state: GameState, ui: UiState): string {
     <ul class="ledger">
       <li><span>Títulos da Coroa</span><span class="up">${signed(report.bondIncome)}</span></li>
       ${report.hedgeFees > 0 ? `<li><span>Seguros</span><span class="down">${signed(-report.hedgeFees)}</span></li>` : ''}
+      ${report.stops.map((st) => `<li><span>${st.kind === 'gain' ? 'Stop gain' : 'Stop loss'}: ${assetName(st.assetId)} a ${pct(st.ret * 100)}</span><span class="gold">${fmt(st.amount)} fl livres</span></li>`).join('')}
       ${(state.ledger.at(-1)?.tradeFees ?? 0) > 0.005 ? `<li><span>Corretagem</span><span class="down">${signed(-(state.ledger.at(-1)?.tradeFees ?? 0))}</span></li>` : ''}
       ${report.investorFlow ? `<li><span>${report.investorFlow > 0 ? 'Aportes de investidores' : 'Resgates de investidores'}</span><span class="${tone(report.investorFlow)}">${signed(report.investorFlow)}</span></li>` : ''}
       ${report.confiscations.map((c) => `<li><span>Confisco: ${c.kind === 'militia' ? 'dinheiro da Milícia' : 'dinheiro do Abade'}</span><span class="down">${signed(-c.amount)}</span></li>`).join('')}

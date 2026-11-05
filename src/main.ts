@@ -16,6 +16,7 @@ import {
   quickTrade,
   sell,
   sellAll,
+  setStops,
   setHedge,
   type ActionResult,
   fmt,
@@ -227,6 +228,18 @@ root.addEventListener('click', (event) => {
     case 'close-report':
       ui.showReport = false;
       break;
+    case 'set-stop': {
+      const raw = target.dataset.value ?? '';
+      const value = raw === '' ? null : Number(raw);
+      report(
+        setStops(
+          state,
+          assetId,
+          target.dataset.kind === 'loss' ? { loss: value } : { gain: value },
+        ),
+      );
+      break;
+    }
     case 'sell-all':
       ui.confirmingSellAll = true;
       break;

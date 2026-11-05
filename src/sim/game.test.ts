@@ -36,6 +36,7 @@ import {
   PRE_HISTORY_WEEKS,
   sell,
   sellAll,
+  setStops,
   reading,
   sellAllPreview,
   setHedge,
@@ -885,5 +886,45 @@ describe('the reading (potential)', () => {
       return;
     }
     throw new Error('no rumour found');
+  });
+});
+
+describe('stop orders', () => {
+  it('need the broker, and only work on stock positions', () => {
+    const state = newGame(3);
+    buy(state, 'bakers', 20);
+    expect(setStops(state, 'bakers', { loss: -0.1 }).ok).toBe(false);
+    state.perks.broker = 1;
+    expect(setStops(state, 'bakers', { loss: -0.1, gain: 0.1 }).ok).toBe(true);
+    buy(state, BOND_LIQUID, 10);
+    expect(setStops(state, BOND_LIQUID, { loss: -0.1 }).ok).toBe(false);
+  });
+
+  it('sell the whole position at the stop when the week trades through it', () => {
+    let fired = 0;
+    for (let seed = 1; seed <= 60; seed++) {
+      const state = newGame(seed);
+      state.perks.broker = 1;
+      buy(state, 'bakers.harbor', 50);
+      setStops(state, 'bakers.harbor', { loss: -0.02, gain: 0.02 });
+      const report = endWeek(state);
+      const bar = state.assets['bakers.harbor']!.bars.at(-1)!;
+      const hit = report.stops[0];
+      // The position starts at -0.5% (broker): the stops sit at moves of about -1.5% and +2.5%
+      const ret = (move: number) => (1 - TRADE_FEE) * (1 + move / 100) - 1;
+      if (!hit) {
+        expect(ret(bar.low) > -0.02 && ret(bar.high) < 0.02).toBe(true);
+        continue;
+      }
+      fired++;
+      expect(state.positions['bakers.harbor']).toBeUndefined();
+      if (bar.gap === 0) expect(Math.abs(hit.ret)).toBeCloseTo(0.02);
+      // Low first: a loss fires before a gain could
+      if (bar.gap === 0 && ret(bar.low) <= -0.02 && ret(bar.high) >= 0.02) {
+        expect(hit.kind).toBe(bar.lowFirst ? 'loss' : 'gain');
+      }
+      expect(Math.abs(state.ledger.at(-1)!.other)).toBeLessThan(1e-6);
+    }
+    expect(fired).toBeGreaterThan(30);
   });
 });

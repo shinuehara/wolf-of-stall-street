@@ -125,7 +125,8 @@ export type PerkId =
   | 'insurers'
   | 'chronicler'
   | 'scribe'
-  | 'treasurer';
+  | 'treasurer'
+  | 'broker';
 
 export interface PerkLevel {
   cost: number;
@@ -249,6 +250,10 @@ export interface Position {
   /** Gold put in that is still in the position (reduced pro rata on sales). */
   cost: number;
   hedged: boolean;
+  /** Sell everything if the position falls to this return on its cost (e.g. -0.1). */
+  stopLoss?: number;
+  /** Sell everything if the position rises to this return on its cost (e.g. 0.1). */
+  stopGain?: number;
 }
 
 /** A Crown bond lot locked until it matures. Its gold returns to free cash at maturity. */
@@ -350,9 +355,22 @@ export interface WeekRecord {
   purse: number;
 }
 
+/**
+ * How a week traded, in % of the week's open: a gap at the open (a shock), then the low and
+ * the high in the order given, then the close. Stops are checked on this path; charts draw it.
+ */
+export interface WeekBar {
+  gap: number;
+  low: number;
+  high: number;
+  lowFirst: boolean;
+}
+
 export interface AssetState {
   price: number;
   history: number[];
+  /** One bar per week played, aligned with the end of `history` (null before the game). */
+  bars: (WeekBar | null)[];
 }
 
 export interface ActiveEvent {
@@ -451,7 +469,7 @@ export interface RiskyDeposit {
 }
 
 export interface GameState {
-  version: 16;
+  version: 17;
   seed: number;
   rngState: number;
   /** Weeks elapsed. A season is SEASON_LENGTH weeks. */

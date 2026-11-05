@@ -162,6 +162,20 @@ export const PERKS: readonly PerkDef[] = [
     ],
   },
   {
+    id: 'broker',
+    name: 'Corretor de Ordens',
+    icon: 'scroll',
+    description: 'Um corretor da guilda que vigia seus papéis enquanto você dorme.',
+    levels: [
+      {
+        cost: 6,
+        minClass: 1,
+        effect:
+          'Stop loss e stop gain: vende sozinho se a posição cair ou subir até o nível que você marcar.',
+      },
+    ],
+  },
+  {
     id: 'informants',
     name: 'Rede de Informantes',
     icon: 'scroll',
@@ -1399,3 +1413,9 @@ export const DRUNK_FILLER = [
   'Depois disso eu acho que cochilei um pouco.',
   'E foi isso. Ou foi ontem? Não importa.',
 ];
+
+/** Stop levels offered in the asset screen, as returns on the position's cost. */
+export const STOP_LOSS_LEVELS = [-0.05, -0.1, -0.15];
+export const STOP_GAIN_LEVELS = [0.05, 0.1, 0.15];
+/** How far a week's high and low reach beyond its open and close, in weekly noise units. */
+export const BAR_REACH = 0.6;

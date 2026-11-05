@@ -70,6 +70,9 @@ Key model facts (details in `docs/design.md`):
   and clues rendered by his _current_ rank (`drunkLine`/`drunkPadding`). Astrologer: votes
   (`ASTRO_VOTES`). Spy: `parts` breakdown and guild report (`answer`, `spyBreakdown`). The
   first trained expert is the `confidant` (`perkCost`).
+- **Week bars and stops.** `endWeek` builds a `WeekBar` per asset (gap, low, high, lowFirst),
+  stored in `AssetState.bars` aligned with `history`; `checkStops` walks it for positions with
+  `stopLoss`/`stopGain` (broker perk); charts draw bars via `oscillate(..., bars)`.
 - **Time.** Quarter (`SEASON_LENGTH`) = 12 weeks = 3 months (`MONTH_LENGTH` = 4). Class
   review + party at week 12; visitors (merchant/smuggler) at weeks 4 and 8.
 - **Story / gradual unlock.** `state.story.chapter`: 0 = bonds only (quarter 1, no experts,
