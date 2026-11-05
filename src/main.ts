@@ -228,6 +228,11 @@ root.addEventListener('click', (event) => {
     case 'close-report':
       ui.showReport = false;
       break;
+    case 'toggle-hedge': {
+      const position = state.positions[assetId];
+      if (position) report(setHedge(state, assetId, !position.hedged));
+      break;
+    }
     case 'set-stop': {
       const raw = target.dataset.value ?? '';
       const value = raw === '' ? null : Number(raw);

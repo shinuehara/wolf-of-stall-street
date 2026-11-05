@@ -374,8 +374,13 @@ export function expertCost(state: GameState, expertId: ExpertId): number {
 }
 
 export function hedgeFee(state: GameState, assetId: string): number {
+  return state.positions[assetId]?.hedged ? hedgeQuote(state, assetId) : 0;
+}
+
+/** What insuring a position costs per week (whether or not it is insured now). */
+export function hedgeQuote(state: GameState, assetId: string): number {
   const position = state.positions[assetId];
-  if (!position?.hedged) return 0;
+  if (!position) return 0;
   if (hasEffect(state, 'guildSeal')) return 0;
   const discount = state.perks.insurers ? 1 - INSURERS_DISCOUNT : 1;
   return position.value * currentClass(state).hedgeFeeRate * discount;

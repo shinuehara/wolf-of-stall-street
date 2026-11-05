@@ -66,6 +66,7 @@ import {
   expertCost,
   fmt,
   hedgeFee,
+  hedgeQuote,
   reading,
   sellAllPreview,
   expertOfPerk,
@@ -761,7 +762,7 @@ function renderGuildGroup(state: GameState, ui: UiState, guild: GuildDef): strin
         ? ` <span class="muted small">+ ${fmt(inCompanies)} em empresas</span>`
         : '';
     return `<div class="asset-item ${isCompany ? 'company-item' : ''} ${ui.selectedAsset === assetId ? 'selected' : ''}">
-      ${toggle}
+      <div class="row-side">${toggle}${hedgeButton(state, assetId)}</div>
       <button class="guild-row ${isCompany ? 'company-row' : ''}" data-action="select-asset" data-asset="${assetId}">
         ${isCompany ? '<span class="tree">└</span>' : sprite(GUILD_SPRITE[guild.id]!, 28)}
         <span class="row-name">${label}${hasShockWarnings(state) && (state.shockRisk[assetId] ?? 0) > 0.05 ? ' <span class="warn" title="Informantes: risco alto de choque">⚠</span>' : ''}</span>
@@ -1406,6 +1407,18 @@ function spyParts(parts: { key: string; value: number }[]): string {
     )}<li class="spy-total"><span>Análise completa</span><span class="${tone(total)}">${pct(total)}</span></li></ul>`;
 }
 
+/** A shield next to each position in the market: one click turns its insurance on or off. */
+function hedgeButton(state: GameState, assetId: string): string {
+  const position = state.positions[assetId];
+  if (!position || isBond(assetId) || isManager(assetId)) return '';
+  const cover = hedgeBounds(assetRange(state, assetId));
+  const fee = hedgeQuote(state, assetId);
+  const title = position.hedged
+    ? `Seguro ligado: a semana fica entre ${pct(cover.floor)} e ${pct(cover.cap)}, inclusive contra choques. Clique para desligar.`
+    : `Ligar seguro: limita a semana a ${pct(cover.floor)} a ${pct(cover.cap)}, inclusive contra choques, por ${fmtCost(fee)} fl/sem.`;
+  return `<button class="shield-btn ${position.hedged ? 'on' : ''}" data-action="toggle-hedge" data-asset="${assetId}" title="${esc(title)}" aria-pressed="${position.hedged}" ${state.status === 'playing' ? '' : 'disabled'}>${sprite('shield', 16, 'Seguro')}</button>`;
+}
+
 /** Price levels of a position's stops, for the chart. */
 function stopMarks(state: GameState, assetId: string): ChartMark[] {
   const position = state.positions[assetId];
@@ -1451,7 +1464,25 @@ function stopControls(state: GameState, assetId: string): string {
     <span class="small muted">Sobre o custo (agora <span class="${tone(now)}">${pct(now * 100)}</span>):</span>
     <div class="stop-row"><span class="small down">Stop loss</span>${[...STOP_LOSS_LEVELS, null].map((v) => button('loss', v, position.stopLoss)).join('')}</div>
     <div class="stop-row"><span class="small up">Stop gain</span>${[...STOP_GAIN_LEVELS, null].map((v) => button('gain', v, position.stopGain)).join('')}</div>
+    ${destinyStop(state, assetId, now, position.stopGain)}
   </div>`;
+}
+
+/**
+ * Stop gain where your reading says the asset ends the quarter: the remaining move from now,
+ * turned into a return on the position's cost.
+ */
+function destinyStop(state: GameState, assetId: string, now: number, current?: number): string {
+  const r = reading(state, assetId);
+  if (!r.known) return '';
+  const remaining = (1 + r.target / 100) / (1 + r.progress / 100) - 1;
+  const onCost = Math.round(((1 + now) * (1 + remaining) - 1) * 1000) / 1000;
+  if (onCost <= now + 0.005) {
+    return '<p class="small muted">Stop gain no destino: o papel já chegou onde deve terminar o trimestre.</p>';
+  }
+  const on = current !== undefined && Math.abs(current - onCost) < 0.0015;
+  return `<button class="qbtn qbuy destiny-stop ${on ? 'on' : ''}" data-action="set-stop" data-kind="gain" data-value="${onCost}" data-asset="${assetId}"
+    title="Vende sozinho quando chegar onde você acredita que termina o trimestre">Stop gain no destino: ${pct(onCost * 100)} sobre o custo</button>`;
 }
 
 /** How strong a potential is, as arrows. */

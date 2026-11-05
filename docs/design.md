@@ -385,7 +385,12 @@ O caminho é abertura → (salto) → primeira → segunda → fechamento.
   nível** (com corretagem). Se um choque salta por cima do stop, sai no preço depois do salto.
 - O gráfico de cada ativo desenha as semanas jogadas com a barra real (os mesmos 4 pontos) e
   as linhas tracejadas dos stops; o histórico de antes do jogo segue com oscilação visual.
-- O seguro limita também a mínima e a máxima da semana.
+- **Stop gain no destino:** marca o stop gain onde a sua leitura (o Potencial) diz que o ativo
+  termina o trimestre, convertido em retorno sobre o custo. Só aparece quando alguém te contou
+  algo; fica fixo no valor do momento em que você clicou.
+- O seguro limita também a mínima e a máxima da semana. Na lista do Mercado, cada posição tem
+  um **botão de escudo** que liga/desliga o seguro (dourado = ligado; o preço aparece ao passar
+  o mouse).
 - Os bots ainda não usam stops.
 
 ### Seguro (hedge)

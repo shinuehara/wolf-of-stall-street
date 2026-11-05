@@ -98,6 +98,7 @@ melhorias ~128 semanas; oráculo (teto) ~88. Quem usa o Espião não vai para a 
 - Dinheiro na Coroa deve desenhar linha lisa (sem volatilidade) no time-lapse e nos gráficos.
 - Stop loss / stop gain como melhoria comprável; modelo do dono: sortear máxima, mínima e
   quem vem primeiro (abertura → mínima → máxima → fechamento) e checar os stops nessa ordem.
+- O dono nunca achou o seguro: agora é um botão de escudo em cada posição da lista do Mercado.
 - Ideias aceitas para depois: relatórios por setor e panorama macro do Espião (pacotes),
   assinatura semanal.
 
@@ -151,3 +152,4 @@ melhorias ~128 semanas; oráculo (teto) ~88. Quem usa o Espião não vai para a 
 | `380f855`                       | Potencial: um número por ativo; detalhes recolhidos                      |
 | `8870ccc`                       | Linha lisa para a Coroa no time-lapse e nos gráficos do fundo            |
 | `dcb1127`                       | Stop loss/gain (Corretor de Ordens), barras semanais reais no gráfico    |
+| (este)                          | Stop gain no destino; seguro como botão de escudo no Mercado             |

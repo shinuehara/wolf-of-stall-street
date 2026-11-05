@@ -28,6 +28,7 @@ import {
   buyItem,
   hasShockWarnings,
   hedgeFee,
+  hedgeQuote,
   expertLevel,
   expertRankName,
   buyPerk,
@@ -926,5 +927,17 @@ describe('stop orders', () => {
       expect(Math.abs(state.ledger.at(-1)!.other)).toBeLessThan(1e-6);
     }
     expect(fired).toBeGreaterThan(30);
+  });
+});
+
+describe('insurance quote', () => {
+  it('quotes the weekly premium before you insure, and charges it only once insured', () => {
+    const state = newGame(2);
+    buy(state, 'bakers', 40);
+    expect(hedgeFee(state, 'bakers')).toBe(0);
+    const quote = hedgeQuote(state, 'bakers');
+    expect(quote).toBeGreaterThan(0);
+    setHedge(state, 'bakers', true);
+    expect(hedgeFee(state, 'bakers')).toBeCloseTo(quote);
   });
 });
