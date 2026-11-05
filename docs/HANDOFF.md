@@ -150,4 +150,4 @@ melhorias ~128 semanas; oráculo (teto) ~88. Quem usa o Espião não vai para a 
 | `f2728e5`                       | Botão Vender tudo (Mercado e Carteira) com confirmação                   |
 | `380f855`                       | Potencial: um número por ativo; detalhes recolhidos                      |
 | `8870ccc`                       | Linha lisa para a Coroa no time-lapse e nos gráficos do fundo            |
-| (este)                          | Stop loss/gain (Corretor de Ordens), barras semanais reais no gráfico    |
+| `dcb1127`                       | Stop loss/gain (Corretor de Ordens), barras semanais reais no gráfico    |
