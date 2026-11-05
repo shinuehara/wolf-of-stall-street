@@ -1,4 +1,4 @@
-import { GUILDS, SEASON_LENGTH, companiesOf, getClass } from './data';
+import { DRUNK_GAP_GUESS, GUILDS, SEASON_LENGTH, companiesOf, getClass } from './data';
 import { BOND_LIQUID, assetProphecy, isBond } from './assets';
 import { PULL } from './forecast';
 import {
@@ -34,13 +34,6 @@ import type { ExpertId, GameState, PerkId } from './types';
  */
 export type BotStrategy =
   'bonds' | 'naive' | 'astrologer' | 'spy' | 'perks' | 'oracle' | 'drunk' | 'drunkRookie';
-
-/**
- * How far from the public middle a perfect reader of the Drunk assumes his company ends the
- * quarter (he hints the direction, not the size). Rumours pick companies at least
- * DRUNK_MIN_DEVIATION away; this is about their typical gap.
- */
-const DRUNK_GAP_GUESS = 8;
 
 /** Diagnostics only: the oracle knows every true destiny (an upper bound, not a player). */
 let ORACLE = false;

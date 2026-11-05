@@ -36,6 +36,7 @@ import {
   PRE_HISTORY_WEEKS,
   sell,
   sellAll,
+  reading,
   sellAllPreview,
   setHedge,
   targetForecast,
@@ -853,5 +854,36 @@ describe('selling everything', () => {
     expect(state.lockedBonds).toHaveLength(1);
     expect(state.cash).toBeCloseTo(40 + preview.amount - preview.fees);
     expect(sellAll(state).ok).toBe(false);
+  });
+});
+
+describe('the reading (potential)', () => {
+  it('is unknown until someone tells you; with the spy it is his estimate minus the way so far', () => {
+    const state = newGame(9);
+    state.purse = 20;
+    expect(reading(state, 'bakers').known).toBe(false);
+    consult(state, 'spy', 'bakers');
+    const r = reading(state, 'bakers');
+    expect(r.known).toBe(true);
+    expect(r.sources).toEqual(['spy']);
+    expect(r.potential).toBeCloseTo(r.target - r.progress);
+  });
+
+  it("reads the Drunk's rumour for you only once his arrow is readable", () => {
+    for (let seed = 1; seed <= 30; seed++) {
+      const state = newGame(seed);
+      state.purse = 20;
+      consult(state, 'drunk', '');
+      const rumour = state.insights[0];
+      if (rumour?.expert !== 'drunk' || rumour.ramble) continue;
+      expect(reading(state, rumour.targetId).known).toBe(false);
+      state.perks.drunkCare = 3;
+      const r = reading(state, rumour.targetId);
+      expect(r.known).toBe(true);
+      expect(r.potential > -r.progress - 1e9).toBe(true);
+      expect(Math.sign(r.target - (r.target - (rumour.up ? 8 : -8)))).toBe(rumour.up ? 1 : -1);
+      return;
+    }
+    throw new Error('no rumour found');
   });
 });

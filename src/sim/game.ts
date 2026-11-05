@@ -34,6 +34,8 @@ import {
   CYCLE_PERSISTENCE,
   CYCLE_SHOCK,
   DRUNK_DRINKS_PER_WEEK,
+  DRUNK_GAP_GUESS,
+  DRUNK_READABLE_LEVEL,
   DRUNK_MIN_DEVIATION,
   DRUNK_RAMBLE_CHANCE,
   DRUNK_RAMBLES,
@@ -696,6 +698,64 @@ function spyBreakdown(
     }
   }
   return [...totals].map(([key, value]) => ({ key, value }));
+}
+
+/** What the player knows about where an asset ends the quarter, summed up in one number. */
+export interface Reading {
+  /** Someone told you something (otherwise the potential is a public guess, worth little). */
+  known: boolean;
+  /** Your best estimate of where it ends the quarter (%). */
+  target: number;
+  /** How far it still has to go (%): the number to decide on. */
+  potential: number;
+  progress: number;
+  sources: ExpertId[];
+}
+
+/**
+ * The player's reading of an asset: the public middle of its quarter, moved by what the
+ * experts said (the Spy's estimate wins; otherwise the stars and the Drunk once his arrow is
+ * readable), minus how far it already went.
+ */
+export function reading(state: GameState, assetId: string): Reading {
+  const p = assetProphecy(state, assetId);
+  const middle = (p.low + p.high) / 2;
+  let offset = 0;
+  const sources: ExpertId[] = [];
+  const spy = state.insights.find((i) => i.targetId === assetId && i.expert === 'spy');
+  if (spy?.expert === 'spy') {
+    offset = spy.bands.reduce((sum, b) => sum + b.p * ((b.from + b.to) / 2), 0) - spy.publicMid;
+    sources.push('spy');
+  } else {
+    const astro = state.insights.find((i) => i.targetId === assetId && i.expert === 'astrologer');
+    if (astro?.expert === 'astrologer') {
+      const share = astro.votes.filter(Boolean).length / astro.votes.length;
+      offset += (share * 2 - 1) * (p.high - p.low) * 0.15;
+      sources.push('astrologer');
+    }
+    if (expertLevel(state, 'drunk') >= DRUNK_READABLE_LEVEL) {
+      const basket = isBasket(assetId);
+      const rumours = state.insights.filter(
+        (i) =>
+          i.expert === 'drunk' &&
+          !i.ramble &&
+          (basket ? i.targetId.startsWith(`${assetId}.`) : i.targetId === assetId),
+      );
+      for (const r of rumours) {
+        if (r.expert !== 'drunk') continue;
+        offset += ((r.up ? 1 : -1) * DRUNK_GAP_GUESS) / (basket ? 3 : 1);
+      }
+      if (rumours.length > 0) sources.push('drunk');
+    }
+  }
+  const target = middle + offset;
+  return {
+    known: sources.length > 0,
+    target,
+    potential: target - p.progress,
+    progress: p.progress,
+    sources,
+  };
 }
 
 /**

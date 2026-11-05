@@ -64,6 +64,7 @@ import {
   expertCost,
   fmt,
   hedgeFee,
+  reading,
   sellAllPreview,
   expertOfPerk,
   perkCost,
@@ -747,7 +748,6 @@ function renderGuildGroup(state: GameState, ui: UiState, guild: GuildDef): strin
   const inCompanies = companies.reduce((s, c) => s + (state.positions[c.id]?.value ?? 0), 0);
 
   const row = (assetId: string, label: string, isCompany: boolean) => {
-    const q = assetProphecy(state, assetId);
     const position = state.positions[assetId];
     const toggle = isCompany
       ? '<span class="toggle-spacer"></span>'
@@ -762,7 +762,7 @@ function renderGuildGroup(state: GameState, ui: UiState, guild: GuildDef): strin
       <button class="guild-row ${isCompany ? 'company-row' : ''}" data-action="select-asset" data-asset="${assetId}">
         ${isCompany ? '<span class="tree">└</span>' : sprite(GUILD_SPRITE[guild.id]!, 28)}
         <span class="row-name">${label}${hasShockWarnings(state) && (state.shockRisk[assetId] ?? 0) > 0.05 ? ' <span class="warn" title="Informantes: risco alto de choque">⚠</span>' : ''}</span>
-        <span class="row-range" title="Profecia do trimestre e quanto já andou">${pct(q.low, 0)} a ${pct(q.high, 0)} <span class="${tone(q.progress)}">· já ${pct(q.progress)}</span></span>
+        <span class="row-range">${potentialChip(state, assetId)}</span>
         <span class="row-pos ${position ? 'gold' : 'muted'}">${position ? `${fmt(position.value)} fl${position.hedged ? ' 🛡' : ''}` : '—'}${extra}</span>
       </button>
       ${quickBar(state, assetId)}
@@ -964,13 +964,12 @@ function renderAssetDetail(state: GameState, ui: UiState, assetId: string): stri
   const members = basket
     ? `<div class="members">${components
         .map((c, i) => {
-          const r = assetRange(state, c.id);
           const move = ui.lastReport?.marketReturns[c.id];
           return `<button class="member" data-action="select-asset" data-asset="${c.id}">
             <span class="swatch" style="background:${COMPANY_COLORS[i]}"></span>
             <span class="member-name">${c.name}</span>
-            <span class="muted">${pct(r.low, 0)} a ${pct(r.high, 0)}</span>
-            ${move === undefined ? '' : `<span class="${tone(move)}">${pct(move)}</span>`}
+            ${potentialChip(state, c.id)}
+            ${move === undefined ? '' : `<span class="${tone(move)} small">semana: ${pct(move)}</span>`}
           </button>`;
         })
         .join('')}</div>`
@@ -1000,23 +999,24 @@ function renderAssetDetail(state: GameState, ui: UiState, assetId: string): stri
   return `${back}${head(price)}
     <div class="detail-grid">
       <div class="detail-main">
-        ${company ? `<p class="trait">${company.trait}</p>` : ''}
+        ${readingCard(state, assetId)}
         ${renderChart(chartSeries, basket)}
         ${members}
-        ${prophecyBlock(state, assetId)}
-        <div class="forecast forecast-week">
-          <div class="forecast-label small">Humor da semana: o arauto espera <strong>${pct(range.low, 0)} a ${pct(range.high, 0)}</strong>, contando só com a faixa pública</div>
-          ${rangeBar(range, position?.hedged ? hedgeRange : null)}
-          ${breakdown}
-        </div>
+        <details class="more">
+          <summary>Ver detalhes: profecia, o que cada ajudante disse, humor da semana</summary>
+          ${company ? `<p class="trait">${company.trait}</p>` : ''}
+          ${prophecyBlock(state, assetId)}
+          ${insights.length ? `<div class="insights">${insights.map((i) => renderInsight(i, true, state.week)).join('')}</div>` : ''}
+          <div class="forecast forecast-week">
+            <div class="forecast-label small">Humor da semana: o arauto espera <strong>${pct(range.low, 0)} a ${pct(range.high, 0)}</strong>, contando só com a faixa pública</div>
+            ${rangeBar(range, position?.hedged ? hedgeRange : null)}
+            ${breakdown}
+          </div>
+        </details>
       </div>
       <div class="detail-side">
         ${news.length ? `<div class="chips">${news.map((n) => `<span class="chip ${tone(n.shift)}">${esc(n.label)}${n.shift > 0 ? ' ▲' : n.shift < 0 ? ' ▼' : ''}</span>`).join('')}</div>` : ''}
-        ${
-          insights.length
-            ? `<div class="insights">${insights.map((i) => renderInsight(i, true, state.week)).join('')}</div>`
-            : `<p class="muted small">Onde isto termina o trimestre? <button class="linkish" data-action="go" data-screen="tavern">Pergunte na Taverna ▶</button></p>`
-        }
+
         <div class="trade-box">
           <div class="holding">
             Sua posição: <strong class="gold">${fmt(position?.value ?? 0)} fl</strong>
@@ -1225,8 +1225,8 @@ function expertBlurb(expert: ExpertId, level: number): string {
  */
 /** The mumbling around a rumour: lots for the rookie, none once he is nearly sober. */
 function drunkPadding(insight: Extract<Insight, { expert: 'drunk' }>, core: string): string {
-  const before = [3, 2, 1, 0, 0][Math.min(DRUNK_LEVEL, 4)]!;
-  const after = [2, 1, 0, 0, 0][Math.min(DRUNK_LEVEL, 4)]!;
+  const before = [2, 1, 1, 0, 0][Math.min(DRUNK_LEVEL, 4)]!;
+  const after = [1, 1, 0, 0, 0][Math.min(DRUNK_LEVEL, 4)]!;
   // A fixed shuffle per rumour, so the same mumbling comes back and never repeats itself.
   let seed = hashString(`${insight.week}|${insight.targetId}|${insight.line}|${insight.up}`) || 1;
   const order = DRUNK_FILLER.map((text, i) => {
@@ -1338,6 +1338,55 @@ function spyParts(parts: { key: string; value: number }[]): string {
     .join(
       '',
     )}<li class="spy-total"><span>Análise completa</span><span class="${tone(total)}">${pct(total)}</span></li></ul>`;
+}
+
+/** How strong a potential is, as arrows. */
+function potentialArrows(value: number): string {
+  if (value >= 6) return '▲▲';
+  if (value >= 2) return '▲';
+  if (value <= -6) return '▼▼';
+  if (value <= -2) return '▼';
+  return '≈';
+}
+
+/** The one number to decide on: how far the asset should still go this quarter. */
+function potentialChip(state: GameState, assetId: string): string {
+  const r = reading(state, assetId);
+  if (!r.known) {
+    return `<span class="potential unknown" title="Ninguém te contou nada sobre isto: pergunte na Taverna">Potencial ?</span>`;
+  }
+  const faces = r.sources
+    .map((e) => sprite(expertSprite(e, expertLevel(state, e)), 14, e))
+    .join('');
+  return `<span class="potential ${tone(r.potential)}" title="Quanto ainda deve andar até o fim do trimestre, pelo que te contaram">${potentialArrows(r.potential)} ${pct(r.potential, 0)} ${faces}</span>`;
+}
+
+/** The detail's headline: the potential, where you think it ends, where it is, who told you. */
+function readingCard(state: GameState, assetId: string): string {
+  const r = reading(state, assetId);
+  const left = weeksUntilSeasonEnd(state);
+  const who: Record<ExpertId, string> = {
+    spy: 'o Espião',
+    astrologer: 'a Astróloga',
+    drunk: 'o Bêbado',
+  };
+  if (!r.known) {
+    return `<div class="reading px unknown">
+      <span class="reading-big">Potencial ?</span>
+      <p>Ninguém te contou para onde isto vai neste trimestre. Já andou <strong class="${tone(r.progress)}">${pct(r.progress)}</strong>, faltam ${left} semanas.
+      <button class="linkish" data-action="go" data-screen="tavern">Pergunte na Taverna ▶</button></p>
+    </div>`;
+  }
+  const verdict =
+    r.potential >= 2
+      ? 'ainda tem espaço para subir'
+      : r.potential <= -2
+        ? 'deve cair até o fim do trimestre'
+        : 'já está perto de onde deve terminar';
+  return `<div class="reading px ${tone(r.potential)}">
+    <span class="reading-big">${potentialArrows(r.potential)} ${pct(r.potential)}</span>
+    <p><strong>${verdict}.</strong> Pelo que ${r.sources.map((e) => who[e]).join(' e ')} ${r.sources.length > 1 ? 'disseram' : 'disse'}, termina o trimestre por volta de <strong>${pct(r.target, 0)}</strong>; já andou <strong class="${tone(r.progress)}">${pct(r.progress)}</strong>; faltam ${left} semanas.</p>
+  </div>`;
 }
 
 /**
@@ -1539,7 +1588,7 @@ function renderPositions(state: GameState, ui: UiState): string {
         <td class="num ${tone(gain)}">${signed(gain)}</td>
         <td class="num ${tone(gain)}">${h.cost > 0 ? pct((gain / h.cost) * 100) : '—'}</td>
         <td class="num">${whole(share(h.value))}%</td>
-        <td class="num muted">${h.range}</td>
+        <td class="num">${isBond(h.id) || isManager(h.id) ? `<span class="muted">${h.range}</span>` : potentialChip(state, h.id)}</td>
         <td>${h.hedged ? '🛡 sim' : '<span class="muted">não</span>'}</td>
       </tr>`;
     })
@@ -1549,7 +1598,7 @@ function renderPositions(state: GameState, ui: UiState): string {
     ${sellAllBar(state, ui)}
     <div class="table-wrap px">
       <table class="ptable">
-        <thead><tr><th>Ativo</th><th>Onde</th><th class="num">Valor</th><th class="num">Custo</th><th class="num">Ganho</th><th class="num">%</th><th class="num">Peso</th><th class="num">Profecia do trimestre</th><th>Seguro</th></tr></thead>
+        <thead><tr><th>Ativo</th><th>Onde</th><th class="num">Valor</th><th class="num">Custo</th><th class="num">Ganho</th><th class="num">%</th><th class="num">Peso</th><th class="num">Potencial</th><th>Seguro</th></tr></thead>
         <tbody>${rows}</tbody>
         <tfoot><tr><td>Total aplicado</td><td></td><td class="num">${fmt(investedTotal)}</td><td class="num muted">${fmt(costTotal)}</td><td class="num ${tone(openGain)}">${signed(openGain)}</td><td class="num ${tone(openGain)}">${costTotal > 0 ? pct((openGain / costTotal) * 100) : '—'}</td><td class="num">${whole(share(investedTotal))}%</td><td></td><td></td></tr></tfoot>
       </table>

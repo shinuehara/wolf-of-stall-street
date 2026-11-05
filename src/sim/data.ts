@@ -1275,6 +1275,15 @@ export const DRUNK_RAMBLES = [
   'Meu joelho dói quando vai chover. Ou quando não vai.',
 ];
 
+/**
+ * The Drunk hints the direction, not the size: readers assume his company ends this far (%)
+ * from the public middle (his rumours average ~11).
+ */
+export const DRUNK_GAP_GUESS = 8;
+
+/** From this rank the Drunk's arrow lets the game read his rumour for you. */
+export const DRUNK_READABLE_LEVEL = 3;
+
 /** The Drunk only gossips about a company whose quarter is this far (%) from the public guess. */
 export const DRUNK_MIN_DEVIATION = 3;
 

@@ -91,6 +91,10 @@ melhorias ~128 semanas; oráculo (teto) ~88. Quem usa o Espião não vai para a 
   foca em um só): Bêbado começa com monólogo cheio de divagação e o treino corta até sobrar a
   frase útil; Astróloga consulta vários astros ("2 de 3 alta"); Espião ganha análise completa
   (economia + setor + bairro + empresa). Claude acrescentou o confidente (treino pela metade).
+- O dono achou difícil progredir e as informações dispersas, confusas e cansativas de ler.
+  Resposta: o **Potencial** (um número por ativo, a conta feita pelo jogo), detalhes
+  recolhidos, monólogo do Bêbado mais curto. Pendente: progressão mais rápida no começo
+  (perguntei quanto tempo ele imagina para uma partida boa).
 - Ideias aceitas para depois: relatórios por setor e panorama macro do Espião (pacotes),
   assinatura semanal.
 
@@ -141,3 +145,4 @@ melhorias ~128 semanas; oráculo (teto) ~88. Quem usa o Espião não vai para a 
 | `c6fbe64`                       | Bêbado que nunca mente: fofocas a interpretar, bobagens, 5 patentes      |
 | `5ce6055`                       | Árvores dos ajudantes (5 patentes), astros, análise completa, confidente |
 | `f2728e5`                       | Botão Vender tudo (Mercado e Carteira) com confirmação                   |
+| (este)                          | Potencial: um número por ativo; detalhes recolhidos                      |

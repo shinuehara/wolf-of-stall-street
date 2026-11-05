@@ -2751,3 +2751,83 @@ img.sprite,
 .guild-list .sell-all-row {
   list-style: none;
 }
+
+/* The potential: one number to decide on */
+.potential {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.potential.unknown {
+  color: var(--muted);
+}
+
+.potential .sprite {
+  width: 14px;
+  height: 14px;
+}
+
+.reading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-left: 6px solid var(--muted);
+}
+
+.reading.up {
+  border-left-color: var(--green);
+}
+
+.reading.down {
+  border-left-color: var(--red);
+}
+
+.reading p {
+  margin: 0;
+}
+
+.reading-big {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  white-space: nowrap;
+}
+
+.reading.up .reading-big {
+  color: var(--green);
+}
+
+.reading.down .reading-big {
+  color: var(--red);
+}
+
+.reading.unknown .reading-big {
+  color: var(--muted);
+}
+
+details.more {
+  margin-top: 8px;
+}
+
+details.more > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.95em;
+  padding: 4px 0;
+}
+
+details.more[open] > summary {
+  margin-bottom: 6px;
+}
+
+@media (max-width: 640px) {
+  .reading {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+}

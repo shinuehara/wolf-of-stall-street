@@ -56,6 +56,17 @@ Cada guilda tem `minChapter` (padrão 1) e `minClass`; as duas precisam ser aten
 
 ## Mecânicas
 
+### O Potencial (um número para decidir)
+
+O dono achou as informações dispersas, confusas e cansativas de ler. Agora o jogo faz a conta:
+**Potencial** = onde você acredita que o ativo termina o trimestre − quanto ele já andou
+(`reading()` em game.ts). A estimativa usa o Espião (se houver); senão a votação dos astros e,
+a partir de Quase Sóbrio, a fofoca do Bêbado (que dá a direção; o tamanho suposto é
+`DRUNK_GAP_GUESS`). Sem ninguém ter dito nada, aparece **"Potencial ?"** (a faixa pública não
+prevê). Mostrado com setas (▲▲ ≥ 6, ▲ ≥ 2, ≈, ▼, ▼▼) e o retrato de quem informou na lista do
+Mercado, nos cartões das empresas, na Carteira e em destaque no detalhe do ativo. Profecia,
+respostas dos ajudantes e humor da semana ficam em "Ver detalhes" (recolhido).
+
 ### A profecia do trimestre (modelo de mercado)
 
 Pedido do dono: o jogo induzia a comprar e vender tudo toda semana, porque cada semana era um
