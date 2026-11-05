@@ -95,6 +95,7 @@ melhorias ~128 semanas; oráculo (teto) ~88. Quem usa o Espião não vai para a 
   Resposta: o **Potencial** (um número por ativo, a conta feita pelo jogo), detalhes
   recolhidos, monólogo do Bêbado mais curto. Pendente: progressão mais rápida no começo
   (perguntei quanto tempo ele imagina para uma partida boa).
+- Dinheiro na Coroa deve desenhar linha lisa (sem volatilidade) no time-lapse e nos gráficos.
 - Ideias aceitas para depois: relatórios por setor e panorama macro do Espião (pacotes),
   assinatura semanal.
 
@@ -146,3 +147,4 @@ melhorias ~128 semanas; oráculo (teto) ~88. Quem usa o Espião não vai para a 
 | `5ce6055`                       | Árvores dos ajudantes (5 patentes), astros, análise completa, confidente |
 | `f2728e5`                       | Botão Vender tudo (Mercado e Carteira) com confirmação                   |
 | `380f855`                       | Potencial: um número por ativo; detalhes recolhidos                      |
+| (este)                          | Linha lisa para a Coroa no time-lapse e nos gráficos do fundo            |

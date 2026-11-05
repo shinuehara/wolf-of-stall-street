@@ -1081,6 +1081,11 @@ const TICKS_PER_WEEK = 6;
  */
 function oscillate(values: number[], key: string, firstWeek: number): ChartPoint[] {
   const points: ChartPoint[] = [{ t: 0, v: values[0]! }];
+  // Only as jumpy as the series really is: a fund in Crown bonds draws a smooth line.
+  const returns = values.slice(1).map((v, i) => (values[i]! > 0 ? v / values[i]! - 1 : 0));
+  const mean = returns.reduce((a, b) => a + b, 0) / (returns.length || 1);
+  const sd = Math.sqrt(returns.reduce((a, b) => a + (b - mean) ** 2, 0) / (returns.length || 1));
+  const daily = Math.min(0.009, sd * 0.5);
   for (let i = 1; i < values.length; i++) {
     const from = values[i - 1]!;
     const to = values[i]!;
@@ -1092,8 +1097,9 @@ function oscillate(values: number[], key: string, firstWeek: number): ChartPoint
     const walk = [0];
     for (let k = 1; k <= TICKS_PER_WEEK; k++) walk.push(walk[k - 1]! + rand());
     const end = walk[TICKS_PER_WEEK]!;
-    // Daily noise of roughly 0.9% of the price, a bit more in weeks that moved a lot.
-    const scale = Math.abs(from) * 0.009 + Math.abs(to - from) * 0.35;
+    // Daily noise up to 0.9% of the price (less for calm series), more in weeks that moved a
+    // lot; none at all for a smooth series (Crown bonds).
+    const scale = sd < 0.0005 ? 0 : Math.abs(from) * daily + Math.abs(to - from) * 0.35;
     for (let k = 1; k <= TICKS_PER_WEEK; k++) {
       const f = k / TICKS_PER_WEEK;
       const bridge = k === TICKS_PER_WEEK ? 0 : (walk[k]! - f * end) * scale;
@@ -2082,7 +2088,12 @@ function renderTimelapse(state: GameState, report: WeekReport): string {
     seed = (seed * 1103515245 + 12345) & 0x7fffffff;
     return seed / 0x7fffffff;
   };
-  const vol = Math.max(Math.abs(end - start) * 0.6, start * 0.004);
+  // Only the share in guilds and managers wobbles; Crown bonds grow in a straight line.
+  const risky = Object.entries(state.positions)
+    .filter(([id]) => !isBond(id))
+    .reduce((sum, [, p]) => sum + p.value, 0);
+  const exposure = Math.min(1, risky / Math.max(1, end));
+  const vol = Math.max(Math.abs(end - start) * 0.6, start * 0.004) * exposure;
   const walk = [0];
   for (let i = 1; i < n; i++) walk.push(walk[i - 1]! + (rnd() - 0.5) * vol * 0.5);
   const values = walk.map(
