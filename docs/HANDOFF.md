@@ -37,7 +37,11 @@ O jogo é jogável do começo ao fim e passa em 54 testes. Visão geral do que e
   jogador interpreta) ou bobagem; o treino acrescenta ícone da guilda, bairro, seta e empresa.
 - **Gestores contratados** (Carteira → Gestores): Frei Prudêncio, Dona Ambrosina, Rodrigo
   Rompe-Bolsa investem parte do fundo sozinhos, com estilo e taxa próprios.
-- **Promoções e quedas múltiplas** no fim do trimestre (um título por teto ultrapassado).
+- **Promoção em qualquer semana** (um título por teto ultrapassado, `offerTitles`); quedas
+  múltiplas só no fim do trimestre (o Meirinho confere o piso).
+- **Fundo parado na Coroa:** mês com mais de 60% em Coroa + florins livres faz investidores
+  sacarem até 4% (`PARK_LIMIT`, `PARK_OUT`, `state.monthParked`).
+- **Coroa (4 sem.)** fica presa 4 semanas e depois segue rendendo até ser vendida.
 - **Investidores:** julgam os últimos 3 meses (aporte lento, resgate rápido); propostas de aporte
   (Milícia suja, Abade talvez desviado, Viúva limpa) com risco de confisco e multa.
 - **Influencer a cada guilda nova** ("A nova febre: …"), ganhando seguidores.
@@ -99,6 +103,9 @@ melhorias ~128 semanas; oráculo (teto) ~88. Quem usa o Espião não vai para a 
 - Stop loss / stop gain como melhoria comprável; modelo do dono: sortear máxima, mínima e
   quem vem primeiro (abertura → mínima → máxima → fechamento) e checar os stops nessa ordem.
 - O dono nunca achou o seguro: agora é um botão de escudo em cada posição da lista do Mercado.
+- O dono notou que, depois de passar do teto, compensava estacionar na Coroa até a avaliação.
+  Decisão: promoção em qualquer semana + investidores sacam de fundo parado (ambos aceitos).
+- Coroa de 4 semanas: presa 4 semanas, depois rende até o jogador vender (pedido do dono).
 - Ideias aceitas para depois: relatórios por setor e panorama macro do Espião (pacotes),
   assinatura semanal.
 
@@ -153,3 +160,4 @@ melhorias ~128 semanas; oráculo (teto) ~88. Quem usa o Espião não vai para a 
 | `8870ccc`                       | Linha lisa para a Coroa no time-lapse e nos gráficos do fundo            |
 | `dcb1127`                       | Stop loss/gain (Corretor de Ordens), barras semanais reais no gráfico    |
 | `f2a233f`                       | Stop gain no destino; seguro como botão de escudo no Mercado             |
+| (este commit)                   | Promoção em qualquer semana, saque por fundo parado, Coroa 4 sem. rende  |

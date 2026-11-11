@@ -256,13 +256,13 @@ export interface Position {
   stopGain?: number;
 }
 
-/** A Crown bond lot locked until it matures. Its gold returns to free cash at maturity. */
+/** A Crown bond lot: locked for 4 weeks, then it keeps paying its rate and can be sold. */
 export interface LockedBond {
   value: number;
   cost: number;
   /** Weekly rate fixed at purchase (0.004 = 0.4%). */
   rate: number;
-  /** Week number at whose end the lot pays out. */
+  /** From this week on the lot can be sold (it keeps paying until it is). */
   maturesWeek: number;
 }
 
@@ -469,7 +469,7 @@ export interface RiskyDeposit {
 }
 
 export interface GameState {
-  version: 17;
+  version: 18;
   seed: number;
   rngState: number;
   /** Weeks elapsed. A season is SEASON_LENGTH weeks. */
@@ -535,6 +535,8 @@ export interface GameState {
   riskyDeposits: RiskyDeposit[];
   /** Excess return over the Crown bond of the last months (%, newest last, up to 3). */
   monthlyExcess: number[];
+  /** Sum of the weekly parked share (free gold + Crown bonds) this month; see parkedShare. */
+  monthParked: number;
   /** The first expert you trained: their training costs less. */
   confidant: ExpertId | null;
   /** Managers hired; their money is a position with id `mgr.<id>`. */

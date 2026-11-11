@@ -414,7 +414,7 @@ describe('endWeek', () => {
     endWeek(state);
     expect(state.status).toBe('lost');
   });
-  it('a locked Crown bond pays double, cannot be sold and returns to cash at maturity', () => {
+  it('a locked Crown bond pays double, is stuck 4 weeks, then keeps paying until sold', () => {
     const state = newGame(3);
     const serf = CLASSES[0]!;
     expect(buy(state, BOND_LOCKED, 50).ok).toBe(true);
@@ -425,12 +425,19 @@ describe('endWeek', () => {
     expect(setHedge(state, BOND_LIQUID, true).ok).toBe(false);
     expect(wealth(state)).toBeCloseTo(100);
     for (let i = 0; i < BOND_LOCK_WEEKS - 1; i++) endWeek(state);
+    expect(sell(state, BOND_LOCKED, 10).ok).toBe(false);
+    for (let i = 0; i < 3; i++) endWeek(state);
+    // Matured, still in the fund and still paying the locked rate.
     expect(state.lockedBonds).toHaveLength(1);
-    endWeek(state);
+    const weeks = BOND_LOCK_WEEKS + 2;
+    const grown = 50 * (1 + serf.bondRate * BOND_LOCK_MULTIPLIER) ** weeks;
+    expect(state.lockedBonds[0]!.value).toBeCloseTo(grown);
+    const cash = state.cash;
+    expect(sell(state, BOND_LOCKED, 20).ok).toBe(true);
+    expect(state.cash).toBeCloseTo(cash + 20);
+    expect(quickTrade(state, BOND_LOCKED, -1).ok).toBe(true);
     expect(state.lockedBonds).toHaveLength(0);
-    const grown = 50 * (1 + serf.bondRate * BOND_LOCK_MULTIPLIER) ** BOND_LOCK_WEEKS;
-    const fees = state.ledger.reduce((s, r) => s + r.fees, 0);
-    expect(state.cash).toBeCloseTo(50 + grown - fees);
+    expect(state.cash).toBeCloseTo(cash + grown);
   });
   it('locked bonds count in the fund for the season review', () => {
     const state = newGame(3);
@@ -567,11 +574,12 @@ describe('endWeek', () => {
     expect(state.status).toBe('lost');
   });
 
-  it('offers a title when the season ends above the ceiling, paid from the purse', () => {
+  it('offers a title any week the fund is above the ceiling, paid from the purse', () => {
     const state = newGame(3);
     state.cash = 140;
     state.monthStart = 140;
-    for (let i = 0; i < SEASON_LENGTH; i++) endWeek(state);
+    endWeek(state);
+    expect(state.week % SEASON_LENGTH).not.toBe(0);
     expect(state.ascensionOffer).toBe(1);
     const fund = wealth(state);
     const purse = state.purse;
@@ -584,7 +592,7 @@ describe('endWeek', () => {
     const state = newGame(3);
     state.cash = CLASSES[2]!.ceiling + 30; // past the Serf, Peasant and Artisan ceilings
     state.monthStart = state.cash;
-    for (let i = 0; i < SEASON_LENGTH; i++) endWeek(state);
+    endWeek(state);
     expect(state.ascensionOffer).toBe(3);
     expect(ascensionCost(state, 3)).toBeCloseTo(
       CLASSES[0]!.ascensionFee + CLASSES[1]!.ascensionFee + CLASSES[2]!.ascensionFee,
@@ -593,6 +601,15 @@ describe('endWeek', () => {
     expect(acceptAscension(state).ok).toBe(true);
     expect(state.classIndex).toBe(2);
     expect(state.ascensionOffer).toBe(0);
+  });
+
+  it('drops are only judged at the quarter close', () => {
+    const state = newGame(3);
+    state.classIndex = 3;
+    endWeek(state); // far below the Merchant floor, but mid-quarter
+    expect(state.classIndex).toBe(3);
+    while (state.week % SEASON_LENGTH !== 0) endWeek(state);
+    expect(state.classIndex).toBeLessThan(3);
   });
 
   it('becoming Count wins the game', () => {
@@ -712,6 +729,7 @@ describe('the opening quarter', () => {
 describe('investors', () => {
   it('a good month brings deposits and a bad one withdrawals, kept apart from returns', () => {
     const good = newGame(8);
+    buy(good, 'bakers', 70); // at work, not parked in the Crown
     good.monthStart = 80; // the fund "grew" 25% this month
     for (let w = 0; w < MONTH_LENGTH; w++) endWeek(good);
     const goodFlows = good.ledger.reduce((s, r) => s + r.flows, 0);
@@ -724,6 +742,17 @@ describe('investors', () => {
     expect(badFlows).toBeLessThan(0);
     expect(badFlows).toBeGreaterThanOrEqual(-0.16 * 130);
     for (const r of [...good.ledger, ...bad.ledger]) expect(Math.abs(r.other)).toBeLessThan(1e-6);
+  });
+
+  it('a month parked in the Crown makes investors leave, never bring money', () => {
+    const state = newGame(8);
+    buy(state, BOND_LIQUID, 100);
+    state.monthStart = 80; // even a "great" month
+    for (let w = 0; w < MONTH_LENGTH; w++) endWeek(state);
+    const flows = state.ledger.reduce((s, r) => s + r.flows, 0);
+    expect(flows).toBeLessThan(0);
+    expect(flows).toBeGreaterThanOrEqual(-0.07 * 100);
+    expect(state.log.some((l) => l.text.includes('Isso eu faço sozinho'))).toBe(true);
   });
 
   it('the opening quarter has no investor flows or offers', () => {

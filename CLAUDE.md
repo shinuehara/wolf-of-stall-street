@@ -88,8 +88,13 @@ Key model facts (details in `docs/design.md`):
 - **Managers.** Hired managers hold a position `mgr.<id>` (`managerAsset`, `isManager`);
   `endWeek` sets its weekly move from `managerPicks` (noisy read of the forecasts) minus fees.
   Code that walks `state.positions` must handle manager ids (no `guildOfAsset`/`assetRange`).
-- **Class review.** Multiple drops (below the Serf floor = dungeon) and multiple promotions:
-  `ascensionOffer` is a number of titles; `acceptAscension(state, levels)` buys up to that.
+- **Class review.** Promotions any week the fund is above the ceiling (`offerTitles`, one
+  title per ceiling; `ascensionOffer` is a number, `acceptAscension(state, levels)`); drops
+  only at the quarter close (`reviewSeason`; below the Serf floor = dungeon).
+- **Parking.** `parkedShare` (free gold + Crown bonds) is summed weekly in `monthParked`; a
+  month above `PARK_LIMIT` cancels deposits and withdraws up to `PARK_OUT`.
+- **Locked bonds** stay locked `BOND_LOCK_WEEKS`, then keep paying until sold (`isMatured`,
+  `maturedValue`, `sellMatured`; `raiseCash` and `sellAll` include matured lots).
   Tests use a `newGame` wrapper in `game.test.ts` that skips the opening (chapter 2).
 - **Shocks** happen outside the announced range; insurance (hedge) clamps them too.
 

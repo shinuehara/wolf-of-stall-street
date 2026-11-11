@@ -42,6 +42,7 @@ import {
   getGuild,
   getRegion,
   isRegionId,
+  PARK_LIMIT,
 } from '../sim/data';
 import {
   BOND_LIQUID,
@@ -69,6 +70,9 @@ import {
   hedgeQuote,
   reading,
   sellAllPreview,
+  isMatured,
+  maturedValue,
+  monthParkedSoFar,
   expertOfPerk,
   perkCost,
   tradeFee,
@@ -434,12 +438,12 @@ function renderSquare(state: GameState, ui: UiState): string {
   const net = report ? reportNet(report) : null;
   const total = wealth(state);
   const weeks = weeksUntilSeasonEnd(state);
-  let verdict = `Faltam ${weeks} semana(s) para a avaliação. Você está entre o piso e o teto: se o trimestre acabasse hoje, seguiria ${cls.name}.`;
+  let verdict = `Faltam ${weeks} semana(s) para o Meirinho conferir o piso. Passe do teto de ${whole(cls.ceiling)} fl em qualquer semana e o camareiro vende o próximo título.`;
   if (state.classIndex >= TOP_CLASS) verdict = 'Você é Conde. O reino é seu.';
   else if (total < cls.floor)
     verdict = `Cuidado! Faltam ${weeks} semana(s) e você está abaixo do piso de ${whole(cls.floor)} fl. Se nada mudar, vai cair de classe.`;
   else if (total >= cls.ceiling)
-    verdict = `Faltam ${weeks} semana(s) e você já passou do teto de ${whole(cls.ceiling)} fl. Mantenha assim e o camareiro vai bater à sua porta.`;
+    verdict = `Você passou do teto de ${whole(cls.ceiling)} fl: o camareiro tem um título à venda no Castelo.`;
 
   const noNews =
     events.length === 0 && state.companyEvents.length === 0 && state.localNews.length === 0;
@@ -703,7 +707,7 @@ function sellAllBar(state: GameState, ui: UiState): string {
   const playing = state.status === 'playing';
   if (ui.confirmingSellAll && count > 0) {
     return `<div class="sell-all confirm">
-      <span>Vender <strong>tudo</strong> (${count} ${count === 1 ? 'posição' : 'posições'}): recebe <strong class="gold">${fmt(amount - fees)} fl</strong>${fees > 0 ? `, paga <span class="down">${fmtCost(fees)} fl</span> de corretagem` : ''}.${state.lockedBonds.length ? ' Títulos presos ficam até vencer.' : ''}</span>
+      <span>Vender <strong>tudo</strong> (${count} ${count === 1 ? 'posição' : 'posições'}): recebe <strong class="gold">${fmt(amount - fees)} fl</strong>${fees > 0 ? `, paga <span class="down">${fmtCost(fees)} fl</span> de corretagem` : ''}.${state.lockedBonds.length > state.lockedBonds.filter((b) => isMatured(state, b)).length ? ' Títulos ainda presos ficam até completar 4 semanas.' : ''}</span>
       <span class="actions">
         <button class="pbtn pbtn-small pbtn-sell" data-action="confirm-sell-all">Vender tudo</button>
         <button class="pbtn pbtn-small pbtn-ghost" data-action="cancel-sell-all">Cancelar</button>
@@ -711,9 +715,18 @@ function sellAllBar(state: GameState, ui: UiState): string {
     </div>`;
   }
   return `<div class="sell-all">
-    <span class="muted small">${count > 0 ? `Aplicado: ${fmt(amount)} fl em ${count} ${count === 1 ? 'posição' : 'posições'}` : 'Nada aplicado'}</span>
+    <span class="muted small">${count > 0 ? `Aplicado: ${fmt(amount)} fl em ${count} ${count === 1 ? 'posição' : 'posições'}` : 'Nada aplicado'}${parkedNote(state)}</span>
     <button class="pbtn pbtn-small pbtn-sell" data-action="sell-all" ${playing && count > 0 ? '' : 'disabled'}>Vender tudo</button>
   </div>`;
+}
+
+/** Warns when investors will judge the month as parked in the Crown (or idle gold). */
+function parkedNote(state: GameState): string {
+  if (state.story.chapter < 1 || state.status !== 'playing') return '';
+  const parked = monthParkedSoFar(state);
+  if (parked <= PARK_LIMIT - 0.15) return '';
+  const tone = parked > PARK_LIMIT ? 'down' : 'gold';
+  return ` · <span class="${tone}" title="Investidores toleram até ${whole(PARK_LIMIT * 100)}% do fundo parado (florins livres + Coroa) na média do mês. Acima disso, alguns sacam no fim do mês.">Parado na Coroa no mês: ${whole(parked * 100)}%${parked > PARK_LIMIT ? ' ⚠ investidores vão sacar' : ''}</span>`;
 }
 
 function renderCrownGroup(state: GameState, ui: UiState): string {
@@ -794,7 +807,9 @@ const QUICK_SHARES: [share: number, label: string][] = [
 function quickBar(state: GameState, assetId: string): string {
   const playing = state.status === 'playing';
   const canBuy = playing && state.cash > 0.005;
-  const canSell = playing && assetId !== BOND_LOCKED && Boolean(state.positions[assetId]);
+  const canSell =
+    playing &&
+    (assetId === BOND_LOCKED ? maturedValue(state) > 0.005 : Boolean(state.positions[assetId]));
   const name = assetName(assetId);
   return `<div class="quick" role="group" aria-label="Compra e venda rápida: ${esc(name)}">
     ${QUICK_SHARES.map(([share, label]) => {
@@ -835,7 +850,7 @@ function renderBondDetail(state: GameState, ui: UiState, assetId: string): strin
       <div class="detail-main">
         <p>${
           locked
-            ? `Rende <strong>${BOND_LOCK_MULTIPLIER}×</strong> o título livre, mas o ouro fica <strong>preso por ${BOND_LOCK_WEEKS} semanas</strong>. A taxa fica fixa na compra e, no vencimento, o valor volta sozinho para os seus florins livres.`
+            ? `Rende <strong>${BOND_LOCK_MULTIPLIER}×</strong> o título livre, mas o ouro fica <strong>preso por ${BOND_LOCK_WEEKS} semanas</strong>. A taxa fica fixa na compra. Depois das ${BOND_LOCK_WEEKS} semanas o lote <strong>continua rendendo</strong> e pode ser vendido quando você quiser.`
             : 'Rende a taxa da sua classe toda semana. Compre e venda quando quiser: é o lugar para estacionar o ouro entre uma aposta e outra.'
         }</p>
         <p class="muted small">Florins livres parados não rendem nada. A taxa sobe conforme você sobe na escada social.</p>
@@ -850,7 +865,7 @@ function renderBondDetail(state: GameState, ui: UiState, assetId: string): strin
               ? `<h3>Seus lotes</h3><ul class="ledger">${lots
                   .map(
                     (b) =>
-                      `<li><span>${fmt(b.value)} fl a ${pct(b.rate * 100, 2)}/sem</span><span>vence na semana ${b.maturesWeek}${b.maturesWeek - state.week <= 1 ? ' (esta semana)' : ` (faltam ${b.maturesWeek - state.week})`}</span></li>`,
+                      `<li><span>${fmt(b.value)} fl a ${pct(b.rate * 100, 2)}/sem</span><span>${isMatured(state, b) ? '<span class="up">livre para vender</span>' : `preso até a semana ${b.maturesWeek} (faltam ${b.maturesWeek - state.week})`}</span></li>`,
                   )
                   .join('')}</ul>`
               : '<p class="muted small">Você não tem lotes presos.</p>'
@@ -870,7 +885,7 @@ function renderBondDetail(state: GameState, ui: UiState, assetId: string): strin
           </div>
           <div class="trade">
             <button class="pbtn pbtn-buy" data-action="buy" data-asset="${assetId}" ${playing ? '' : 'disabled'}>${locked ? `Prender por ${BOND_LOCK_WEEKS} sem.` : 'Comprar'}</button>
-            ${locked ? '' : `<button class="pbtn pbtn-sell" data-action="sell" data-asset="${assetId}" ${playing && position ? '' : 'disabled'}>Vender</button>`}
+            <button class="pbtn pbtn-sell" data-action="sell" data-asset="${assetId}" ${playing && (locked ? maturedValue(state) > 0.005 : position) ? '' : 'disabled'}>Vender${locked ? ' liberados' : ''}</button>
           </div>
         </div>
       </div>
@@ -1678,7 +1693,9 @@ function holdings(state: GameState): Holding[] {
   });
   const lots = state.lockedBonds.map((b) => ({
     id: BOND_LOCKED,
-    name: `Título da Coroa · vence sem. ${b.maturesWeek}`,
+    name: isMatured(state, b)
+      ? 'Título da Coroa · livre, rendendo'
+      : `Título da Coroa · preso até sem. ${b.maturesWeek}`,
     where: '<span class="muted small">Coroa (preso)</span>',
     value: b.value,
     cost: b.cost,
@@ -2004,7 +2021,7 @@ function renderCastle(state: GameState, ui: UiState): string {
           </li>`,
         )
         .join('')}</ol>
-      <p class="muted small">A cada ${SEASON_LENGTH} semanas: abaixo do piso você cai (quantas classes forem precisas); acima do teto pode comprar o próximo título, um por teto ultrapassado.</p>
+      <p class="muted small">Passou do teto em qualquer semana: o camareiro vende o próximo título (um por teto ultrapassado). A cada ${SEASON_LENGTH} semanas o Meirinho confere o piso: abaixo dele você cai (quantas classes forem precisas).</p>
     </article>
     <article class="card px">
       <h2>${sprite('shield', 20)} Seu título: ${cls.name}</h2>
@@ -2012,7 +2029,7 @@ function renderCastle(state: GameState, ui: UiState): string {
         state.ascensionOffer && next
           ? titleOfferHtml(
               state,
-              'O camareiro tem títulos à venda. A oferta expira no fim da semana.',
+              'O camareiro tem títulos à venda. A oferta vale esta semana e volta enquanto o fundo seguir acima do teto.',
               'decline-title',
               'Recusar',
             )
@@ -2108,7 +2125,7 @@ function renderModal(state: GameState, ui: UiState): string {
       ${report.hedgeFees > 0 ? `<li><span>Seguros</span><span class="down">${signed(-report.hedgeFees)}</span></li>` : ''}
       ${report.stops.map((st) => `<li><span>${st.kind === 'gain' ? 'Stop gain' : 'Stop loss'}: ${assetName(st.assetId)} a ${pct(st.ret * 100)}</span><span class="gold">${fmt(st.amount)} fl livres</span></li>`).join('')}
       ${(state.ledger.at(-1)?.tradeFees ?? 0) > 0.005 ? `<li><span>Corretagem</span><span class="down">${signed(-(state.ledger.at(-1)?.tradeFees ?? 0))}</span></li>` : ''}
-      ${report.investorFlow ? `<li><span>${report.investorFlow > 0 ? 'Aportes de investidores' : 'Resgates de investidores'}</span><span class="${tone(report.investorFlow)}">${signed(report.investorFlow)}</span></li>` : ''}
+      ${report.investorFlow ? `<li><span>${report.investorFlow > 0 ? 'Aportes de investidores' : report.parked ? `Resgates: fundo ${whole(report.parked * 100)}% parado na Coroa` : 'Resgates de investidores'}</span><span class="${tone(report.investorFlow)}">${signed(report.investorFlow)}</span></li>` : ''}
       ${report.confiscations.map((c) => `<li><span>Confisco: ${c.kind === 'militia' ? 'dinheiro da Milícia' : 'dinheiro do Abade'}</span><span class="down">${signed(-c.amount)}</span></li>`).join('')}
       <li><span>Taxas pagas a você</span><span class="down">${signed(-(report.managementFee + report.performanceFee))}</span></li>
     </ul>
@@ -2353,7 +2370,7 @@ function renderSeasonModal(state: GameState, ui: UiState, review: SeasonReview):
         <button class="pbtn" data-action="close-report">Seguir em frente</button>`;
       break;
     case 'stay':
-      verdict = `<p class="verdict">Você segue <strong>${after.name}</strong>. Para subir, o fundo precisa passar de ${whole(after.ceiling)} fl no fim do próximo trimestre.</p>
+      verdict = `<p class="verdict">Você segue <strong>${after.name}</strong>. Para subir, o fundo precisa passar de ${whole(after.ceiling)} fl, em qualquer semana.</p>
         <button class="pbtn" data-action="close-report">Continuar</button>`;
       break;
     default: {

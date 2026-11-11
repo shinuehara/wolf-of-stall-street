@@ -1158,6 +1158,10 @@ export const FLOW_MAX_IN = 0.12;
 export const FLOW_MAX_OUT = 0.15;
 /** Withdrawals stop when the fund is this close to the class floor (1.15 = 15% above it). */
 export const FLOW_FLOOR_MARGIN = 1.3;
+/** Investors tolerate this much of the fund parked (free gold + Crown bonds) over a month. */
+export const PARK_LIMIT = 0.6;
+/** A month fully parked costs this share of the fund in withdrawals (scaled above the limit). */
+export const PARK_OUT = 0.04;
 /**
  * Guild broker's fee on every purchase and sale of baskets and companies (not on Crown bonds,
  * not on money handed to managers). Makes churning the whole portfolio every week costly.

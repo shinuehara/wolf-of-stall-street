@@ -65,6 +65,8 @@ import {
   FLOW_MAX_IN,
   FLOW_MAX_OUT,
   FLOW_FLOOR_MARGIN,
+  PARK_LIMIT,
+  PARK_OUT,
   FLOW_MONTHS,
   FLOW_SENSITIVITY_IN,
   FLOW_SENSITIVITY_OUT,
@@ -134,6 +136,7 @@ import type {
   Prophecy,
   Position,
   WeekBar,
+  LockedBond,
 } from './types';
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
@@ -167,6 +170,8 @@ export interface WeekReport {
   visitorArrived: VisitorKind | null;
   /** Investors' monthly deposit (+) or withdrawal (-), 0 when nobody moved. */
   investorFlow: number;
+  /** Set when investors judged the month parked (average idle share), 0 to 1. */
+  parked?: number;
   /** Deposits traced and taken back this week. */
   confiscations: { kind: InvestorKind; amount: number; fine: number }[];
   /** Someone offered to invest in the fund (answer before the week ends). */
@@ -266,7 +271,7 @@ function cityProfile(state: GameState): { drift: number; width: number } {
 
 export function newGame(seed: number = Date.now() >>> 0): GameState {
   const state: GameState = {
-    version: 17,
+    version: 18,
     seed,
     rngState: seed,
     week: 0,
@@ -306,6 +311,7 @@ export function newGame(seed: number = Date.now() >>> 0): GameState {
     investorOffer: null,
     riskyDeposits: [],
     monthlyExcess: [],
+    monthParked: 0,
     managers: [],
     confidant: null,
     ascensionOffer: 0,
@@ -334,9 +340,35 @@ export function lockedValue(state: GameState): number {
   return state.lockedBonds.reduce((sum, b) => sum + b.value, 0);
 }
 
-/** Everything that can be turned into cash this week (locked bonds excluded). */
+/** A locked Crown bond lot is free to sell once its 4 weeks are over (it keeps paying). */
+export function isMatured(state: GameState, lot: LockedBond): boolean {
+  return lot.maturesWeek <= state.week;
+}
+
+/** Value of the locked bond lots that already matured and can be sold. */
+export function maturedValue(state: GameState): number {
+  return state.lockedBonds.reduce((sum, b) => sum + (isMatured(state, b) ? b.value : 0), 0);
+}
+
+/** Everything that can be turned into cash this week (unmatured bonds excluded). */
 export function liquidWealth(state: GameState): number {
-  return state.cash + invested(state);
+  return state.cash + invested(state) + maturedValue(state);
+}
+
+/** Sells up to `amount` of matured Crown bond lots, oldest first; returns what was sold. */
+function sellMatured(state: GameState, amount: number): number {
+  let left = amount;
+  for (const lot of [...state.lockedBonds].sort((a, b) => a.maturesWeek - b.maturesWeek)) {
+    if (left <= 1e-9 || !isMatured(state, lot)) continue;
+    const take = Math.min(left, lot.value);
+    lot.cost -= lot.cost * (take / lot.value);
+    lot.value -= take;
+    left -= take;
+  }
+  state.lockedBonds = state.lockedBonds.filter((b) => b.value >= 0.005);
+  const sold = amount - left;
+  state.cash += sold;
+  return sold;
 }
 
 export function wealth(state: GameState): number {
@@ -543,7 +575,12 @@ export function buy(state: GameState, assetId: string, amount: number): ActionRe
 export function sell(state: GameState, assetId: string, amount: number): ActionResult {
   if (state.status !== 'playing') return fail('O jogo terminou.');
   if (assetId === BOND_LOCKED) {
-    return fail('Títulos de 4 semanas ficam presos até o vencimento; o ouro volta sozinho.');
+    if (maturedValue(state) <= 0.005) {
+      return fail('Esses Títulos ainda estão presos: só podem ser vendidos depois de 4 semanas.');
+    }
+    if (!(amount > 0)) return fail('Informe um valor positivo.');
+    sellMatured(state, amount);
+    return ok;
   }
   const position = state.positions[assetId];
   if (!position || position.value <= 0) return fail('Você não tem cotas disso.');
@@ -558,20 +595,24 @@ export function sell(state: GameState, assetId: string, amount: number): ActionR
 
 /**
  * What selling everything would bring: every position (stocks, the liquid Crown bond, money
- * with managers) back to free gold, minus the broker's fees. Locked bonds stay locked.
+ * with managers) and the matured locked bonds back to free gold, minus the broker's fees.
+ * Locked bonds still inside their 4 weeks stay.
  */
 export function sellAllPreview(state: GameState): { amount: number; fees: number; count: number } {
   const ids = Object.keys(state.positions);
-  const amount = ids.reduce((sum, id) => sum + state.positions[id]!.value, 0);
+  const matured = maturedValue(state);
+  const amount = ids.reduce((sum, id) => sum + state.positions[id]!.value, 0) + matured;
   const fees = ids.reduce((sum, id) => sum + tradeFee(id, state.positions[id]!.value), 0);
-  return { amount, fees, count: ids.length };
+  return { amount, fees, count: ids.length + (matured > 0.005 ? 1 : 0) };
 }
 
 export function sellAll(state: GameState): ActionResult {
   if (state.status !== 'playing') return fail('O jogo terminou.');
   const ids = Object.keys(state.positions);
-  if (ids.length === 0) return fail('Você não tem nada para vender.');
+  const matured = maturedValue(state);
+  if (ids.length === 0 && matured <= 0.005) return fail('Você não tem nada para vender.');
   for (const id of ids) sell(state, id, state.positions[id]!.value);
+  if (matured > 0.005) sellMatured(state, matured);
   log(state, 'Você vendeu tudo. O ouro está livre no fundo.', 'neutral');
   return ok;
 }
@@ -591,7 +632,13 @@ export function quickTrade(state: GameState, assetId: string, share: number): Qu
     return result.ok ? { ok: true, amount } : result;
   }
   if (assetId === BOND_LOCKED) {
-    return fail('Títulos de 4 semanas ficam presos até o vencimento; o ouro volta sozinho.');
+    const free = maturedValue(state);
+    if (free <= 0.005) {
+      return fail('Esses Títulos ainda estão presos: só podem ser vendidos depois de 4 semanas.');
+    }
+    const amount = share <= -1 ? free : Math.min(wealth(state) * -share, free);
+    sell(state, BOND_LOCKED, amount);
+    return { ok: true, amount };
   }
   const position = state.positions[assetId];
   if (!position) return fail('Você não tem cotas disso.');
@@ -968,8 +1015,11 @@ export function endWeek(state: GameState): WeekReport {
     stops: [],
   };
 
-  // Unanswered offers expire when the week ends.
+  // Unanswered offers expire when the week ends (a new one comes if the fund is still high).
+  const offeredBefore = state.ascensionOffer;
   state.ascensionOffer = 0;
+  // Investors watch how much of the fund sits idle in the Crown (or in free gold).
+  state.monthParked += parkedShare(state);
   state.investorOffer = null;
 
   // 1. Insurance premiums are paid up front.
@@ -1105,14 +1155,13 @@ export function endWeek(state: GameState): WeekReport {
     report.bondIncome += interest;
     state.assetPnl[BOND_LOCKED] = (state.assetPnl[BOND_LOCKED] ?? 0) + interest;
   }
-  const matured = state.lockedBonds.filter((b) => b.maturesWeek <= state.week + 1);
-  if (matured.length > 0) {
-    const total = matured.reduce((sum, b) => sum + b.value, 0);
-    state.cash += total;
-    state.lockedBonds = state.lockedBonds.filter((b) => b.maturesWeek > state.week + 1);
+  // Lots that finish their 4 weeks keep paying at their rate; from now on they can be sold.
+  const freed = state.lockedBonds.filter((b) => b.maturesWeek === state.week + 1);
+  if (freed.length > 0) {
+    const total = freed.reduce((sum, b) => sum + b.value, 0);
     log(
       state,
-      `Títulos da Coroa venceram: ${fmt(total)} florins voltaram para o seu bolso.`,
+      `Títulos da Coroa de 4 semanas liberados: ${fmt(total)} florins seguem rendendo e já podem ser vendidos.`,
       'good',
     );
   }
@@ -1140,11 +1189,12 @@ export function endWeek(state: GameState): WeekReport {
   logWeekSummary(state, report);
   recordWeek(state, report);
 
-  // 4. Season review.
+  // 4. Season review (drops); titles are on offer any week the fund is above the ceiling.
   if (state.week % SEASON_LENGTH === 0) {
     report.seasonEnded = true;
     const classBefore = state.classIndex;
     report.classChange = reviewSeason(state);
+    if (report.classChange === 'stay' && offerTitles(state, 0)) report.classChange = 'up-offer';
     report.seasonReview = buildSeasonReview(state, classBefore, report.classChange);
     if (state.status === 'playing') advanceStory(state);
     announceGuilds(state);
@@ -1155,6 +1205,8 @@ export function endWeek(state: GameState): WeekReport {
       classIndex: state.classIndex,
     };
     if (state.status !== 'playing') return report;
+  } else if (state.status === 'playing') {
+    offerTitles(state, offeredBefore);
   }
 
   // 5. The world turns.
@@ -1254,6 +1306,13 @@ function applyInvestorFlows(state: GameState, report: WeekReport): void {
     const worst = Math.min(excess, average);
     if (worst < -FLOW_DEAD_ZONE) share = (worst * FLOW_SENSITIVITY_OUT) / 100;
     else if (average > FLOW_DEAD_ZONE && excess > 0) share = (average * FLOW_SENSITIVITY_IN) / 100;
+    // Nobody pays a manager to sit in the Crown: a parked month cancels deposits and
+    // makes some investors leave.
+    const parked = state.monthParked / MONTH_LENGTH;
+    if (parked > PARK_LIMIT) {
+      share = Math.min(share, 0) - (PARK_OUT * (parked - PARK_LIMIT)) / (1 - PARK_LIMIT);
+      report.parked = parked;
+    }
     if (share !== 0) {
       const mood = 0.75 + nextRandom(state) * 0.5;
       share = Math.max(-FLOW_MAX_OUT, Math.min(FLOW_MAX_IN, share * mood));
@@ -1267,12 +1326,15 @@ function applyInvestorFlows(state: GameState, report: WeekReport): void {
           state,
           moved > 0
             ? `Sua fama corre a cidade: novos investidores aportaram ${fmt(moved)} florins no fundo.`
-            : `Investidores assustados sacaram ${fmt(-moved)} florins do fundo.`,
+            : report.parked
+              ? `Investidores sacaram ${fmt(-moved)} florins: "pagar gestor para deixar na Coroa? Isso eu faço sozinho."`
+              : `Investidores assustados sacaram ${fmt(-moved)} florins do fundo.`,
           moved > 0 ? 'good' : 'bad',
         );
     }
   }
   state.monthStart = wealth(state);
+  state.monthParked = 0;
 }
 
 function tickRiskyDeposits(state: GameState, report: WeekReport): void {
@@ -1433,7 +1495,14 @@ function reviewSeason(state: GameState): WeekReport['classChange'] {
     );
     return 'down';
   }
-  // Above the ceiling: one title on offer for every ceiling the fund passed.
+  if (titleLevels(state) > 0) return 'stay';
+  log(state, `Fim do trimestre: você segue ${before.name}.`, 'neutral');
+  return 'stay';
+}
+
+/** How many ceilings the fund is above right now (one title each). */
+function titleLevels(state: GameState): number {
+  const total = wealth(state);
   let levels = 0;
   while (
     state.classIndex + levels < TOP_CLASS &&
@@ -1441,20 +1510,43 @@ function reviewSeason(state: GameState): WeekReport['classChange'] {
   ) {
     levels += 1;
   }
-  if (levels > 0) {
-    state.ascensionOffer = levels;
+  return levels;
+}
+
+/**
+ * Above the ceiling, any week: the chamberlain offers one title per ceiling passed. The offer
+ * lasts the week and comes back every week while the fund stays high; it is only announced
+ * when it is new or bigger than last week's.
+ */
+function offerTitles(state: GameState, offeredBefore: number): boolean {
+  const levels = titleLevels(state);
+  if (levels === 0) return false;
+  state.ascensionOffer = levels;
+  if (levels > offeredBefore) {
     const target = getClass(state.classIndex + levels);
     log(
       state,
       levels > 1
-        ? `Fim do trimestre: o fundo passou ${levels} tetos! O camareiro oferece os títulos até ${target.name} por ${fmt(ascensionCost(state, levels))} florins.`
-        : `Fim do trimestre: o camareiro oferece o título de ${target.name} por ${fmt(ascensionCost(state, 1))} florins.`,
+        ? `O fundo passou ${levels} tetos! O camareiro oferece os títulos até ${target.name} por ${fmt(ascensionCost(state, levels))} florins.`
+        : `O fundo passou do teto! O camareiro oferece o título de ${target.name} por ${fmt(ascensionCost(state, 1))} florins.`,
       'good',
     );
-    return 'up-offer';
   }
-  log(state, `Fim do trimestre: você segue ${before.name}.`, 'neutral');
-  return 'stay';
+  return true;
+}
+
+/** Share of the fund that is not at work: free gold and Crown bonds (0 to 1). */
+export function parkedShare(state: GameState): number {
+  const total = wealth(state);
+  if (total <= 0) return 0;
+  const bonds = (state.positions[BOND_LIQUID]?.value ?? 0) + lockedValue(state);
+  return Math.min(1, Math.max(0, (state.cash + bonds) / total));
+}
+
+/** Average parked share of the month so far (what investors will judge at month end). */
+export function monthParkedSoFar(state: GameState): number {
+  const weeks = state.week % MONTH_LENGTH;
+  return weeks > 0 ? state.monthParked / weeks : parkedShare(state);
 }
 
 /** Price of the next `levels` titles, paid from the purse. */
@@ -1707,7 +1799,7 @@ function rollForecasts(state: GameState): void {
 function raiseCash(state: GameState, needed: number): void {
   const missing = needed - state.cash;
   if (missing <= 0) return;
-  const total = invested(state);
+  const total = invested(state) + maturedValue(state);
   if (total <= 0) return;
   const fraction = Math.min(1, missing / total);
   for (const [assetId, position] of Object.entries(state.positions)) {
@@ -1715,6 +1807,7 @@ function raiseCash(state: GameState, needed: number): void {
     reducePosition(state, assetId, amount);
     state.cash += amount;
   }
+  sellMatured(state, maturedValue(state) * fraction);
 }
 
 /** Takes `amount` gold out of a position, reducing its cost in the same proportion. */

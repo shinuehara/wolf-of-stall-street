@@ -110,13 +110,15 @@ que você acumula, e performar bem rende mais taxa de performance.
 
 **Ouro parado não rende.** Para render, o jogador compra Títulos da Coroa no Mercado:
 
-| Título         | Rendimento semanal                            | Liquidez                                                                |
-| -------------- | --------------------------------------------- | ----------------------------------------------------------------------- |
-| Coroa (livre)  | taxa da classe: 0,20% (Servo) a 0,50% (Barão) | compra e venda a qualquer momento                                       |
-| Coroa (4 sem.) | 2× a taxa da classe, fixa na compra           | preso por 4 semanas; no vencimento volta sozinho para os florins livres |
+| Título         | Rendimento semanal                            | Liquidez                                                                    |
+| -------------- | --------------------------------------------- | --------------------------------------------------------------------------- |
+| Coroa (livre)  | taxa da classe: 0,20% (Servo) a 0,50% (Barão) | compra e venda a qualquer momento                                           |
+| Coroa (4 sem.) | 2× a taxa da classe, fixa na compra           | preso por 4 semanas; depois segue rendendo e pode ser vendido quando quiser |
 
-O título preso conta no patrimônio para a avaliação do trimestre, mas **não** pode ser vendido
-para pagar contas nem para comprar um título de nobreza. É a troca entre rendimento e liquidez.
+O título preso conta no patrimônio, mas nas 4 primeiras semanas **não** pode ser vendido
+(nem para pagar contas ou resgates). Depois disso o lote continua rendendo a taxa fixa da
+compra até você vender (`isMatured`, `maturedValue`); "Vender tudo" e os resgates incluem os
+lotes liberados. É a troca entre rendimento e liquidez.
 
 ### Guildas, empresas e cestas (ações)
 
@@ -210,6 +212,11 @@ O fundo é dinheiro dos investidores, e eles reagem ao seu desempenho:
     tem de vir do mercado, não dos saques.
 - Aportes e resgates **não contam como lucro**: ficam fora da taxa de performance, do
   retorno do trimestre (cerimônia) e da pior semana dos bots. O livro-caixa registra `flows`.
+- **Fundo parado na Coroa** (`PARK_LIMIT` 60%, `PARK_OUT` 4%): toda semana conta a fatia do
+  fundo em florins livres + Títulos da Coroa (`parkedShare`, somada em `state.monthParked`).
+  Se a média do mês passar de 60%, os investidores cancelam aportes e sacam até 4% do fundo
+  (proporcional: 100% parado = 4%), respeitando a mesma margem do piso. "Pagar gestor para
+  deixar na Coroa? Isso eu faço sozinho." O Mercado avisa a fatia parada do mês acima de 45%.
 - **Propostas de aporte** (10% de chance por semana, fora das semanas de visitante). Valem até
   o fim da semana: aceitar, recusar ou pensar.
 
@@ -414,16 +421,19 @@ cobrado toda semana, de 1,0% (Servo) a 0,4% (Barão) do valor segurado.
 | Barão     | 345  | 475  | 17                      | 0,80              | 0,28%    | 27%         |
 | Conde     | —    | —    | —                       | 0                 | 0,30%    | 30%         |
 
-Cada classe tem **piso** e **teto** do fundo. A cada **12 semanas** o fundo é comparado com eles:
+Cada classe tem **piso** e **teto** do fundo. O **teto vale em qualquer semana**; o **piso** só é
+conferido a cada **12 semanas** (o Meirinho):
 
 - **L1 (abaixo do piso):** cai **quantas classes forem precisas** até o fundo caber no piso.
   Quem **já era Servo** e fecha abaixo do piso vai para a **masmorra** (game over). Quem cai de
   uma classe mais alta para em Servo mesmo abaixo do piso, com um **último aviso**: mais um
   trimestre assim e é masmorra. Perder exige erros repetidos, não um trimestre ruim.
 - **L2 (entre os dois):** mantém a classe.
-- **L3 (acima do teto):** o camareiro oferece **um título por teto ultrapassado** (fundo acima
+- **L3 (acima do teto, qualquer semana):** o camareiro oferece **um título por teto ultrapassado** (fundo acima
   dos tetos de Servo e Camponês = 2 títulos). Você escolhe até onde subir, pagando a soma dos
-  títulos; vale até o fim da semana.
+  títulos; vale até o fim da semana e volta toda semana enquanto o fundo seguir acima do teto
+  (`offerTitles`; o log só avisa quando a oferta é nova ou maior). Antes era só no fim do
+  trimestre, e o melhor era estacionar na Coroa depois de passar do teto.
 
 O título é pago do bolso, então comprá-lo não reduz o fundo; o teto de cada classe fica
 acima do piso da seguinte.
@@ -450,14 +460,18 @@ gradual):
 | Bot                   | Vence    | Semanas até Conde | Quedas de classe  | Pior semana |
 | --------------------- | -------- | ----------------- | ----------------- | ----------- |
 | Só títulos            | 0        | —                 | —                 | —           |
-| Sem informação        | 33 de 60 | ~199              | 0,3 (7 masmorras) | -14%        |
-| Espião sem melhorias  | 59 de 60 | ~155              | 0,2 (nenhuma)     | -13%        |
-| Espião com melhorias  | 60 de 60 | ~128              | 0,02 (nenhuma)    | -11%        |
-| Oráculo (diagnóstico) | 60 de 60 | ~88               | 0                 | -11%        |
+| Sem informação        | 44 de 60 | ~192              | 0,5 (5 masmorras) | -13%        |
+| Espião sem melhorias  | 57 de 60 | ~139              | 0,3 (1 masmorra)  | -12%        |
+| Espião com melhorias  | 58 de 60 | ~111              | 0,08 (1 masmorra) | -11%        |
+| Oráculo (diagnóstico) | 60 de 60 | ~81               | 0,05              | -10%        |
 
 Leitor perfeito do Bêbado (bot `drunk`, 60 partidas): interpreta cada pista certo; como
 aprendiz aposta na cesta da guilda, depois na empresa. Treinando o Bêbado: 58 de 60 vitórias,
-~150 semanas, 1 masmorra. Sem treinar (`drunkRookie`): 55 de 60, ~163 semanas, 3 masmorras.
+~125 semanas, 1 masmorra. Sem treinar (`drunkRookie`): 59 de 60, ~153 semanas, nenhuma masmorra.
+
+Com a promoção em qualquer semana (v0.24) as partidas ficaram ~10 a 20 semanas mais curtas e há
+um pouco mais de quedas (sobe cedo, cai no fim do trimestre). Antes dela, um bot que travava
+na Coroa ao passar do teto levava ~20 a 30 semanas a mais que o normal.
 A fofoca típica aponta um destino ~11 pontos longe do meio da faixa pública.
 
 Metas escolhidas por Claude (o dono delegou a dificuldade): quem chuta vai para a masmorra em
